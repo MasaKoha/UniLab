@@ -1,12 +1,11 @@
 ﻿namespace UniLab.Common
 {
-    public abstract class Singleton<TData> where TData : class
+    public abstract class Singleton<T> where T : class, new()
     {
-        private static TData _instance;
+        private static T _instance;
+        public static T Instance => _instance ??= new T();
 
-        public static TData Instance => _instance;
-
-        public static TData Initialize(TData data)
+        public static T Initialize(T data)
         {
             if (_instance != null)
             {
