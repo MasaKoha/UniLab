@@ -8,7 +8,7 @@ namespace UniLab.Tools.Editor
 {
     public class FavoriteAssetsWindow : EditorWindow
     {
-        private const string PrefsKey = "FavoriteAssetsWindow.Favorites";
+        private const string ProjectPrefsKey = "FavoriteAssetsWindow.Favorites.Project";
         private List<string> _favorites = new(); // GUIDs
         private Vector2 _scroll;
         private ReorderableList _reorderableList;
@@ -137,7 +137,7 @@ namespace UniLab.Tools.Editor
 
         private void LoadFavorites()
         {
-            var joined = EditorPrefs.GetString(PrefsKey, "");
+            var joined = EditorUserSettings.GetConfigValue(ProjectPrefsKey);
             _favorites = string.IsNullOrEmpty(joined) ? new List<string>() : joined.Split('|').ToList();
 
             // pathベースからGUIDベースへの自動マイグレーション
@@ -164,7 +164,7 @@ namespace UniLab.Tools.Editor
 
         private void SaveFavorites()
         {
-            EditorPrefs.SetString(PrefsKey, string.Join("|", _favorites));
+            EditorUserSettings.SetConfigValue(ProjectPrefsKey, string.Join("|", _favorites));
         }
     }
 }
