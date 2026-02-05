@@ -32,6 +32,11 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private static void OnHierarchyItemGUI(int instanceId, Rect selectionRect)
         {
+            if (Application.isPlaying)
+            {
+                return;
+            }
+
             if (_needsRebuild)
             {
                 RebuildCache();
