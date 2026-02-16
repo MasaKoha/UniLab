@@ -7,39 +7,43 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
     [InitializeOnLoad]
     public static class ProjectAssetReferenceHighlighter
     {
-        private static readonly HashSet<string> _referenceGuids = new();
+        private static readonly HashSet<string> _highlightGuids = new();
+        private static readonly HashSet<string> _markerGuids = new();
 
         static ProjectAssetReferenceHighlighter()
         {
             EditorApplication.projectWindowItemOnGUI += OnProjectItemGUI;
         }
 
-        public static void SetReferenceGuids(IEnumerable<string> guids)
+        public static void SetReferenceGuids(IEnumerable<string> highlightGuids, IEnumerable<string> markerGuids)
         {
-            _referenceGuids.Clear();
-            FillSet(_referenceGuids, guids);
+            _highlightGuids.Clear();
+            _markerGuids.Clear();
+            FillSet(_highlightGuids, highlightGuids);
+            FillSet(_markerGuids, markerGuids);
             RepaintProjectWindow();
         }
 
         public static void Clear()
         {
-            if (_referenceGuids.Count == 0)
+            if (_highlightGuids.Count == 0 && _markerGuids.Count == 0)
             {
                 return;
             }
 
-            _referenceGuids.Clear();
+            _highlightGuids.Clear();
+            _markerGuids.Clear();
             RepaintProjectWindow();
         }
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
         {
-            if (_referenceGuids.Count == 0 || string.IsNullOrEmpty(guid))
+            if (_highlightGuids.Count == 0 || string.IsNullOrEmpty(guid))
             {
                 return;
             }
 
-            if (!_referenceGuids.Contains(guid))
+            if (!_highlightGuids.Contains(guid))
             {
                 return;
             }
@@ -53,11 +57,14 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
             var bgRect = new Rect(selectionRect.x, selectionRect.y + 1f, selectionRect.width, selectionRect.height - 2f);
             EditorGUI.DrawRect(bgRect, settings.ProjectReferenceBackgroundColor);
 
-            var iconRect = new Rect(selectionRect.xMax - 18f, selectionRect.y, 18f, selectionRect.height);
-            var prevColor = GUI.color;
-            GUI.color = Color.yellow;
-            EditorGUI.LabelField(iconRect, "R");
-            GUI.color = prevColor;
+            if (_markerGuids.Contains(guid))
+            {
+                var iconRect = new Rect(selectionRect.xMax - 18f, selectionRect.y, 18f, selectionRect.height);
+                var prevColor = GUI.color;
+                GUI.color = Color.yellow;
+                EditorGUI.LabelField(iconRect, "R");
+                GUI.color = prevColor;
+            }
         }
 
         private static void FillSet(HashSet<string> set, IEnumerable<string> guids)

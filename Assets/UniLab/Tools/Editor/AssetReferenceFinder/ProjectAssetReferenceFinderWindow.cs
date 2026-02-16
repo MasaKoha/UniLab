@@ -237,8 +237,8 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
                 var extensionFilter = ProjectScanFilterUtility.BuildExtensionFilter(_settings.ExtensionsCsv);
                 var folderRoots = ProjectScanFilterUtility.BuildFolderRoots(_settings.TargetFolders);
-                var targetGuid = AssetDatabase.AssetPathToGUID(targetPath);
                 var referenceGuids = new HashSet<string>();
+                var parentFolderGuids = new HashSet<string>();
                 var guids = AssetDatabase.FindAssets(string.Empty, new[] { "Assets" });
                 for (int i = 0; i < guids.Length; i++)
                 {
@@ -275,15 +275,14 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
                     {
                         _referencePaths.Add(path);
                         referenceGuids.Add(guids[i]);
+                        AddParentFolderGuid(path, parentFolderGuids);
                     }
                 }
 
-                if (_referencePaths.Count > 0 && !string.IsNullOrEmpty(targetGuid))
-                {
-                    referenceGuids.Add(targetGuid);
-                }
-
-                ProjectAssetReferenceHighlighter.SetReferenceGuids(referenceGuids);
+                parentFolderGuids.ExceptWith(referenceGuids);
+                var highlightGuids = new HashSet<string>(referenceGuids);
+                highlightGuids.UnionWith(parentFolderGuids);
+                ProjectAssetReferenceHighlighter.SetReferenceGuids(highlightGuids, referenceGuids);
             }
             finally
             {
@@ -321,6 +320,33 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
             }
 
             return false;
+        }
+
+        private static void AddParentFolderGuid(string assetPath, HashSet<string> guidSet)
+        {
+            if (string.IsNullOrEmpty(assetPath) || guidSet == null)
+            {
+                return;
+            }
+
+            var parentPath = Path.GetDirectoryName(assetPath);
+            if (string.IsNullOrEmpty(parentPath))
+            {
+                return;
+            }
+
+            // Unity asset paths are always slash-separated.
+            parentPath = parentPath.Replace('\\', '/');
+            if (!AssetDatabase.IsValidFolder(parentPath))
+            {
+                return;
+            }
+
+            var parentGuid = AssetDatabase.AssetPathToGUID(parentPath);
+            if (!string.IsNullOrEmpty(parentGuid))
+            {
+                guidSet.Add(parentGuid);
+            }
         }
     }
 }
