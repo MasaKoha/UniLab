@@ -29,7 +29,7 @@ namespace UniLab.Tools.Editor
         private Vector2 _scroll;
         private ReorderableList _reorderableList;
 
-        [MenuItem("UniLab/Tools/Favorite Assets Window")]
+        [MenuItem("UniLab/Tools/Favorite Assets/Open Window")]
         public static void ShowWindow()
         {
             GetWindow<FavoriteAssetsWindow>("Favorite Assets Window");

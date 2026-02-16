@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -15,13 +16,13 @@ namespace UniLab.Tools.Editor.MissingChecker
         private ProjectMissingCheckerSettings _settings;
         private const string _settingsAssetPath = "Assets/Generated/UniCore/MissingCheckerSettings.asset";
 
-        [MenuItem("UniLab/Tools/Project Missing Checker")]
+        [MenuItem("UniLab/Tools/Project Missing Checker/Open Window")]
         public static void ShowWindow()
         {
             GetWindow<ProjectMissingCheckerWindow>("Missing Checker");
         }
 
-        [MenuItem("UniLab/Tools/Project Missing Checker Settings")]
+        [MenuItem("UniLab/Tools/Project Missing Checker/Settings")]
         public static void ShowSettings()
         {
             var settings = ProjectMissingCheckerSettings.GetOrCreate();
@@ -223,8 +224,8 @@ namespace UniLab.Tools.Editor.MissingChecker
                     _settings = ProjectMissingCheckerSettings.GetOrCreate();
                 }
 
-                var extensionFilter = BuildExtensionFilter();
-                var folderRoots = BuildFolderRoots();
+                var extensionFilter = ProjectScanFilterUtility.BuildExtensionFilter(_settings.ExtensionsCsv);
+                var folderRoots = ProjectScanFilterUtility.BuildFolderRoots(_settings.TargetFolders);
                 var missingSelfGuids = new List<string>();
                 var missingParentGuids = new HashSet<string>();
                 var guids = AssetDatabase.FindAssets(string.Empty, new[] { "Assets" });
@@ -236,12 +237,12 @@ namespace UniLab.Tools.Editor.MissingChecker
                         continue;
                     }
 
-                    if (!PassExtensionFilter(path, extensionFilter))
+                    if (!ProjectScanFilterUtility.PassExtensionFilter(path, extensionFilter))
                     {
                         continue;
                     }
 
-                    if (!PassFolderFilter(path, folderRoots))
+                    if (!ProjectScanFilterUtility.PassFolderFilter(path, folderRoots))
                     {
                         continue;
                     }
@@ -368,95 +369,6 @@ namespace UniLab.Tools.Editor.MissingChecker
                 }
 
                 if (iterator.objectReferenceValue == null && iterator.objectReferenceInstanceIDValue != 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private HashSet<string> BuildExtensionFilter()
-        {
-            var set = new HashSet<string>();
-            if (_settings == null || string.IsNullOrWhiteSpace(_settings.ExtensionsCsv))
-            {
-                return set;
-            }
-
-            var items = _settings.ExtensionsCsv.Split(',');
-            foreach (var item in items)
-            {
-                var ext = item.Trim().TrimStart('.');
-                if (string.IsNullOrEmpty(ext))
-                {
-                    continue;
-                }
-
-                set.Add(ext.ToLowerInvariant());
-            }
-
-            return set;
-        }
-
-        private bool PassExtensionFilter(string path, HashSet<string> extensionFilter)
-        {
-            if (extensionFilter.Count == 0)
-            {
-                return true;
-            }
-
-            var ext = System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-            if (!extensionFilter.Contains(ext))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        private List<string> BuildFolderRoots()
-        {
-            var roots = new List<string>();
-            if (_settings == null)
-            {
-                return roots;
-            }
-
-            foreach (var folder in _settings.TargetFolders)
-            {
-                if (folder == null)
-                {
-                    continue;
-                }
-
-                var path = AssetDatabase.GetAssetPath(folder);
-                if (string.IsNullOrEmpty(path) || !AssetDatabase.IsValidFolder(path))
-                {
-                    continue;
-                }
-
-                if (!path.EndsWith("/"))
-                {
-                    path += "/";
-                }
-
-                roots.Add(path);
-            }
-
-            return roots;
-        }
-
-        private static bool PassFolderFilter(string path, List<string> roots)
-        {
-            if (roots.Count == 0)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < roots.Count; i++)
-            {
-                if (path.StartsWith(roots[i]))
                 {
                     return true;
                 }
