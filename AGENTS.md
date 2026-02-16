@@ -12,3 +12,4 @@
 - Do not use `[FormerlySerializedAs]` or similar attribute-based migration when renaming `[SerializeField]` fields. Rename the serialized field directly in Prefab/scene data so references are not detached.
 - Do not add null checks for variables declared with `[SerializeField]`. Assume Inspector always has a valid instance assigned.
 - Do not write end-of-line comments. If a comment is needed, write it on the line immediately above the target code.
+- Remove unused namespaces/usings and unused variables when editing code.
