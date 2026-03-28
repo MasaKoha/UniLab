@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Qvou.UnityCore.LocalSave.Editor.Test
+namespace UniLab.Tests.EditMode.LocalSave
 {
     public class LocalSaveTests
     {

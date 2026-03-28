@@ -4,7 +4,7 @@ using System.Text;
 using MessagePack;
 using NUnit.Framework;
 
-namespace Qvou.UnityCore.MessagePack.Editor.Test
+namespace UniLab.Tests.EditMode.MessagePack
 {
     public class MessagePackNestTests
     {
