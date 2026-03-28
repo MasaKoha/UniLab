@@ -283,20 +283,8 @@ namespace UniLab.UI
             _rowHeights.Clear();
             _rowOffsetXs.Clear();
 
-            // padding を除いた利用可能幅
-            var innerWidth = rectTransform.rect.width - padding.horizontal;
-            if (innerWidth <= 0f)
-            {
-                // レイアウト開始時の一時的な 0 幅対策
-                innerWidth = _defaultItemSize.x;
-            }
-
-            // 現在行のカーソル位置と行情報
-            var x = 0f;
-            var y = 0f;
-            var currentRowWidth = 0f;
-            var currentRowHeight = 0f;
-            var currentRow = 0;
+            var innerWidth = ResolveInnerWidth();
+            var cursor = new RowCursor();
 
             for (var i = 0; i < rectChildren.Count; i++)
             {
@@ -305,49 +293,52 @@ namespace UniLab.UI
                 var height = ResolveChildSize( child, axis: 1 );
 
                 // 現在行に収まらないときは次行へ折り返し
-                var shouldWrap = currentRowWidth > 0f && x + width > innerWidth;
-                if (shouldWrap)
+                if (cursor.ShouldWrap( width, innerWidth ))
                 {
-                    // 行確定
-                    _rowWidths.Add( currentRowWidth );
-                    _rowHeights.Add( currentRowHeight );
-
-                    // 次行の初期化
-                    y += currentRowHeight + _spacing.y;
-                    x = 0f;
-                    currentRowWidth = 0f;
-                    currentRowHeight = 0f;
-                    currentRow++;
+                    CommitCurrentRow( ref cursor );
                 }
 
-                var layout = new ChildLayout
+                _childLayouts.Add( new ChildLayout
                 {
                     Rect = child,
-                    Row = currentRow,
-                    X = x,
-                    Y = y,
+                    Row = cursor.Row,
+                    X = cursor.X,
+                    Y = cursor.Y,
                     Width = width,
                     Height = height
-                };
-                _childLayouts.Add( layout );
+                } );
 
-                // 行内カーソル更新
-                x += width + _spacing.x;
-                currentRowWidth = Mathf.Max( currentRowWidth, x - _spacing.x );
-                currentRowHeight = Mathf.Max( currentRowHeight, height );
+                cursor.Advance( width, height, _spacing.x );
             }
 
-            // 最終行を確定
             if (_childLayouts.Count > 0)
             {
-                _rowWidths.Add( currentRowWidth );
-                _rowHeights.Add( currentRowHeight );
+                _rowWidths.Add( cursor.RowWidth );
+                _rowHeights.Add( cursor.RowHeight );
             }
 
+            ComputeContentSize();
+        }
+
+        private float ResolveInnerWidth()
+        {
+            var inner = rectTransform.rect.width - padding.horizontal;
+            // Fallback for the transient zero-width state during initial layout pass.
+            return inner > 0f ? inner : _defaultItemSize.x;
+        }
+
+        private void CommitCurrentRow( ref RowCursor cursor )
+        {
+            _rowWidths.Add( cursor.RowWidth );
+            _rowHeights.Add( cursor.RowHeight );
+            cursor.StartNextRow( _spacing.y );
+        }
+
+        private void ComputeContentSize()
+        {
             _contentWidth = 0f;
             _contentHeight = 0f;
 
-            // 全行からコンテンツ外形を算出
             for (var row = 0; row < _rowWidths.Count; row++)
             {
                 _contentWidth = Mathf.Max( _contentWidth, _rowWidths[row] );
@@ -357,6 +348,37 @@ namespace UniLab.UI
             if (_rowHeights.Count > 1)
             {
                 _contentHeight += _spacing.y * (_rowHeights.Count - 1);
+            }
+        }
+
+        // Tracks mutable row-cursor state across the layout loop.
+        private struct RowCursor
+        {
+            public float X;
+            public float Y;
+            public float RowWidth;
+            public float RowHeight;
+            public int Row;
+
+            public bool ShouldWrap( float childWidth, float innerWidth )
+            {
+                return RowWidth > 0f && X + childWidth > innerWidth;
+            }
+
+            public void Advance( float childWidth, float childHeight, float spacingX )
+            {
+                X += childWidth + spacingX;
+                RowWidth = Mathf.Max( RowWidth, X - spacingX );
+                RowHeight = Mathf.Max( RowHeight, childHeight );
+            }
+
+            public void StartNextRow( float spacingY )
+            {
+                Y += RowHeight + spacingY;
+                X = 0f;
+                RowWidth = 0f;
+                RowHeight = 0f;
+                Row++;
             }
         }
 
