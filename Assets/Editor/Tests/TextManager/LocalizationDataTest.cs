@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
-using UniLab.TextManager;
+using UniLab.Localization;
 using UnityEngine;
 
 namespace UniLab.Tests.EditMode.TextManager

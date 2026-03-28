@@ -3,7 +3,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
-using UniLab.LocalSave;
+using UniLab.Persistence;
 
 namespace UniLab.Auth
 {
@@ -116,7 +116,7 @@ namespace UniLab.Auth
         /// <inheritdoc/>
         public async UniTask<AuthUser> RestoreSessionAsync(CancellationToken cancellationToken = default)
         {
-            var cached = LocalSave.LocalSave.Load<AuthUser>();
+            var cached = LocalSave.Load<AuthUser>();
 
             // LocalSave returns a new() instance when no data exists; treat empty UserId as cache miss.
             if (string.IsNullOrEmpty(cached.UserId))
@@ -240,7 +240,7 @@ namespace UniLab.Auth
                 ExpiresAt = session.ExpiresAt(),
             };
 
-            LocalSave.LocalSave.Save(user);
+            LocalSave.Save(user);
             SetCurrentUser(user);
             return user;
         }
@@ -253,7 +253,7 @@ namespace UniLab.Auth
 
         private void ClearSession()
         {
-            LocalSave.LocalSave.Delete<AuthUser>();
+            LocalSave.Delete<AuthUser>();
             _currentUser = null;
             _currentUserSubject.OnNext(null);
         }
