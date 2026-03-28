@@ -3,24 +3,24 @@ using Cysharp.Threading.Tasks;
 using UniLab.Popup;
 using UnityEngine;
 
-namespace UniLab.Feature.UI.Dialog
+namespace UniLab.Feature.UI.Popup
 {
     /// <summary>
-    /// Singleton manager for showing modal dialogs and awaiting user responses.
+    /// Singleton manager for showing modal confirmation popups and awaiting user responses.
     /// Wraps PopupManagerBase to integrate with the popup stack system.
     /// </summary>
-    public class UniLabDialogManager : PopupManagerBase<UniLabDialogManager>, IDialogManager
+    public class UniLabPopupManager : PopupManagerBase<UniLabPopupManager>, IPopupManager
     {
-        [SerializeField] private DialogPopup _dialogPopupPrefab = null;
+        [SerializeField] private ConfirmPopup _confirmPopupPrefab = null;
 
         /// <summary>
-        /// Instantiates a DialogPopup, opens it, awaits the user's response, then destroys it.
+        /// Instantiates a ConfirmPopup, opens it, awaits the user's response, then destroys it.
         /// </summary>
-        public async UniTask<DialogResult> ShowAsync(
-            DialogParameter parameter,
+        public async UniTask<PopupResult> ShowAsync(
+            PopupParameter parameter,
             CancellationToken cancellationToken = default)
         {
-            var popupInstance = InstantiatePopup(_dialogPopupPrefab, parameter);
+            var popupInstance = InstantiatePopup(_confirmPopupPrefab, parameter);
 
             // Subscribe to result before OpenPopupAsync to avoid missing the event
             var resultTask = popupInstance.GetResultAsync()
