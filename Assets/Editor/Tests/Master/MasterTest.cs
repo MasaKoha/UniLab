@@ -2,7 +2,7 @@ using System.Text;
 using MessagePack;
 using NUnit.Framework;
 using UniLab.Common.Utility;
-using UniLab.Feature.MasterData;
+using UniLab.MasterData;
 
 namespace Sample.Tests
 {
