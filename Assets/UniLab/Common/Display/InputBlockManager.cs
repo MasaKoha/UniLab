@@ -24,26 +24,33 @@ namespace UniLab.Common.Display
         {
             _onShowLoading.OnNext(Unit.Default);
             _onShow.OnNext(Unit.Default);
+            var blockingId = _blockingIdCounter++;
             var block = new LoadingInputBlock(() =>
             {
+                _inputBlocks.Remove(blockingId);
                 _onHideLoading.OnNext(Unit.Default);
                 _onHide.OnNext(Unit.Default);
             })
             {
-                BlockingId = _blockingIdCounter++
+                BlockingId = blockingId
             };
-            _inputBlocks[block.BlockingId] = block;
+            _inputBlocks[blockingId] = block;
             return block;
         }
 
         public static InputBlock CreateInputBlock()
         {
             _onShow.OnNext(Unit.Default);
-            var block = new InputBlock(() => { _onHide.OnNext(Unit.Default); })
+            var blockingId = _blockingIdCounter++;
+            var block = new InputBlock(() =>
             {
-                BlockingId = _blockingIdCounter++
+                _inputBlocks.Remove(blockingId);
+                _onHide.OnNext(Unit.Default);
+            })
+            {
+                BlockingId = blockingId
             };
-            _inputBlocks[block.BlockingId] = block;
+            _inputBlocks[blockingId] = block;
             return block;
         }
 
