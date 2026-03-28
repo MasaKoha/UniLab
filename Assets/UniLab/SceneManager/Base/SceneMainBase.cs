@@ -1,11 +1,17 @@
 using System;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using VContainer;
 
 namespace UniLab.Scene
 {
+    /// <summary>
+    /// Base class for scene root objects. Manages the scene lifecycle and owns the VContainer LifetimeScope.
+    /// </summary>
     public abstract class SceneMainBase : MonoBehaviour
     {
+        [SerializeField] private LifetimeScope _lifetimeScope = null;
+
         private bool _initialized;
         protected SceneParameterBase Parameter { get; private set; }
 
@@ -91,6 +97,11 @@ namespace UniLab.Scene
         public void Leave()
         {
             OnLeave();
+        }
+
+        private void OnDestroy()
+        {
+            _lifetimeScope?.Dispose();
         }
     }
 }
