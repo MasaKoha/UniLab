@@ -57,7 +57,7 @@ namespace UniLab.Persistence.Editor
                 EditorGUILayout.LabelField("Delete All", EditorStyles.boldLabel);
                 if (GUILayout.Button("Delete All LocalSave Data"))
                 {
-                    if (EditorUtility.DisplayDialog("Confirm", "Delete all LocalSave data?", "Delete", "Cancel"))
+                    if (EditorUtility.DisplayDialog("Confirm", "Delete all PlayerPrefs data? This clears all LocalSave entries and any other PlayerPrefs keys.", "Delete", "Cancel"))
                     {
                         LocalSave.DeleteAll();
                         RefreshKeys();
@@ -81,6 +81,9 @@ namespace UniLab.Persistence.Editor
                         {
                             PlayerPrefs.DeleteKey(_directDeleteKey);
                             PlayerPrefs.Save();
+                            RefreshKeys();
+                            _directDeleteKey = string.Empty;
+                            Repaint();
                         }
                     }
                 }

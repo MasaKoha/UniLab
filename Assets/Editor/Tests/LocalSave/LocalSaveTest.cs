@@ -41,8 +41,8 @@ namespace UniLab.Tests.EditMode.LocalSave
 
             var loaded = LocalSave.Load<TestData>();
 
-            Assert.AreNotEqual(data.Value, loaded.Value);
-            Assert.AreNotEqual(data.Name, loaded.Name);
+            Assert.AreEqual(0, loaded.Value);
+            Assert.IsNull(loaded.Name);
         }
 
         [Test]
@@ -54,8 +54,8 @@ namespace UniLab.Tests.EditMode.LocalSave
 
             var loaded = LocalSave.Load<TestData>();
 
-            Assert.AreNotEqual(data.Value, loaded.Value);
-            Assert.AreNotEqual(data.Name, loaded.Name);
+            Assert.AreEqual(0, loaded.Value);
+            Assert.IsNull(loaded.Name);
         }
 
         [Test]
@@ -100,8 +100,9 @@ namespace UniLab.Tests.EditMode.LocalSave
         [Test]
         public void DirectPlayerPrefsDeleteKey_LeavesKeyInRegistryButNotInPlayerPrefs()
         {
-            // This scenario represents the "Not saved" state shown in LocalSaveEditorWindow Section 2.
-            // The registry retains the key, but PlayerPrefs no longer has the actual value.
+            // This scenario represents the "Not saved" state shown in the Registered Keys list
+            // (the third section in LocalSaveEditorWindow's OnGUI). The registry retains the key,
+            // but PlayerPrefs no longer has the actual value.
             var data = new SampleData { Score = 30 };
             LocalSave.Save(data);
 
