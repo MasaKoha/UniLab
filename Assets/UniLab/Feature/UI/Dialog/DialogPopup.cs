@@ -91,7 +91,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public UniTask<DialogResult> GetResultAsync()
         {
-            return _resultSubject.FirstAsync();
+            return _resultSubject.FirstAsync().AsUniTask();
         }
     }
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace UniLab.Debug
+namespace UniLab.Diagnostics
 {
     /// <summary>
     /// Deployment environment identifier.

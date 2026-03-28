@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UniLab.LocalSave;
+using LocalStorage = UniLab.LocalSave.LocalSave;
 
 namespace UniLab.Network
 {
@@ -36,7 +36,7 @@ namespace UniLab.Network
 
     /// <summary>
     /// Persists outgoing requests locally and flushes them when connectivity is restored.
-    /// Uses <see cref="LocalSave"/> for durability across app restarts.
+    /// Uses <see cref="UniLab.LocalSave.LocalSave"/> for durability across app restarts.
     /// Idempotency keys prevent duplicate submissions on retry.
     /// <para>
     /// IMPORTANT: <typeparamref name="T"/> must be a concrete, non-generic, <c>[Serializable]</c> class
@@ -57,11 +57,11 @@ namespace UniLab.Network
         // --- Constructor ---
 
         /// <summary>
-        /// Loads any previously persisted entries from <see cref="LocalSave"/> on construction.
+        /// Loads any previously persisted entries from <see cref="UniLab.LocalSave.LocalSave"/> on construction.
         /// </summary>
         public OfflineQueue()
         {
-            _data = LocalSave.Load<OfflineQueueData<T>>();
+            _data = LocalStorage.Load<OfflineQueueData<T>>();
         }
 
         // --- Public API ---
@@ -137,7 +137,7 @@ namespace UniLab.Network
 
         private void Persist()
         {
-            LocalSave.Save(_data);
+            LocalStorage.Save(_data);
         }
     }
 }
