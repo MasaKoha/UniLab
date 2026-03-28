@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using UniLab.Common.Utility;
 
-namespace Qvou.UnityCore.TextManager.Editor.Tests
+namespace UniLab.Tests.EditMode.TextManager
 {
     public class ParseCsvLineTest
     {
