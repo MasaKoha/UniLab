@@ -2,7 +2,7 @@ using System.Collections;
 using Cysharp.Threading.Tasks;
 using NUnit.Framework;
 using R3;
-using UniLab.Feature.Animation;
+using UniLab.Animation;
 using UnityEngine;
 using UnityEngine.TestTools;
 

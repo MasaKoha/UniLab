@@ -1,7 +1,7 @@
 using System.Collections;
 using NUnit.Framework;
 using R3;
-using UniLab.Common.Display;
+using UniLab.UI;
 using UnityEngine.TestTools;
 
 namespace UniLab.Tests.PlayMode.UI

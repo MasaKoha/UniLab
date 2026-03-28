@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using NUnit.Framework;
-using UniLab.Storage;
+using UniLab.Persistence;
 using UnityEngine;
 
 namespace UniLab.Tests.EditMode.Storage

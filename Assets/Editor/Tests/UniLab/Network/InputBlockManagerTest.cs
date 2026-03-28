@@ -1,6 +1,6 @@
 using NUnit.Framework;
 using R3;
-using UniLab.Common.Display;
+using UniLab.UI;
 
 namespace UniLab.Tests.EditMode.Network
 {

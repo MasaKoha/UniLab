@@ -2,23 +2,17 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using R3;
-using UniLab.Common.Display;
-using UniLab.Common.Input;
-using UniLab.Feature.Animation;
-using UniLab.Feature.UI.Loading;
-using UniLab.Feature.UI.Toast;
+using UniLab.Animation;
+using UniLab.Input;
+using UniLab.Localization;
 using UniLab.Network;
-using UniLab.Storage;
+using UniLab.Persistence;
 using UniLab.UI;
+using UniLab.UI.Loading;
+using UniLab.UI.Toast;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-// Aliases resolve the namespace-vs-class ambiguity: UniLab.LocalSave.LocalSave and
-// UniLab.TextManager.TextManager share their name with their enclosing namespace.
-// global:: ensures the compiler starts from the global root instead of walking up
-// the enclosing UniLab.* namespace tree.
-using LocalSave = global::UniLab.LocalSave.LocalSave;
-using TextManager = global::UniLab.TextManager.TextManager;
 
 namespace UniLab.Sample
 {

@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using NUnit.Framework;
-using UniLab.Feature.MasterData;
+using UniLab.MasterData;
 
 namespace UniLab.Tests.EditMode.MasterData
 {

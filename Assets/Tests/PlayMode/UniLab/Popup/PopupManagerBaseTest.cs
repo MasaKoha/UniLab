@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using Cysharp.Threading.Tasks;
 using NUnit.Framework;
-using UniLab.Popup;
+using UniLab.UI.Popup;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
