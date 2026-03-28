@@ -19,12 +19,10 @@ namespace UniLab.Feature.UI.Dialog
         [SerializeField] private Button _confirmButton = null;
         [SerializeField] private Button _cancelButton = null;
 
-        private UniTaskCompletionSource<DialogResult> _resultSource;
+        private readonly Subject<DialogResult> _resultSubject = new();
 
         protected override void OnInitialize()
         {
-            _resultSource = new UniTaskCompletionSource<DialogResult>();
-
             var dialogParameter = (DialogParameter)Parameter;
 
             _titleText.text = dialogParameter.Title;
@@ -39,11 +37,11 @@ namespace UniLab.Feature.UI.Dialog
             }
 
             _confirmButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(DialogResult.Confirm))
+                .Subscribe(_ => _resultSubject.OnNext(DialogResult.Confirm))
                 .AddTo(this);
 
             _cancelButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(DialogResult.Cancel))
+                .Subscribe(_ => _resultSubject.OnNext(DialogResult.Cancel))
                 .AddTo(this);
         }
 
@@ -64,7 +62,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public override async UniTask WaitAsync()
         {
-            await _resultSource.Task;
+            await _resultSubject.FirstAsync().AsUniTask();
             await CloseAsync();
         }
 
@@ -84,7 +82,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public override void OnClose()
         {
-            _resultSource.TrySetResult(DialogResult.Cancel);
+            _resultSubject.OnNext(DialogResult.Cancel);
         }
 
         /// <summary>
@@ -93,7 +91,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public UniTask<DialogResult> GetResultAsync()
         {
-            return _resultSource.Task;
+            return _resultSubject.FirstAsync().AsUniTask();
         }
     }
 }
