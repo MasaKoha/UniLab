@@ -4,19 +4,30 @@ using UnityEngine;
 
 namespace UniLab.Persistence.Editor
 {
+    /// <summary>
+    /// Editor window for managing LocalSave keys and PlayerPrefs data.
+    /// </summary>
     public sealed class LocalSaveEditorWindow : EditorWindow
     {
-        private Vector2 _scroll;
-        private List<string> _keys;
+        private const float StatusLabelWidth = 70f;
+        private const float DeleteButtonWidth = 60f;
+        private const float RowSpacing = 2f;
+        private static readonly Vector2 MinWindowSize = new Vector2(480f, 600f);
 
+        private List<string> _keys = new List<string>();
+        private Vector2 _scrollPosition;
+        private string _directDeleteKey = string.Empty;
+
+        /// <summary>Opens the LocalSave Manager window.</summary>
         [MenuItem("UniLab/LocalSave/SaveDataManage")]
         public static void Open()
         {
-            GetWindow<LocalSaveEditorWindow>("SaveDataManage");
+            GetWindow<LocalSaveEditorWindow>("LocalSave Manager");
         }
 
         private void OnEnable()
         {
+            minSize = MinWindowSize;
             RefreshKeys();
         }
 
@@ -27,40 +38,102 @@ namespace UniLab.Persistence.Editor
 
         private void OnGUI()
         {
-            if (GUILayout.Button("Refresh"))
-            {
-                RefreshKeys();
-            }
-
-            if (GUILayout.Button("Delete All"))
-            {
-                if (EditorUtility.DisplayDialog("Confirm", "全てのローカルのセーブデータを削除します。よろしいですか？", "はい", "キャンセル"))
-                {
-                    LocalSave.DeleteAll();
-                    RefreshKeys();
-                }
-            }
-
+            EditorGUILayout.HelpBox("Manages registered LocalSave keys and allows direct PlayerPrefs deletion.", MessageType.Info);
             EditorGUILayout.Space();
 
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
+            DrawDeleteAllSection();
+            EditorGUILayout.Space();
 
-            foreach (var key in _keys.ToArray())
+            DrawDirectKeyDeletionSection();
+            EditorGUILayout.Space();
+
+            DrawRegisteredKeysSection();
+        }
+
+        private void DrawDeleteAllSection()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(key);
-                if (GUILayout.Button("Delete", GUILayout.Width(60)))
+                EditorGUILayout.LabelField("Delete All", EditorStyles.boldLabel);
+                if (GUILayout.Button("Delete All LocalSave Data"))
                 {
-                    LocalSave.DeleteEditorOnly(key);
-                    RefreshKeys();
-                    EditorGUILayout.EndHorizontal();
-                    break;
+                    if (EditorUtility.DisplayDialog("Confirm", "Delete all LocalSave data?", "Delete", "Cancel"))
+                    {
+                        LocalSave.DeleteAll();
+                        RefreshKeys();
+                    }
+                }
+            }
+        }
+
+        private void DrawDirectKeyDeletionSection()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField("Direct Key Deletion", EditorStyles.boldLabel);
+                _directDeleteKey = EditorGUILayout.TextField("Key", _directDeleteKey);
+
+                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_directDeleteKey)))
+                {
+                    if (GUILayout.Button("Delete Key"))
+                    {
+                        if (EditorUtility.DisplayDialog("Confirm", $"Delete PlayerPrefs key \"{_directDeleteKey}\"?", "Delete", "Cancel"))
+                        {
+                            PlayerPrefs.DeleteKey(_directDeleteKey);
+                            PlayerPrefs.Save();
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DrawRegisteredKeysSection()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField("Registered Keys", EditorStyles.boldLabel);
+                    if (GUILayout.Button("Refresh", GUILayout.Width(70f)))
+                    {
+                        RefreshKeys();
+                    }
                 }
 
-                EditorGUILayout.EndHorizontal();
+                _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+                foreach (var key in _keys.ToArray())
+                {
+                    DrawKeyRow(key);
+                }
+                EditorGUILayout.EndScrollView();
             }
+        }
 
-            EditorGUILayout.EndScrollView();
+        private void DrawKeyRow(string key)
+        {
+            var lineHeight = EditorGUIUtility.singleLineHeight;
+            var rowRect = EditorGUILayout.GetControlRect(false, lineHeight + RowSpacing);
+
+            var keyRect = new Rect(rowRect.x, rowRect.y, rowRect.width - StatusLabelWidth - DeleteButtonWidth - 8f, lineHeight);
+            var statusRect = new Rect(keyRect.xMax + 4f, rowRect.y, StatusLabelWidth, lineHeight);
+            var deleteRect = new Rect(statusRect.xMax + 4f, rowRect.y, DeleteButtonWidth, lineHeight);
+
+            EditorGUI.SelectableLabel(keyRect, key);
+
+            var isSaved = PlayerPrefs.HasKey(key);
+            EditorGUI.LabelField(statusRect, isSaved ? "Saved" : "Not saved");
+
+            using (new EditorGUI.DisabledScope(!isSaved))
+            {
+                if (GUI.Button(deleteRect, "Delete"))
+                {
+                    if (EditorUtility.DisplayDialog("Confirm", $"Delete key \"{key}\"?", "Delete", "Cancel"))
+                    {
+                        LocalSave.DeleteEditorOnly(key);
+                        RefreshKeys();
+                    }
+                }
+            }
         }
     }
 }
