@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace UniLab.Scene.Screen
 {
-    public abstract class ScreenBase : MonoBehaviour, IDisposable
+    public abstract class ScreenBase : MonoBehaviour, IDisposable, IScreenView
     {
         public abstract Enum Type { get; protected set; }
         private bool _isInitialized = false;
