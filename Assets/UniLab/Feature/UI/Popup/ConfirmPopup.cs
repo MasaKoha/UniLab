@@ -6,42 +6,44 @@ using UniLab.Popup;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace UniLab.Feature.UI.Dialog
+namespace UniLab.Feature.UI.Popup
 {
     /// <summary>
-    /// Popup view for dialog confirmation/cancellation interactions.
+    /// Popup view for confirmation/cancellation interactions.
     /// Inherits PopupBase to integrate with the existing popup stack system.
     /// </summary>
-    public class DialogPopup : PopupBase
+    public class ConfirmPopup : PopupBase
     {
         [SerializeField] private TMP_Text _titleText = null;
         [SerializeField] private TMP_Text _messageText = null;
         [SerializeField] private Button _confirmButton = null;
         [SerializeField] private Button _cancelButton = null;
 
-        private readonly Subject<DialogResult> _resultSubject = new();
+        private UniTaskCompletionSource<PopupResult> _resultSource;
 
         protected override void OnInitialize()
         {
-            var dialogParameter = (DialogParameter)Parameter;
+            _resultSource = new UniTaskCompletionSource<PopupResult>();
 
-            _titleText.text = dialogParameter.Title;
-            _messageText.text = dialogParameter.Message;
-            _confirmButton.GetComponentInChildren<TMP_Text>().text = dialogParameter.ConfirmLabel;
+            var parameter = (PopupParameter)Parameter;
 
-            var hasCancelButton = dialogParameter.CancelLabel != null;
+            _titleText.text = parameter.Title;
+            _messageText.text = parameter.Message;
+            _confirmButton.GetComponentInChildren<TMP_Text>().text = parameter.ConfirmLabel;
+
+            var hasCancelButton = parameter.CancelLabel != null;
             _cancelButton.gameObject.SetActive(hasCancelButton);
             if (hasCancelButton)
             {
-                _cancelButton.GetComponentInChildren<TMP_Text>().text = dialogParameter.CancelLabel;
+                _cancelButton.GetComponentInChildren<TMP_Text>().text = parameter.CancelLabel;
             }
 
             _confirmButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSubject.OnNext(DialogResult.Confirm))
+                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Confirm))
                 .AddTo(this);
 
             _cancelButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSubject.OnNext(DialogResult.Cancel))
+                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Cancel))
                 .AddTo(this);
         }
 
@@ -62,7 +64,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public override async UniTask WaitAsync()
         {
-            await _resultSubject.FirstAsync().AsUniTask();
+            await _resultSource.Task;
             await CloseAsync();
         }
 
@@ -82,16 +84,16 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public override void OnClose()
         {
-            _resultSubject.OnNext(DialogResult.Cancel);
+            _resultSource.TrySetResult(PopupResult.Cancel);
         }
 
         /// <summary>
         /// Returns a UniTask that completes with the user's response.
         /// Must be awaited before WaitPopupAsync destroys the instance.
         /// </summary>
-        public UniTask<DialogResult> GetResultAsync()
+        public UniTask<PopupResult> GetResultAsync()
         {
-            return _resultSubject.FirstAsync().AsUniTask();
+            return _resultSource.Task;
         }
     }
 }
