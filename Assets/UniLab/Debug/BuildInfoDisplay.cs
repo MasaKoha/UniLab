@@ -1,7 +1,7 @@
 using TMPro;
 using UnityEngine;
 
-namespace UniLab.Debug
+namespace UniLab.Diagnostics
 {
     /// <summary>
     /// Displays the application version and build GUID on a TMP_Text component.
