@@ -146,20 +146,31 @@ namespace UniLab.Feature.MasterData
                     continue;
                 }
 
-                var localPath = GetLocalMasterPath(entry.MasterName);
-                var localHash = File.Exists(localPath) ? ComputeFileHash(localPath) : null;
-
-                var needsDownload = string.IsNullOrEmpty(localHash) ||
-                                    string.IsNullOrEmpty(entry.Hash) ||
-                                    !string.Equals(localHash, entry.Hash, StringComparison.Ordinal);
-
-                if (needsDownload)
+                if (!NeedsDownload(entry))
                 {
-                    downloadTargets.Add(entry.MasterName);
+                    continue;
                 }
+
+                downloadTargets.Add(entry.MasterName);
             }
 
             return downloadTargets;
+        }
+
+        private bool NeedsDownload(MasterCatalog entry)
+        {
+            if (string.IsNullOrEmpty(entry.Hash))
+            {
+                return true;
+            }
+
+            var localPath = GetLocalMasterPath(entry.MasterName);
+            if (!File.Exists(localPath))
+            {
+                return true;
+            }
+
+            return !string.Equals(ComputeFileHash(localPath), entry.Hash, StringComparison.Ordinal);
         }
 
         private async UniTask<string> DownloadCatalogAsync(string baseUrl)
@@ -182,10 +193,7 @@ namespace UniLab.Feature.MasterData
                     throw new ArgumentException("Base URL is required.", nameof(baseUrl));
                 }
 
-                var requestUrl = baseUrl.EndsWith("/", StringComparison.Ordinal)
-                    ? baseUrl + fileName
-                    : $"{baseUrl}/{fileName}";
-
+                var requestUrl = BuildRequestUrl(baseUrl, fileName);
                 using var request = UnityWebRequest.Get(requestUrl);
                 await request.SendWebRequest();
 
@@ -196,12 +204,8 @@ namespace UniLab.Feature.MasterData
                     throw new InvalidOperationException($"Download failed: {requestUrl} => {request.responseCode} {reason}");
                 }
 
-                if (!Directory.Exists(SavePath))
-                {
-                    Directory.CreateDirectory(SavePath);
-                }
-
                 var savePath = Path.Combine(SavePath, fileName);
+                EnsureSaveDirectoryExists();
                 await File.WriteAllBytesAsync(savePath, request.downloadHandler.data);
                 Debug.Log($"Downloaded {requestUrl} to {savePath}");
                 return savePath;
@@ -210,6 +214,21 @@ namespace UniLab.Feature.MasterData
             {
                 _onError.OnNext(e.Message);
                 throw;
+            }
+        }
+
+        private static string BuildRequestUrl(string baseUrl, string fileName)
+        {
+            return baseUrl.EndsWith("/", StringComparison.Ordinal)
+                ? baseUrl + fileName
+                : $"{baseUrl}/{fileName}";
+        }
+
+        private void EnsureSaveDirectoryExists()
+        {
+            if (!Directory.Exists(SavePath))
+            {
+                Directory.CreateDirectory(SavePath);
             }
         }
 
