@@ -2,15 +2,31 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cysharp.Threading.Tasks;
+using R3;
 using UnityEngine;
 
 namespace UniLab.Scene.Screen
 {
-    public abstract class ScreenManagerBase<TScreenBase> : MonoBehaviour where TScreenBase : ScreenBase
+    /// <summary>
+    /// Base class for screen managers. Maintains a list of screens, handles show/hide transitions,
+    /// exposes OnScreenChanged as an observable, and implements history-based BackAsync.
+    /// </summary>
+    public abstract class ScreenManagerBase<TScreenBase> : MonoBehaviour, IScreenManager
+        where TScreenBase : ScreenBase
     {
         private List<TScreenBase> _screens;
         private ScreenBase _currentScreen;
+        private readonly Stack<Enum> _history = new();
+        private readonly Subject<IScreenView> _onScreenChangedSubject = new();
 
+        /// <summary>
+        /// Emits the newly shown IScreenView each time ShowAsync transitions to a different screen.
+        /// </summary>
+        public Observable<IScreenView> OnScreenChanged => _onScreenChangedSubject;
+
+        /// <summary>
+        /// Registers and initializes the managed screens. All screens start hidden.
+        /// </summary>
         public void RegisterScreens(List<TScreenBase> screens)
         {
             _screens = screens;
@@ -21,6 +37,10 @@ namespace UniLab.Scene.Screen
             }
         }
 
+        /// <summary>
+        /// Shows the screen identified by <paramref name="type"/>, hiding the current one if needed.
+        /// Pushes the type onto the internal history stack and fires OnScreenChanged.
+        /// </summary>
         public async UniTask ShowAsync(Enum type)
         {
             if (_currentScreen != null)
@@ -42,10 +62,35 @@ namespace UniLab.Scene.Screen
                 return;
             }
 
+            _history.Push(type);
             _currentScreen = screen;
             _currentScreen.gameObject.SetActive(true);
             await _currentScreen.PreShowAsync();
             _currentScreen.Show();
+            _onScreenChangedSubject.OnNext(_currentScreen);
+        }
+
+        /// <summary>
+        /// Returns to the previous screen in the history stack. Does nothing if history is empty or has only one entry.
+        /// </summary>
+        public async UniTask BackAsync()
+        {
+            if (_history.Count <= 1)
+            {
+                return;
+            }
+
+            _history.Pop();
+            var previousType = _history.Peek();
+
+            // Pop from stack so ShowAsync re-pushes it cleanly
+            _history.Pop();
+            await ShowAsync(previousType);
+        }
+
+        private void OnDestroy()
+        {
+            _onScreenChangedSubject.Dispose();
         }
     }
 }
