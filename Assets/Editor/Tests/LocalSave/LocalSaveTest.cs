@@ -2,7 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UniLab.Persistence;
 
-namespace UniLab.Tests.EditMode.LocalSave
+namespace UniLab.Tests.EditMode.Persistence
 {
     public class LocalSaveTests
     {
