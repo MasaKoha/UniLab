@@ -62,7 +62,7 @@ namespace UniLab.Feature.UI.Dialog
         /// </summary>
         public override async UniTask WaitAsync()
         {
-            await _resultSubject.FirstAsync();
+            await _resultSubject.FirstAsync().AsUniTask();
             await CloseAsync();
         }
 
