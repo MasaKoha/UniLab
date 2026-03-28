@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Threading;
-using UnityEngine;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using R3;
+using UniLab.Common.Display;
+using UnityEngine;
 
 namespace UniLab.Feature.Banner
 {
@@ -21,17 +22,17 @@ namespace UniLab.Feature.Banner
 
         private float _cellWidth;
 
-        // 現在表示されているバナーのパラメータリスト。このリストは元のパラメータリストからローテーションされて更新される。
-        private List<TParameter> _currentBannerParameters;
+        // perf: LinkedList enables O(1) rotation (RemoveFirst/AddLast and vice versa) vs O(N) RemoveAt(0) on List.
+        private LinkedList<TParameter> _currentBannerParameters;
 
-        // 元のパラメータリスト。Initialize()で設定されたパラメータのコピー。ローテーションしても更新されないもの。
+        // Original unrotated parameter list. Never mutated after Initialize().
         private List<TParameter> _parametersOriginal;
         public int ParameterCount => _parametersOriginal.Count;
 
         public void Initialize(List<TParameter> parameters)
         {
             _parametersOriginal = new List<TParameter>(parameters);
-            _currentBannerParameters = new List<TParameter>(parameters);
+            _currentBannerParameters = new LinkedList<TParameter>(parameters);
             foreach (var cell in _cells)
             {
                 Destroy(cell.gameObject);
@@ -149,25 +150,28 @@ namespace UniLab.Feature.Banner
 
         private void UpdateAllCellContents()
         {
-            // 0: ダミー（末尾データ）
+            // 0: dummy cell (shows the last parameter — appears to the left of the first real cell)
             if (_cells[0].GetComponent<BannerCellBase<TParameter>>() is { } dummyFirst)
             {
-                dummyFirst.UpdateContentAsync(_currentBannerParameters[^1]).Forget();
+                dummyFirst.UpdateContentAsync(_currentBannerParameters.Last.Value).Forget();
             }
 
-            // 1～N: 実データ
-            for (var i = 0; i < _currentBannerParameters.Count; i++)
+            // 1～N: real data cells
+            var cellIndex = 1;
+            foreach (var parameter in _currentBannerParameters)
             {
-                if (_cells[i + 1].GetComponent<BannerCellBase<TParameter>>() is { } cell)
+                if (_cells[cellIndex].GetComponent<BannerCellBase<TParameter>>() is { } cell)
                 {
-                    cell.UpdateContentAsync(_currentBannerParameters[i]).Forget();
+                    cell.UpdateContentAsync(parameter).Forget();
                 }
+
+                cellIndex++;
             }
 
-            // N+1: ダミー（先頭データ）
+            // N+1: dummy cell (shows the first parameter — appears to the right of the last real cell)
             if (_cells[^1].GetComponent<BannerCellBase<TParameter>>() is { } dummyLast)
             {
-                dummyLast.UpdateContentAsync(_currentBannerParameters[0]).Forget();
+                dummyLast.UpdateContentAsync(_currentBannerParameters.First.Value).Forget();
             }
         }
 
@@ -203,22 +207,24 @@ namespace UniLab.Feature.Banner
 
             if (direction == SwipeDirection.Left)
             {
-                var lastParam = _currentBannerParameters[^1];
-                _currentBannerParameters.RemoveAt(_currentBannerParameters.Count - 1);
-                _currentBannerParameters.Insert(0, lastParam);
+                // perf: O(1) rotate-right — move last node to front
+                var lastValue = _currentBannerParameters.Last.Value;
+                _currentBannerParameters.RemoveLast();
+                _currentBannerParameters.AddFirst(lastValue);
             }
             else
             {
-                var firstParam = _currentBannerParameters[0];
-                _currentBannerParameters.RemoveAt(0);
-                _currentBannerParameters.Add(firstParam);
+                // perf: O(1) rotate-left — move first node to back
+                var firstValue = _currentBannerParameters.First.Value;
+                _currentBannerParameters.RemoveFirst();
+                _currentBannerParameters.AddLast(firstValue);
             }
 
             UpdateAllCellContents();
             UpdateCellPositions();
             _content.anchoredPosition = new Vector2(-(_cellWidth + _spaceX) * 0, _content.anchoredPosition.y);
-            // 中央に表示されているデータの「元リストでのインデックス」をセット
-            var currentParameter = _currentBannerParameters[0];
+            // Find the original index of the parameter now at the front (center cell).
+            var currentParameter = _currentBannerParameters.First.Value;
             var originalIndex = _parametersOriginal.FindIndex(p => ReferenceEquals(p, currentParameter));
             _currentIndexReactiveProperty.Value = originalIndex;
             onComplete?.Invoke();

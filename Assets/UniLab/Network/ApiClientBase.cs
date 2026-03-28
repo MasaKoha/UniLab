@@ -179,14 +179,7 @@ namespace UniLab.Network
                 };
             }
 
-            // Copy headers by re-applying common headers through the same path.
-            clone.SetRequestHeader("Accept", "application/json");
-            var token = GetAccessToken();
-            if (!string.IsNullOrEmpty(token))
-            {
-                clone.SetRequestHeader("Authorization", "Bearer " + token);
-            }
-
+            SetCommonHeaders(clone);
             return clone;
         }
     }

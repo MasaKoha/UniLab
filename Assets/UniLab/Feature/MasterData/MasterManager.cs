@@ -82,7 +82,12 @@ namespace UniLab.Feature.MasterData
 
                 return MessagePackSerializer.Deserialize<MasterCatalog[]>(bytes);
             }
-            catch (Exception e)
+            catch (IOException e)
+            {
+                Debug.LogWarning($"Failed to read catalog file at {loadPath}: {e.Message}");
+                return null;
+            }
+            catch (MessagePackSerializationException e)
             {
                 Debug.LogWarning($"Failed to deserialize catalog at {loadPath}: {e.Message}");
                 return null;

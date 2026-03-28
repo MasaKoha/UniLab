@@ -71,7 +71,10 @@ namespace UniLab.Scene.Screen
         }
 
         /// <summary>
-        /// Returns to the previous screen in the history stack. Does nothing if history is empty or has only one entry.
+        /// Returns to the previous screen in the history stack.
+        /// Pops the current entry, then peeks the target, then pops it again before calling ShowAsync —
+        /// ShowAsync itself pushes the target back onto the stack, so the pre-pop prevents a duplicate entry.
+        /// Does nothing if the history has one or fewer entries.
         /// </summary>
         public async UniTask BackAsync()
         {
@@ -80,10 +83,11 @@ namespace UniLab.Scene.Screen
                 return;
             }
 
+            // Remove the current screen from history.
             _history.Pop();
             var previousType = _history.Peek();
 
-            // Pop from stack so ShowAsync re-pushes it cleanly
+            // Remove the previous entry too — ShowAsync will re-push it when it runs.
             _history.Pop();
             await ShowAsync(previousType);
         }

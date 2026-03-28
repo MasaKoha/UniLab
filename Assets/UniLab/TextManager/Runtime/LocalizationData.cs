@@ -1,9 +1,14 @@
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
+using UnityEngine;
 
 namespace UniLab.TextManager
 {
+    /// <summary>
+    /// ScriptableObject that maps localization keys (FNV-1a hashes) to translated strings.
+    /// Caches lookup dictionaries lazily on first Get() call, thread-safe via lock.
+    /// Call InvalidateCache() after modifying Entries or Languages at runtime.
+    /// </summary>
     [CreateAssetMenu(menuName = "Localization/LocalizationData")]
     public class LocalizationData : ScriptableObject
     {
@@ -13,51 +18,74 @@ namespace UniLab.TextManager
         private Dictionary<uint, LocalizationEntry> _hashMap;
         private Dictionary<uint, int> _languageHashToIndex;
 
-        public void BuildHashMap()
-        {
-            _hashMap = Entries.ToDictionary(e => e.Hash, e => e);
-        }
+        // Guards lazy initialization of both dictionaries — safe for background thread access.
+        private readonly object _cacheLock = new();
 
-        public void BuildLanguageMap()
+        /// <summary>
+        /// Pre-warms both lookup dictionaries. Optional — Get() also builds them lazily on first call.
+        /// Call this after loading the asset to avoid a hitch on the first text lookup.
+        /// </summary>
+        public void WarmupCache()
         {
-            _languageHashToIndex = new Dictionary<uint, int>();
-            for (var i = 0; i < Languages.Count; i++)
+            lock (_cacheLock)
             {
-                var hash = KeyHash.Fnv1AHash(Languages[i]);
-                _languageHashToIndex[hash] = i;
+                _hashMap ??= Entries.ToDictionary(e => e.Hash, e => e);
+                _languageHashToIndex ??= BuildLanguageHashToIndex();
             }
         }
 
+        /// <summary>
+        /// Forces a full rebuild of both lookup dictionaries.
+        /// Call this when Entries or Languages are changed at runtime (e.g. after an import).
+        /// </summary>
+        public void InvalidateCache()
+        {
+            lock (_cacheLock)
+            {
+                _hashMap = null;
+                _languageHashToIndex = null;
+            }
+        }
+
+        /// <summary>
+        /// Returns the translated string for the given key and language hashes.
+        /// Lazily builds the lookup dictionaries on first call.
+        /// </summary>
         public string Get(uint keyHash, uint languageHash)
         {
-            if (_hashMap == null)
+            lock (_cacheLock)
             {
-                BuildHashMap();
+                _hashMap ??= Entries.ToDictionary(e => e.Hash, e => e);
+                _languageHashToIndex ??= BuildLanguageHashToIndex();
             }
 
-            if (_languageHashToIndex == null)
-            {
-                BuildLanguageMap();
-            }
-
-            var langIndex = 0;
-            if (_languageHashToIndex != null && !_languageHashToIndex.TryGetValue(languageHash, out langIndex))
+            if (!_languageHashToIndex.TryGetValue(languageHash, out var langIndex))
             {
                 return $"[MissingLangHash:{languageHash}]";
             }
 
-            LocalizationEntry entry = null;
-            if (_hashMap != null && !_hashMap.TryGetValue(keyHash, out entry))
+            if (!_hashMap.TryGetValue(keyHash, out var entry))
             {
                 return $"[MissingKeyHash:{keyHash}]";
             }
 
-            if (entry != null && langIndex >= entry.Values.Count)
+            if (langIndex >= entry.Values.Count)
             {
                 return $"[MissingValue:{langIndex}]";
             }
 
-            return entry != null ? entry.Values[langIndex] : string.Empty;
+            return entry.Values[langIndex];
+        }
+
+        private Dictionary<uint, int> BuildLanguageHashToIndex()
+        {
+            var map = new Dictionary<uint, int>(Languages.Count);
+            for (var i = 0; i < Languages.Count; i++)
+            {
+                map[KeyHash.Fnv1AHash(Languages[i])] = i;
+            }
+
+            return map;
         }
     }
 }

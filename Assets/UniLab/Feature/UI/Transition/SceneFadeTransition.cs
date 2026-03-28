@@ -53,9 +53,12 @@ namespace UniLab.Feature.UI.Transition
             }
             catch (System.OperationCanceledException)
             {
-                // Kill the tween to avoid dangling animations if cancelled externally
-                tween.Kill();
                 throw;
+            }
+            finally
+            {
+                // Kill the tween on both cancellation and normal completion — safe to call on a completed tween.
+                tween.Kill();
             }
         }
     }

@@ -1,18 +1,12 @@
 using Cysharp.Threading.Tasks;
+using R3;
+using UniLab.Common.Display;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using R3;
 using UnityEngine.UI;
 
 namespace UniLab.Feature.Banner
 {
-    public enum SwipeDirection
-    {
-        None,
-        Left,
-        Right,
-    }
-
     public abstract class BannerCellBase<T> : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDragHandler, IPointerClickHandler where T : class
     {
         [SerializeField] private Image _targetImage = null;
