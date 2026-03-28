@@ -36,16 +36,11 @@ namespace UniLab.Feature.Animation
             }
         }
 
-        public async UniTask PlayAsync(CancellationToken token)
-        {
-            await PlayAsync(null, null, token);
-        }
-
-        public async UniTask PlayAsync(string targetAnimationName, CancellationToken token)
-        {
-            await PlayAsync(targetAnimationName, null, token);
-        }
-
+        /// <summary>
+        /// Plays the animation. Pass <paramref name="token"/> to support external cancellation.
+        /// Pass <paramref name="targetAnimationName"/> to override the inspector-configured name.
+        /// Pass <paramref name="loopCount"/> to override the inspector-configured loop count (0 = infinite).
+        /// </summary>
         public async UniTask PlayAsync(string targetAnimationName = null, int? loopCount = null, CancellationToken token = default)
         {
             var animationName = targetAnimationName ?? _animationName;

@@ -46,8 +46,7 @@ namespace UniLab.TextManager
 
             if (_data != null)
             {
-                _data.BuildHashMap();
-                _data.BuildLanguageMap();
+                _data.WarmupCache();
             }
             else
             {

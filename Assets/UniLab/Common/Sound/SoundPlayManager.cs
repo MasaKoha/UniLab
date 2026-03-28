@@ -4,20 +4,32 @@ using UnityEngine.Audio;
 
 namespace UniLab.Common.Sound
 {
+    /// <summary>Initial volume levels (0–1) passed to SoundPlayManager.Initialize().</summary>
     public class AudioSettings
     {
+        /// <summary>Initial SE channel volume (0–1).</summary>
         public float SeVolume = 1.0f;
+        /// <summary>Initial BGM channel volume (0–1).</summary>
         public float BgmVolume = 1.0f;
+        /// <summary>Initial voice channel volume (0–1).</summary>
         public float VoiceVolume = 1.0f;
+        /// <summary>Initial master channel volume (0–1).</summary>
         public float MasterVolume = 1.0f;
     }
 
+    /// <summary>Number of pooled AudioSource instances created per channel at initialization.</summary>
     public class AudioCount
     {
+        /// <summary>Number of simultaneously playable SE sources.</summary>
         public int SeCount = 8;
+        /// <summary>Number of simultaneously playable voice sources.</summary>
         public int VoiceCount = 10;
     }
 
+    /// <summary>
+    /// Singleton manager for BGM, SE, and voice playback via AudioMixer channels.
+    /// Call Initialize() once with AudioCount and AudioSettings before playing audio.
+    /// </summary>
     public class SoundPlayManager : SingletonMonoBehaviour<SoundPlayManager>
     {
         [SerializeField] private AudioMixer _audioMixer = null;

@@ -3,6 +3,10 @@ using UnityEngine;
 
 namespace UniLab.Common
 {
+    /// <summary>
+    /// Generic singleton base for MonoBehaviour. Creates the instance on first access if none exists in the scene.
+    /// Call SetDontDestroyOnLoad() in OnAwake() to persist across scene loads.
+    /// </summary>
     public abstract class SingletonMonoBehaviour<T> : MonoBehaviour, IDisposable where T : MonoBehaviour
     {
         private static T _instance;
