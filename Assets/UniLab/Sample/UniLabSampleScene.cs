@@ -840,6 +840,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     // UI helpers
     // =========================================================
 
+    // Labels are purely visual — never used as raycast targets.
     private Text CreateLabel(RectTransform parent, string text, int fontSize, TextAnchor alignment, Color color)
     {
         var go = new GameObject("Label", typeof(Text));
@@ -850,6 +851,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         label.color = color;
         label.text = text;
         label.alignment = alignment;
+        label.raycastTarget = false;
         label.horizontalOverflow = HorizontalWrapMode.Wrap;
         label.verticalOverflow = VerticalWrapMode.Overflow;
         var rect = go.GetComponent<RectTransform>();
@@ -860,20 +862,28 @@ public sealed class UniLabSampleScene : MonoBehaviour
         return label;
     }
 
+    // Background panels are purely visual — never used as raycast targets.
+    // Button GameObjects are created separately and keep the default raycastTarget = true.
     private RectTransform CreatePanel(Transform parent, string name, Color color)
     {
         var go = new GameObject(name, typeof(Image));
         go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = color;
+        var image = go.GetComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
         return go.GetComponent<RectTransform>();
     }
 
     private ScrollRect BuildScrollRect(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
     {
-        // Scroll root
+        // Scroll root: transparent Image is visual only; raycastTarget = false.
+        // The Viewport Image below keeps raycastTarget = true so that ScrollRect
+        // receives drag/scroll events when the content area is empty.
         var scrollGo = new GameObject("ScrollView", typeof(RectTransform), typeof(Image));
         scrollGo.transform.SetParent(parent, false);
-        scrollGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
+        var scrollRootImage = scrollGo.GetComponent<Image>();
+        scrollRootImage.color = new Color(0f, 0f, 0f, 0f);
+        scrollRootImage.raycastTarget = false;
         var scrollRect = scrollGo.AddComponent<ScrollRect>();
         SetAnchoredLayout(scrollGo.GetComponent<RectTransform>(), anchorMin, anchorMax);
 
