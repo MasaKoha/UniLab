@@ -59,6 +59,13 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private Text _logText;
     private readonly List<string> _logLines = new();
     private const int MaxLogLines = 14;
+
+    // Status color constants for feature status panels.
+    private static readonly Color StatusColorNeutral = new Color(0.12f, 0.12f, 0.18f);
+    private static readonly Color StatusColorSuccess = new Color(0.10f, 0.28f, 0.15f);
+    private static readonly Color StatusColorWarning = new Color(0.32f, 0.20f, 0.08f);
+    private static readonly Color StatusColorError   = new Color(0.28f, 0.10f, 0.10f);
+
     private Font _font;
 
     private GameObject _menuPanel;
@@ -72,6 +79,11 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
     // Per-feature subscriptions (e.g. UniLabButton) — cleared on each ShowFeature call
     private readonly CompositeDisposable _featureDisposables = new();
+
+    // Status display for the currently shown feature screen.
+    // Set by BuildFeatureContent_*, updated by Demo* methods.
+    private Image _featureStatusImage;
+    private Text _featureStatusText;
 
     // ----- Feature state -----
 
@@ -182,6 +194,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         LocalSave.Save(new SampleSaveData { Counter = _localSaveCounter, Label = "hello" });
         var loaded = LocalSave.Load<SampleSaveData>();
         Log($"[LocalSave] Saved {_localSaveCounter}  →  loaded counter={loaded.Counter}");
+        RefreshLocalSaveStatus();
     }
 
     private void DemoLocalSaveDelete()
@@ -189,6 +202,20 @@ public sealed class UniLabSampleScene : MonoBehaviour
         LocalSave.Delete<SampleSaveData>();
         var loaded = LocalSave.Load<SampleSaveData>();
         Log($"[LocalSave] Deleted. Default load: counter={loaded.Counter}");
+        RefreshLocalSaveStatus();
+    }
+
+    private void RefreshLocalSaveStatus()
+    {
+        var loaded = LocalSave.Load<SampleSaveData>();
+        if (loaded.Counter == 0 && loaded.Label == null)
+        {
+            UpdateStatus("No data saved.", StatusColorNeutral);
+        }
+        else
+        {
+            UpdateStatus($"Counter : {loaded.Counter}\nLabel   : {loaded.Label}", StatusColorSuccess);
+        }
     }
 
     // --- Encrypted Storage ---
@@ -199,12 +226,14 @@ public sealed class UniLabSampleScene : MonoBehaviour
         _encryptedStorage.Save("demo_key", data, TimeSpan.FromMinutes(10));
         var loaded = _encryptedStorage.Load<SampleSaveData>("demo_key");
         Log($"[Storage] AES-saved & loaded: counter={loaded.Counter} label={loaded.Label}");
+        UpdateStatus("demo_key: ✓ Saved\nCounter : 99 / Label : secret", StatusColorSuccess);
     }
 
     private void DemoEncryptedStorageDelete()
     {
         _encryptedStorage.Delete("demo_key");
         Log("[Storage] Deleted demo_key. Exists=" + _encryptedStorage.Exists("demo_key"));
+        UpdateStatus("demo_key: — Not found", StatusColorError);
     }
 
     // --- TextManager ---
@@ -215,6 +244,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         // Requires LocalizationData asset in Resources; returns [Missing:…] without it.
         var text = TextManager.GetText("app_title");
         Log($"[Text] ja: app_title = {text}");
+        UpdateStatus($"Language : JA\napp_title = {text}", StatusColorSuccess);
     }
 
     private void DemoTextManagerEn()
@@ -223,6 +253,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         var text = TextManager.GetText("app_title");
         Log($"[Text] en: app_title = {text}");
         TextManager.SetLanguage("ja"); // restore
+        UpdateStatus($"Language : EN\napp_title = {text}", StatusColorSuccess);
     }
 
     // --- InputBlockManager ---
@@ -234,11 +265,13 @@ public sealed class UniLabSampleScene : MonoBehaviour
             _inputBlockHandle.Dispose();
             _inputBlockHandle = null;
             Log($"[InputBlock] Released. BlockedInput={InputBlockManager.BlockedInput}");
+            UpdateStatus("Input: Open", StatusColorSuccess);
         }
         else
         {
             _inputBlockHandle = InputBlockManager.CreateInputBlock();
             Log($"[InputBlock] Created. BlockedInput={InputBlockManager.BlockedInput}");
+            UpdateStatus("Input: BLOCKED", StatusColorError);
         }
     }
 
@@ -246,7 +279,20 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
     private void DemoNetworkReachability()
     {
-        Log($"[Network] Current: {Application.internetReachability}");
+        var reachability = Application.internetReachability;
+        Log($"[Network] Current: {reachability}");
+        switch (reachability)
+        {
+            case NetworkReachability.ReachableViaLocalAreaNetwork:
+                UpdateStatus("Reachability: WiFi ✓", StatusColorSuccess);
+                break;
+            case NetworkReachability.ReachableViaCarrierDataNetwork:
+                UpdateStatus("Reachability: Mobile ✓", StatusColorWarning);
+                break;
+            default:
+                UpdateStatus("Reachability: Not Reachable ✗", StatusColorError);
+                break;
+        }
     }
 
     // --- OfflineQueue ---
@@ -256,6 +302,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         var key = $"req_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
         _offlineQueue.Enqueue(key, new SamplePendingRequest { Endpoint = "/api/demo", Body = "payload" });
         Log($"[OfflineQueue] Enqueued. Count={_offlineQueue.Count}");
+        RefreshOfflineQueueStatus();
     }
 
     private void DemoOfflineQueueFlush()
@@ -265,6 +312,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
     private async UniTaskVoid FlushOfflineQueueAsync()
     {
+        UpdateStatus("Flushing...", StatusColorWarning);
         var flushedCount = 0;
         await _offlineQueue.FlushAsync(async (request, ct) =>
         {
@@ -273,12 +321,22 @@ public sealed class UniLabSampleScene : MonoBehaviour
             Log($"[OfflineQueue] Sent: {request.Endpoint}");
         }, destroyCancellationToken);
         Log($"[OfflineQueue] Flush done. Sent={flushedCount} Remaining={_offlineQueue.Count}");
+        RefreshOfflineQueueStatus();
     }
 
     private void DemoOfflineQueueClear()
     {
         _offlineQueue.Clear();
         Log($"[OfflineQueue] Cleared. Count={_offlineQueue.Count}");
+        RefreshOfflineQueueStatus();
+    }
+
+    private void RefreshOfflineQueueStatus()
+    {
+        var count = _offlineQueue.Count;
+        UpdateStatus(
+            count == 0 ? "Queue: empty" : $"Queue: {count} item(s) pending",
+            count == 0 ? StatusColorNeutral : StatusColorWarning);
     }
 
     // --- VariableGridLayoutGroup ---
@@ -308,6 +366,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         label.fontSize = 13;
         label.color = Color.white;
         label.alignment = TextAnchor.MiddleCenter;
+        label.raycastTarget = false;
         label.text = _gridChildCount.ToString();
         var labelRect = label.GetComponent<RectTransform>();
         labelRect.anchorMin = Vector2.zero;
@@ -316,6 +375,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         LayoutRebuilder.MarkLayoutForRebuild(_gridContainer);
         Log($"[Grid] Added item {_gridChildCount} (w={width})");
+        UpdateStatus($"Items: {_gridChildCount}", StatusColorSuccess);
     }
 
     private void DemoGridClear()
@@ -326,6 +386,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         }
         _gridChildCount = 0;
         Log("[Grid] Cleared");
+        UpdateStatus("Items: 0", StatusColorNeutral);
     }
 
     // --- AnimationPlayer ---
@@ -338,11 +399,12 @@ public sealed class UniLabSampleScene : MonoBehaviour
         go.AddComponent<Animator>(); // AnimationPlayer requires Animator on the same GameObject
         var player = go.AddComponent<AnimationPlayer>();
 
-        _disposables.Add(player.OnPlay.Subscribe(_ => Log("[Animation] OnPlay fired")));
-        _disposables.Add(player.OnComplete.Subscribe(_ => Log("[Animation] OnComplete fired")));
+        _disposables.Add(player.OnPlay.Subscribe(_ => { Log("[Animation] OnPlay fired"); UpdateStatus("IsPlaying: true", StatusColorSuccess); }));
+        _disposables.Add(player.OnComplete.Subscribe(_ => { Log("[Animation] OnComplete fired"); UpdateStatus("IsPlaying: false", StatusColorNeutral); }));
 
         Log("[Animation] AnimationPlayer set up. IsPlaying=" + player.IsPlaying);
         Log("[Animation] Call player.PlayAsync(\"StateName\") with a real AnimatorController to play.");
+        UpdateStatus("IsPlaying: false\nOnPlay / OnComplete subscribed", StatusColorSuccess);
 
         // Demonstrate the async call signature (returns immediately — animation name is empty)
         player.PlayAsync().Forget();
@@ -359,6 +421,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         if (!_hasToastManager)
         {
             Log("[Toast] Skipped — enable _hasToastManager after adding ToastManager prefab to scene");
+            UpdateStatus("⚠ _hasToastManager is disabled.\nEnable in Inspector.", StatusColorWarning);
             return;
         }
 
@@ -366,6 +429,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         {
             ToastManager.Instance.Show(message, type);
             Log($"[Toast] Shown ({type}): {message}");
+            UpdateStatus($"Last: {type}\n\"{message}\"", StatusColorSuccess);
         }
         catch (Exception exception)
         {
@@ -380,6 +444,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         if (!_hasLoadingManager)
         {
             Log("[Loading] Skipped — enable _hasLoadingManager after adding LoadingOverlayManager prefab to scene");
+            UpdateStatus("⚠ _hasLoadingManager is disabled.\nEnable in Inspector.", StatusColorWarning);
             return;
         }
 
@@ -391,12 +456,15 @@ public sealed class UniLabSampleScene : MonoBehaviour
         try
         {
             using var handle = LoadingOverlayManager.Instance.Show();
+            UpdateStatus("Overlay: Visible", StatusColorWarning);
             Log("[Loading] Overlay shown (1.5 s)...");
             await UniTask.Delay(1500, cancellationToken: destroyCancellationToken);
+            UpdateStatus("Overlay: Hidden", StatusColorNeutral);
         }
         catch (Exception exception)
         {
             Log($"[Loading] Error: {exception.Message}");
+            UpdateStatus($"Error: {exception.Message}", StatusColorError);
         }
         Log("[Loading] Overlay hidden");
     }
@@ -408,6 +476,9 @@ public sealed class UniLabSampleScene : MonoBehaviour
         var manager = BackKeyInputManager.Instance;
         manager.SetBlock(!manager.IsBlocked);
         Log($"[BackKey] IsBlocked={manager.IsBlocked} (Android only; Observable always active)");
+        UpdateStatus(
+            manager.IsBlocked ? "Back Key: BLOCKED" : "Back Key: Active",
+            manager.IsBlocked ? StatusColorError : StatusColorSuccess);
     }
 
     // =========================================================
@@ -592,6 +663,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         _logText.font = _font;
         _logText.fontSize = 20;
         _logText.color = new Color(0.6f, 1f, 0.6f);
+        _logText.raycastTarget = false;
         _logText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _logText.verticalOverflow = VerticalWrapMode.Overflow;
         var logRect = logGo.GetComponent<RectTransform>();
@@ -608,6 +680,8 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_LocalSave(RectTransform parent)
     {
         AddFeatureHeader(parent, "LocalSave", "PlayerPrefs + Base64 JSON による軽量ローカル保存。");
+        AddStatusDisplay(parent, "No data saved.", StatusColorNeutral);
+        RefreshLocalSaveStatus();
         AddFeatureButtonRow(parent,
             ("Save / Load", (Action)DemoLocalSaveSave),
             ("Delete", DemoLocalSaveDelete));
@@ -616,6 +690,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_EncryptedStorage(RectTransform parent)
     {
         AddFeatureHeader(parent, "EncryptedStorage", "AES-256 暗号化 + TTL キャッシュ付きローカルストレージ。");
+        AddStatusDisplay(parent, "demo_key: — Not found", StatusColorError);
         AddFeatureButtonRow(parent,
             ("Save & Load", (Action)DemoEncryptedStorage),
             ("Delete", DemoEncryptedStorageDelete));
@@ -624,6 +699,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_TextManager(RectTransform parent)
     {
         AddFeatureHeader(parent, "TextManager", "FNV-1A ハッシュベースのローカライズシステム。");
+        AddStatusDisplay(parent, "Language: JA\napp_title = [tap a button]", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("GetText [ja]", (Action)DemoTextManagerJa),
             ("GetText [en]", DemoTextManagerEn));
@@ -632,6 +708,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_InputBlock(RectTransform parent)
     {
         AddFeatureHeader(parent, "InputBlock", "参照カウント方式の入力ブロック管理。");
+        AddStatusDisplay(parent, "Input: Open", StatusColorSuccess);
         AddFeatureButtonRow(parent,
             ("Toggle Block", (Action)DemoToggleInputBlock));
     }
@@ -639,6 +716,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_Network(RectTransform parent)
     {
         AddFeatureHeader(parent, "Network", "R3 Observable による通信状態の監視。");
+        AddStatusDisplay(parent, $"Reachability: {Application.internetReachability}", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("Check Now", (Action)DemoNetworkReachability));
     }
@@ -646,6 +724,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_OfflineQueue(RectTransform parent)
     {
         AddFeatureHeader(parent, "OfflineQueue", "オフライン中のリクエストを永続化キューに積み、復帰時に送信。");
+        AddStatusDisplay(parent, "Queue: empty", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("Enqueue", (Action)DemoOfflineQueueEnqueue),
             ("Flush", DemoOfflineQueueFlush),
@@ -655,6 +734,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_Grid(RectTransform parent)
     {
         AddFeatureHeader(parent, "Grid", "可変幅アイテムを折り返しながら並べるレイアウトグループ。");
+        AddStatusDisplay(parent, "Items: 0", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("+ Item", (Action)DemoGridAddItem),
             ("Clear", DemoGridClear));
@@ -662,7 +742,9 @@ public sealed class UniLabSampleScene : MonoBehaviour
         // Grid demo area — rebuilt each time this feature is shown
         var gridPanelGo = new GameObject("GridPanel", typeof(RectTransform), typeof(Image));
         gridPanelGo.transform.SetParent(parent, false);
-        gridPanelGo.GetComponent<Image>().color = new Color(0.15f, 0.15f, 0.18f);
+        var gridPanelImage = gridPanelGo.GetComponent<Image>();
+        gridPanelImage.color = new Color(0.15f, 0.15f, 0.18f);
+        gridPanelImage.raycastTarget = false;
 
         _gridContainer = gridPanelGo.GetComponent<RectTransform>();
         _gridContainer.anchorMin = new Vector2(0f, 1f);
@@ -685,6 +767,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_UniLabButton(RectTransform parent)
     {
         AddFeatureHeader(parent, "UniLabButton", "Hold / Decide / State の Rx Observable を持つ拡張ボタン。");
+        AddStatusDisplay(parent, "State: None", StatusColorNeutral);
 
         var buttonGo = new GameObject("UniLabButtonDemo", typeof(Image));
         buttonGo.transform.SetParent(parent, false);
@@ -707,13 +790,38 @@ public sealed class UniLabSampleScene : MonoBehaviour
         _featureDisposables.Add(uniLabButton.OnDecideAsObservable().Subscribe(_ => Log("[UniLabButton] OnDecide")));
         _featureDisposables.Add(
             uniLabButton.StateAsObservable()
-                .Where(state => state != ButtonState.None)
-                .Subscribe(state => Log($"[UniLabButton] State → {state}")));
+                .Subscribe(state =>
+                {
+                    Log($"[UniLabButton] State → {state}");
+                    string statusText;
+                    Color statusColor;
+                    switch (state)
+                    {
+                        case ButtonState.Down:
+                            statusText = "State: Pressing";
+                            statusColor = StatusColorSuccess;
+                            break;
+                        case ButtonState.Hold:
+                            statusText = "State: Holding";
+                            statusColor = StatusColorWarning;
+                            break;
+                        case ButtonState.Up:
+                            statusText = "State: Up";
+                            statusColor = StatusColorNeutral;
+                            break;
+                        default:
+                            statusText = "State: None";
+                            statusColor = StatusColorNeutral;
+                            break;
+                    }
+                    UpdateStatus(statusText, statusColor);
+                }));
     }
 
     private void BuildFeatureContent_AnimationPlayer(RectTransform parent)
     {
         AddFeatureHeader(parent, "AnimationPlayer", "Animator の非同期再生と OnPlay / OnComplete Observable のラッパー。");
+        AddStatusDisplay(parent, "IsPlaying: —\n(tap Setup to initialize)", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("Setup Demo", (Action)DemoAnimationPlayerSetup));
     }
@@ -721,6 +829,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_Toast(RectTransform parent)
     {
         AddFeatureHeader(parent, "Toast", "[Prefab Required] _hasToastManager を有効化してから使用。");
+        AddStatusDisplay(parent, "Last toast: (none)", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("Info", (Action)DemoToastInfo),
             ("Success", DemoToastSuccess),
@@ -730,6 +839,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_Loading(RectTransform parent)
     {
         AddFeatureHeader(parent, "Loading", "[Prefab Required] _hasLoadingManager を有効化してから使用。");
+        AddStatusDisplay(parent, "Overlay: Hidden", StatusColorNeutral);
         AddFeatureButtonRow(parent,
             ("Show 1.5 s", (Action)DemoLoadingOverlay));
     }
@@ -737,6 +847,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void BuildFeatureContent_BackKey(RectTransform parent)
     {
         AddFeatureHeader(parent, "BackKey", "Android バックキーの Observable ラッパー。IsBlocked でブロック可能。");
+        AddStatusDisplay(parent, "Back Key: Active", StatusColorSuccess);
         AddFeatureButtonRow(parent,
             ("Toggle Block", (Action)DemoBackKeyToggleBlock));
     }
@@ -757,6 +868,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         titleText.color = Color.white;
         titleText.text = title;
         titleText.alignment = TextAnchor.MiddleLeft;
+        titleText.raycastTarget = false;
         titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
         titleText.verticalOverflow = VerticalWrapMode.Overflow;
         var titleRect = titleGo.GetComponent<RectTransform>();
@@ -774,6 +886,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         descText.color = new Color(0.7f, 0.7f, 0.7f);
         descText.text = description;
         descText.alignment = TextAnchor.UpperLeft;
+        descText.raycastTarget = false;
         descText.horizontalOverflow = HorizontalWrapMode.Wrap;
         descText.verticalOverflow = VerticalWrapMode.Overflow;
         var descRect = descGo.GetComponent<RectTransform>();
@@ -785,7 +898,9 @@ public sealed class UniLabSampleScene : MonoBehaviour
         // Divider
         var dividerGo = new GameObject("Divider", typeof(Image));
         dividerGo.transform.SetParent(parent, false);
-        dividerGo.GetComponent<Image>().color = new Color(0.3f, 0.3f, 0.35f);
+        var dividerImage = dividerGo.GetComponent<Image>();
+        dividerImage.color = new Color(0.3f, 0.3f, 0.35f);
+        dividerImage.raycastTarget = false;
         var dividerRect = dividerGo.GetComponent<RectTransform>();
         dividerRect.anchorMin = new Vector2(0f, 1f);
         dividerRect.anchorMax = new Vector2(1f, 1f);
@@ -860,6 +975,40 @@ public sealed class UniLabSampleScene : MonoBehaviour
         rect.offsetMin = new Vector2(4f, 0f);
         rect.offsetMax = new Vector2(-4f, 0f);
         return label;
+    }
+
+    /// <summary>
+    /// Adds a 140px-tall status display panel to the feature content area.
+    /// Sets _featureStatusImage and _featureStatusText for later updates.
+    /// </summary>
+    private void AddStatusDisplay(RectTransform parent, string initialText, Color initialColor)
+    {
+        var panelGo = new GameObject("StatusPanel", typeof(Image));
+        panelGo.transform.SetParent(parent, false);
+        var panelImage = panelGo.GetComponent<Image>();
+        panelImage.color = initialColor;
+        panelImage.raycastTarget = false;
+
+        var panelRect = panelGo.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0f, 1f);
+        panelRect.anchorMax = new Vector2(1f, 1f);
+        panelRect.pivot = new Vector2(0.5f, 1f);
+        panelRect.sizeDelta = new Vector2(0f, 140f);
+
+        var statusLabel = CreateLabel(panelRect, initialText, 20, TextAnchor.UpperLeft, Color.white);
+        var labelRect = statusLabel.GetComponent<RectTransform>();
+        labelRect.offsetMin = new Vector2(12f, 8f);
+        labelRect.offsetMax = new Vector2(-12f, -8f);
+
+        _featureStatusImage = panelImage;
+        _featureStatusText = statusLabel;
+    }
+
+    /// <summary>Updates the status panel color and text.</summary>
+    private void UpdateStatus(string text, Color color)
+    {
+        if (_featureStatusImage != null) { _featureStatusImage.color = color; }
+        if (_featureStatusText  != null) { _featureStatusText.text   = text;  }
     }
 
     // Background panels are purely visual — never used as raycast targets.
