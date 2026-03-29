@@ -57,7 +57,7 @@ namespace UniLab.Persistence.Editor
                 EditorGUILayout.LabelField("Delete All", EditorStyles.boldLabel);
                 if (GUILayout.Button("Delete All LocalSave Data"))
                 {
-                    if (EditorUtility.DisplayDialog("Confirm", "Delete all LocalSave data?", "Delete", "Cancel"))
+                    if (EditorUtility.DisplayDialog("Confirm", "Delete all LocalSave data? Only keys registered by LocalSave will be removed.", "Delete", "Cancel"))
                     {
                         LocalSave.DeleteAll();
                         RefreshKeys();
