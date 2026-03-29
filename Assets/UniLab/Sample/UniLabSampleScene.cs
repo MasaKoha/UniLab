@@ -457,9 +457,6 @@ public sealed class UniLabSampleScene : MonoBehaviour
         var bg = CreatePanel(canvasGo.transform, "BG", new Color(0.09f, 0.09f, 0.11f));
         SetFullStretch(bg);
 
-        // ----- Header -----
-        BuildHeader(canvasGo.transform);
-
         // ----- Menu panel -----
         BuildMenuPanel(canvasGo.transform);
 
@@ -468,6 +465,9 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         // ----- Log panel -----
         BuildLogPanel(canvasGo.transform);
+
+        // ----- Header (last = highest sibling index = top of raycast priority) -----
+        BuildHeader(canvasGo.transform);
 
         // Start at menu screen
         ShowMenu();
