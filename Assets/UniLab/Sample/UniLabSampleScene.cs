@@ -25,7 +25,6 @@ namespace UniLab.Sample
 /// placed in the scene with its Inspector fields wired:
 ///   - ToastManager          : _toastPrefab / _toastRoot
 ///   - LoadingOverlayManager : _overlayRoot
-///   - SoundPlayManager      : _audioMixer / mixer groups
 /// Toggle the matching bool field in this component's Inspector to enable those demos.
 /// All other features work without any additional setup.
 /// </summary>
@@ -37,6 +36,24 @@ public sealed class UniLabSampleScene : MonoBehaviour
     [SerializeField] private bool _hasToastManager = false;
     [SerializeField] private bool _hasLoadingManager = false;
 
+    // ----- Screen state -----
+
+    private enum FeatureId
+    {
+        LocalSave,
+        EncryptedStorage,
+        TextManager,
+        InputBlock,
+        Network,
+        OfflineQueue,
+        Grid,
+        UniLabButton,
+        AnimationPlayer,
+        Toast,
+        Loading,
+        BackKey,
+    }
+
     // ----- Runtime UI -----
 
     private Text _logText;
@@ -44,9 +61,17 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private const int MaxLogLines = 14;
     private Font _font;
 
+    private GameObject _menuPanel;
+    private GameObject _featurePanel;
+    private RectTransform _featurePanelContent;
+    private GameObject _backButton;
+
     // ----- Disposables -----
 
     private readonly CompositeDisposable _disposables = new();
+
+    // Per-feature subscriptions (e.g. UniLabButton) — cleared on each ShowFeature call
+    private readonly CompositeDisposable _featureDisposables = new();
 
     // ----- Feature state -----
 
@@ -70,6 +95,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     private void OnDestroy()
     {
         _inputBlockHandle?.Dispose();
+        _featureDisposables.Dispose();
         _disposables.Dispose();
         _networkObservable?.Dispose();
     }
@@ -97,6 +123,51 @@ public sealed class UniLabSampleScene : MonoBehaviour
                 .Subscribe(_ => Log("[BackKey] Back pressed")));
 
         Log("UniLab Sample ready. Tap any button to demo a feature.");
+    }
+
+    // =========================================================
+    // Navigation
+    // =========================================================
+
+    private void ShowMenu()
+    {
+        _menuPanel.SetActive(true);
+        _featurePanel.SetActive(false);
+        _backButton.SetActive(false);
+    }
+
+    private void ShowFeature(FeatureId id)
+    {
+        // Release previous feature-specific subscriptions before rebuilding content
+        _featureDisposables.Clear();
+
+        _menuPanel.SetActive(false);
+        _featurePanel.SetActive(true);
+        _backButton.SetActive(true);
+
+        // Clear previous content
+        foreach (Transform child in _featurePanelContent)
+        {
+            Destroy(child.gameObject);
+        }
+        _gridContainer = null;
+        _gridChildCount = 0;
+
+        switch (id)
+        {
+            case FeatureId.LocalSave:          BuildFeatureContent_LocalSave(_featurePanelContent);         break;
+            case FeatureId.EncryptedStorage:   BuildFeatureContent_EncryptedStorage(_featurePanelContent);  break;
+            case FeatureId.TextManager:        BuildFeatureContent_TextManager(_featurePanelContent);        break;
+            case FeatureId.InputBlock:         BuildFeatureContent_InputBlock(_featurePanelContent);         break;
+            case FeatureId.Network:            BuildFeatureContent_Network(_featurePanelContent);            break;
+            case FeatureId.OfflineQueue:       BuildFeatureContent_OfflineQueue(_featurePanelContent);       break;
+            case FeatureId.Grid:               BuildFeatureContent_Grid(_featurePanelContent);               break;
+            case FeatureId.UniLabButton:       BuildFeatureContent_UniLabButton(_featurePanelContent);       break;
+            case FeatureId.AnimationPlayer:    BuildFeatureContent_AnimationPlayer(_featurePanelContent);    break;
+            case FeatureId.Toast:              BuildFeatureContent_Toast(_featurePanelContent);              break;
+            case FeatureId.Loading:            BuildFeatureContent_Loading(_featurePanelContent);            break;
+            case FeatureId.BackKey:            BuildFeatureContent_BackKey(_featurePanelContent);            break;
+        }
     }
 
     // =========================================================
@@ -387,36 +458,139 @@ public sealed class UniLabSampleScene : MonoBehaviour
         SetFullStretch(bg);
 
         // ----- Header -----
-        var header = CreatePanel(canvasGo.transform, "Header", new Color(0.06f, 0.06f, 0.08f));
-        SetAnchoredLayout(header, new Vector2(0f, 0.94f), Vector2.one);
-        CreateLabel(header, "UniLab Feature Sample", 26, TextAnchor.MiddleCenter, Color.white);
+        BuildHeader(canvasGo.transform);
 
-        // ----- Scroll area (main demos) -----
-        var scroll = BuildScrollRect(canvasGo.transform, new Vector2(0f, 0.22f), new Vector2(1f, 0.94f));
-        var content = scroll.content;
+        // ----- Menu panel -----
+        BuildMenuPanel(canvasGo.transform);
 
-        BuildSectionLocalSave(content);
-        BuildSectionEncryptedStorage(content);
-        BuildSectionTextManager(content);
-        BuildSectionInputBlock(content);
-        BuildSectionNetwork(content);
-        BuildSectionOfflineQueue(content);
-        BuildSectionGrid(content);
-        BuildSectionUniLabButton(content);
-        BuildSectionAnimationPlayer(content);
-        BuildSectionToast(content);
-        BuildSectionLoading(content);
-        BuildSectionBackKey(content);
+        // ----- Feature panel -----
+        BuildFeaturePanel(canvasGo.transform);
 
         // ----- Log panel -----
-        var logPanel = CreatePanel(canvasGo.transform, "LogPanel", new Color(0.04f, 0.04f, 0.06f));
-        SetAnchoredLayout(logPanel, Vector2.zero, new Vector2(1f, 0.22f));
+        BuildLogPanel(canvasGo.transform);
+
+        // Start at menu screen
+        ShowMenu();
+    }
+
+    private void BuildHeader(Transform canvasTransform)
+    {
+        var header = CreatePanel(canvasTransform, "Header", new Color(0.06f, 0.06f, 0.08f));
+        SetAnchoredLayout(header, new Vector2(0f, 0.94f), Vector2.one);
+
+        // Back button — hidden on menu, shown on feature screens
+        var backButtonGo = new GameObject("BackButton", typeof(Image));
+        backButtonGo.transform.SetParent(header, false);
+        backButtonGo.GetComponent<Image>().color = new Color(0.25f, 0.25f, 0.32f);
+
+        var backButtonRect = backButtonGo.GetComponent<RectTransform>();
+        backButtonRect.anchorMin = new Vector2(0f, 0f);
+        backButtonRect.anchorMax = new Vector2(0f, 1f);
+        backButtonRect.pivot = new Vector2(0f, 0.5f);
+        backButtonRect.offsetMin = new Vector2(12f, 8f);
+        backButtonRect.offsetMax = new Vector2(132f, -8f);
+
+        var backButton = backButtonGo.AddComponent<Button>();
+        backButton.targetGraphic = backButtonGo.GetComponent<Image>();
+        backButton.onClick.AddListener(ShowMenu);
+
+        CreateLabel(backButtonRect, "← Back", 24, TextAnchor.MiddleCenter, Color.white);
+
+        _backButton = backButtonGo;
+
+        // Header title
+        CreateLabel(header, "UniLab Feature Sample", 32, TextAnchor.MiddleCenter, Color.white);
+    }
+
+    private void BuildMenuPanel(Transform canvasTransform)
+    {
+        var menuPanelGo = new GameObject("MenuPanel", typeof(RectTransform));
+        menuPanelGo.transform.SetParent(canvasTransform, false);
+        SetAnchoredLayout(menuPanelGo.GetComponent<RectTransform>(), new Vector2(0f, 0.18f), new Vector2(1f, 0.94f));
+        _menuPanel = menuPanelGo;
+
+        var scroll = BuildScrollRect(menuPanelGo.transform, Vector2.zero, Vector2.one);
+        var content = scroll.content;
+
+        foreach (FeatureId featureId in Enum.GetValues(typeof(FeatureId)))
+        {
+            AddMenuButton(content, featureId);
+        }
+    }
+
+    private void AddMenuButton(RectTransform parent, FeatureId featureId)
+    {
+        var buttonGo = new GameObject($"MenuBtn_{featureId}", typeof(Image));
+        buttonGo.transform.SetParent(parent, false);
+        buttonGo.GetComponent<Image>().color = GetCategoryColor(featureId);
+
+        var buttonRect = buttonGo.GetComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0f, 1f);
+        buttonRect.anchorMax = new Vector2(1f, 1f);
+        buttonRect.pivot = new Vector2(0.5f, 1f);
+        buttonRect.sizeDelta = new Vector2(0f, 100f);
+
+        var button = buttonGo.AddComponent<Button>();
+        button.targetGraphic = buttonGo.GetComponent<Image>();
+
+        var colors = button.colors;
+        colors.highlightedColor = new Color(0.9f, 0.9f, 0.9f);
+        colors.pressedColor = new Color(0.6f, 0.6f, 0.6f);
+        button.colors = colors;
+
+        var capturedId = featureId;
+        button.onClick.AddListener(() => ShowFeature(capturedId));
+
+        CreateLabel(buttonRect, featureId.ToString(), 28, TextAnchor.MiddleCenter, Color.white);
+    }
+
+    private static Color GetCategoryColor(FeatureId featureId)
+    {
+        switch (featureId)
+        {
+            case FeatureId.LocalSave:
+            case FeatureId.EncryptedStorage:
+                return new Color(0.22f, 0.35f, 0.55f);
+            case FeatureId.TextManager:
+                return new Color(0.40f, 0.25f, 0.55f);
+            case FeatureId.InputBlock:
+            case FeatureId.UniLabButton:
+            case FeatureId.Toast:
+            case FeatureId.Loading:
+                return new Color(0.55f, 0.35f, 0.15f);
+            case FeatureId.Network:
+            case FeatureId.OfflineQueue:
+                return new Color(0.20f, 0.45f, 0.30f);
+            case FeatureId.Grid:
+            case FeatureId.AnimationPlayer:
+            case FeatureId.BackKey:
+                return new Color(0.20f, 0.40f, 0.45f);
+            default:
+                return new Color(0.22f, 0.22f, 0.28f);
+        }
+    }
+
+    private void BuildFeaturePanel(Transform canvasTransform)
+    {
+        var featurePanelGo = new GameObject("FeaturePanel", typeof(RectTransform));
+        featurePanelGo.transform.SetParent(canvasTransform, false);
+        SetAnchoredLayout(featurePanelGo.GetComponent<RectTransform>(), new Vector2(0f, 0.18f), new Vector2(1f, 0.94f));
+        _featurePanel = featurePanelGo;
+
+        var scroll = BuildScrollRect(featurePanelGo.transform, Vector2.zero, Vector2.one);
+        _featurePanelContent = scroll.content;
+    }
+
+    private void BuildLogPanel(Transform canvasTransform)
+    {
+        var logPanel = CreatePanel(canvasTransform, "LogPanel", new Color(0.04f, 0.04f, 0.06f));
+        SetAnchoredLayout(logPanel, Vector2.zero, new Vector2(1f, 0.18f));
 
         var logGo = new GameObject("LogText");
         logGo.transform.SetParent(logPanel, false);
         _logText = logGo.AddComponent<Text>();
         _logText.font = _font;
-        _logText.fontSize = 13;
+        _logText.fontSize = 20;
         _logText.color = new Color(0.6f, 1f, 0.6f);
         _logText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _logText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -427,64 +601,76 @@ public sealed class UniLabSampleScene : MonoBehaviour
         logRect.offsetMax = new Vector2(-10f, -6f);
     }
 
-    // ----- Section builders -----
+    // =========================================================
+    // Feature content builders
+    // =========================================================
 
-    private void BuildSectionLocalSave(RectTransform parent)
+    private void BuildFeatureContent_LocalSave(RectTransform parent)
     {
-        var section = AddSection(parent, "LocalSave  (PlayerPrefs + Base64 JSON)");
-        AddButtonRow(section, ("Save / Load", (Action)DemoLocalSaveSave), ("Delete", DemoLocalSaveDelete));
+        AddFeatureHeader(parent, "LocalSave", "PlayerPrefs + Base64 JSON による軽量ローカル保存。");
+        AddFeatureButtonRow(parent,
+            ("Save / Load", (Action)DemoLocalSaveSave),
+            ("Delete", DemoLocalSaveDelete));
     }
 
-    private void BuildSectionEncryptedStorage(RectTransform parent)
+    private void BuildFeatureContent_EncryptedStorage(RectTransform parent)
     {
-        var section = AddSection(parent, "EncryptedLocalStorage  (AES-256 + TTL)");
-        AddButtonRow(section, ("Save & Load", (Action)DemoEncryptedStorage), ("Delete", DemoEncryptedStorageDelete));
+        AddFeatureHeader(parent, "EncryptedStorage", "AES-256 暗号化 + TTL キャッシュ付きローカルストレージ。");
+        AddFeatureButtonRow(parent,
+            ("Save & Load", (Action)DemoEncryptedStorage),
+            ("Delete", DemoEncryptedStorageDelete));
     }
 
-    private void BuildSectionTextManager(RectTransform parent)
+    private void BuildFeatureContent_TextManager(RectTransform parent)
     {
-        var section = AddSection(parent, "TextManager  (FNV-1A localization)");
-        AddButtonRow(section, ("GetText [ja]", (Action)DemoTextManagerJa), ("GetText [en]", DemoTextManagerEn));
+        AddFeatureHeader(parent, "TextManager", "FNV-1A ハッシュベースのローカライズシステム。");
+        AddFeatureButtonRow(parent,
+            ("GetText [ja]", (Action)DemoTextManagerJa),
+            ("GetText [en]", DemoTextManagerEn));
     }
 
-    private void BuildSectionInputBlock(RectTransform parent)
+    private void BuildFeatureContent_InputBlock(RectTransform parent)
     {
-        var section = AddSection(parent, "InputBlockManager  (ref-counted block)");
-        AddButtonRow(section, ("Toggle Block", (Action)DemoToggleInputBlock));
+        AddFeatureHeader(parent, "InputBlock", "参照カウント方式の入力ブロック管理。");
+        AddFeatureButtonRow(parent,
+            ("Toggle Block", (Action)DemoToggleInputBlock));
     }
 
-    private void BuildSectionNetwork(RectTransform parent)
+    private void BuildFeatureContent_Network(RectTransform parent)
     {
-        var section = AddSection(parent, "NetworkReachabilityObservable  (polling)");
-        AddButtonRow(section, ("Check Now", (Action)DemoNetworkReachability));
+        AddFeatureHeader(parent, "Network", "R3 Observable による通信状態の監視。");
+        AddFeatureButtonRow(parent,
+            ("Check Now", (Action)DemoNetworkReachability));
     }
 
-    private void BuildSectionOfflineQueue(RectTransform parent)
+    private void BuildFeatureContent_OfflineQueue(RectTransform parent)
     {
-        var section = AddSection(parent, "OfflineQueue<T>  (persistent request queue)");
-        AddButtonRow(section,
+        AddFeatureHeader(parent, "OfflineQueue", "オフライン中のリクエストを永続化キューに積み、復帰時に送信。");
+        AddFeatureButtonRow(parent,
             ("Enqueue", (Action)DemoOfflineQueueEnqueue),
             ("Flush", DemoOfflineQueueFlush),
             ("Clear", DemoOfflineQueueClear));
     }
 
-    private void BuildSectionGrid(RectTransform parent)
+    private void BuildFeatureContent_Grid(RectTransform parent)
     {
-        var section = AddSection(parent, "VariableGridLayoutGroup  (variable-width wrap)");
+        AddFeatureHeader(parent, "Grid", "可変幅アイテムを折り返しながら並べるレイアウトグループ。");
+        AddFeatureButtonRow(parent,
+            ("+ Item", (Action)DemoGridAddItem),
+            ("Clear", DemoGridClear));
 
-        // Grid container — this is the live demo area
+        // Grid demo area — rebuilt each time this feature is shown
         var gridPanelGo = new GameObject("GridPanel", typeof(RectTransform), typeof(Image));
-        gridPanelGo.transform.SetParent(section, false);
+        gridPanelGo.transform.SetParent(parent, false);
         gridPanelGo.GetComponent<Image>().color = new Color(0.15f, 0.15f, 0.18f);
 
         _gridContainer = gridPanelGo.GetComponent<RectTransform>();
-        _gridContainer.anchorMin = new Vector2(0f, 0f);
-        _gridContainer.anchorMax = new Vector2(1f, 0f);
-        _gridContainer.pivot = new Vector2(0.5f, 0f);
-        _gridContainer.sizeDelta = new Vector2(0f, 120f);
+        _gridContainer.anchorMin = new Vector2(0f, 1f);
+        _gridContainer.anchorMax = new Vector2(1f, 1f);
+        _gridContainer.pivot = new Vector2(0.5f, 1f);
+        _gridContainer.sizeDelta = new Vector2(0f, 160f);
 
         var grid = gridPanelGo.AddComponent<VariableGridLayoutGroup>();
-        // Reflect private fields via SetFieldValue for runtime configuration
         SetField(grid, "_spacing", new Vector2(6f, 6f));
         SetField(grid, "_defaultItemSize", new Vector2(80f, 44f));
         SetField(grid, "_usePreferredWidth", true);
@@ -494,118 +680,132 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         var sizeFitter = gridPanelGo.AddComponent<ContentSizeFitter>();
         sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        AddButtonRow(section, ("+ Item", (Action)DemoGridAddItem), ("Clear", DemoGridClear));
     }
 
-    private void BuildSectionUniLabButton(RectTransform parent)
+    private void BuildFeatureContent_UniLabButton(RectTransform parent)
     {
-        var section = AddSection(parent, "UniLabButton  (Hold / Decide / State observables)");
+        AddFeatureHeader(parent, "UniLabButton", "Hold / Decide / State の Rx Observable を持つ拡張ボタン。");
 
-        // Create a UniLabButton — requires Image as targetGraphic
         var buttonGo = new GameObject("UniLabButtonDemo", typeof(Image));
-        buttonGo.transform.SetParent(section, false);
+        buttonGo.transform.SetParent(parent, false);
         var buttonImage = buttonGo.GetComponent<Image>();
         buttonImage.color = new Color(0.25f, 0.45f, 0.75f);
 
         var buttonRect = buttonGo.GetComponent<RectTransform>();
-        buttonRect.anchorMin = new Vector2(0.05f, 0f);
-        buttonRect.anchorMax = new Vector2(0.95f, 0f);
-        buttonRect.pivot = new Vector2(0.5f, 0f);
-        buttonRect.sizeDelta = new Vector2(0f, 48f);
+        buttonRect.anchorMin = new Vector2(0f, 1f);
+        buttonRect.anchorMax = new Vector2(1f, 1f);
+        buttonRect.pivot = new Vector2(0.5f, 1f);
+        buttonRect.sizeDelta = new Vector2(0f, 80f);
 
         var uniLabButton = buttonGo.AddComponent<UniLabButton>();
         uniLabButton.targetGraphic = buttonImage;
 
-        CreateLabel(buttonRect, "Press & Hold Me", 16, TextAnchor.MiddleCenter, Color.white);
+        CreateLabel(buttonRect, "Press & Hold Me", 22, TextAnchor.MiddleCenter, Color.white);
 
-        // Wire reactive observables — the core UniLabButton feature
-        _disposables.Add(uniLabButton.OnHoldAsObservable().Subscribe(_ => Log("[UniLabButton] OnHold")));
-        _disposables.Add(uniLabButton.OnDecideAsObservable().Subscribe(_ => Log("[UniLabButton] OnDecide")));
-        _disposables.Add(
+        // Wire reactive observables — use _featureDisposables so they are released on screen transition
+        _featureDisposables.Add(uniLabButton.OnHoldAsObservable().Subscribe(_ => Log("[UniLabButton] OnHold")));
+        _featureDisposables.Add(uniLabButton.OnDecideAsObservable().Subscribe(_ => Log("[UniLabButton] OnDecide")));
+        _featureDisposables.Add(
             uniLabButton.StateAsObservable()
                 .Where(state => state != ButtonState.None)
                 .Subscribe(state => Log($"[UniLabButton] State → {state}")));
     }
 
-    private void BuildSectionAnimationPlayer(RectTransform parent)
+    private void BuildFeatureContent_AnimationPlayer(RectTransform parent)
     {
-        var section = AddSection(parent, "AnimationPlayer  (async + observables)");
-        AddButtonRow(section, ("Setup Demo", (Action)DemoAnimationPlayerSetup));
+        AddFeatureHeader(parent, "AnimationPlayer", "Animator の非同期再生と OnPlay / OnComplete Observable のラッパー。");
+        AddFeatureButtonRow(parent,
+            ("Setup Demo", (Action)DemoAnimationPlayerSetup));
     }
 
-    private void BuildSectionToast(RectTransform parent)
+    private void BuildFeatureContent_Toast(RectTransform parent)
     {
-        var section = AddSection(parent, "ToastManager  [Prefab Required]");
-        AddButtonRow(section,
+        AddFeatureHeader(parent, "Toast", "[Prefab Required] _hasToastManager を有効化してから使用。");
+        AddFeatureButtonRow(parent,
             ("Info", (Action)DemoToastInfo),
             ("Success", DemoToastSuccess),
             ("Error", DemoToastError));
     }
 
-    private void BuildSectionLoading(RectTransform parent)
+    private void BuildFeatureContent_Loading(RectTransform parent)
     {
-        var section = AddSection(parent, "LoadingOverlayManager  [Prefab Required]");
-        AddButtonRow(section, ("Show 1.5 s", (Action)DemoLoadingOverlay));
+        AddFeatureHeader(parent, "Loading", "[Prefab Required] _hasLoadingManager を有効化してから使用。");
+        AddFeatureButtonRow(parent,
+            ("Show 1.5 s", (Action)DemoLoadingOverlay));
     }
 
-    private void BuildSectionBackKey(RectTransform parent)
+    private void BuildFeatureContent_BackKey(RectTransform parent)
     {
-        var section = AddSection(parent, "BackKeyInputManager  (Android back key)");
-        AddButtonRow(section, ("Toggle Block", (Action)DemoBackKeyToggleBlock));
+        AddFeatureHeader(parent, "BackKey", "Android バックキーの Observable ラッパー。IsBlocked でブロック可能。");
+        AddFeatureButtonRow(parent,
+            ("Toggle Block", (Action)DemoBackKeyToggleBlock));
     }
 
-    // ----- UI helpers -----
+    // =========================================================
+    // Feature screen layout helpers
+    // =========================================================
 
-    /// <summary>Creates a titled section container inside a vertical scroll content.</summary>
-    private RectTransform AddSection(RectTransform parent, string title)
+    private void AddFeatureHeader(RectTransform parent, string title, string description)
     {
-        const float sectionPadding = 10f;
-
-        // Section wrapper
-        var sectionGo = new GameObject($"Section_{title}", typeof(RectTransform), typeof(Image));
-        sectionGo.transform.SetParent(parent, false);
-        sectionGo.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.15f);
-        var sectionRect = sectionGo.GetComponent<RectTransform>();
-        sectionRect.anchorMin = new Vector2(0f, 1f);
-        sectionRect.anchorMax = new Vector2(1f, 1f);
-        sectionRect.pivot = new Vector2(0.5f, 1f);
-
-        var layout = sectionGo.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(8, 8, 6, 8);
-        layout.spacing = sectionPadding;
-        layout.childControlWidth = true;
-        layout.childControlHeight = false;
-        layout.childForceExpandWidth = true;
-        layout.childForceExpandHeight = false;
-
-        var fitter = sectionGo.AddComponent<ContentSizeFitter>();
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        // Title label
-        var titleGo = new GameObject("Title", typeof(Text));
-        titleGo.transform.SetParent(sectionGo.transform, false);
+        // Feature title
+        var titleGo = new GameObject("FeatureTitle", typeof(Text));
+        titleGo.transform.SetParent(parent, false);
         var titleText = titleGo.GetComponent<Text>();
         titleText.font = _font;
-        titleText.fontSize = 16;
+        titleText.fontSize = 32;
         titleText.fontStyle = FontStyle.Bold;
-        titleText.color = new Color(0.8f, 0.85f, 1f);
+        titleText.color = Color.white;
         titleText.text = title;
+        titleText.alignment = TextAnchor.MiddleLeft;
+        titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        titleText.verticalOverflow = VerticalWrapMode.Overflow;
         var titleRect = titleGo.GetComponent<RectTransform>();
-        titleRect.sizeDelta = new Vector2(0f, 24f);
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.pivot = new Vector2(0.5f, 1f);
+        titleRect.sizeDelta = new Vector2(0f, 52f);
 
-        return sectionRect;
+        // Description
+        var descGo = new GameObject("Description", typeof(Text));
+        descGo.transform.SetParent(parent, false);
+        var descText = descGo.GetComponent<Text>();
+        descText.font = _font;
+        descText.fontSize = 20;
+        descText.color = new Color(0.7f, 0.7f, 0.7f);
+        descText.text = description;
+        descText.alignment = TextAnchor.UpperLeft;
+        descText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        descText.verticalOverflow = VerticalWrapMode.Overflow;
+        var descRect = descGo.GetComponent<RectTransform>();
+        descRect.anchorMin = new Vector2(0f, 1f);
+        descRect.anchorMax = new Vector2(1f, 1f);
+        descRect.pivot = new Vector2(0.5f, 1f);
+        descRect.sizeDelta = new Vector2(0f, 48f);
+
+        // Divider
+        var dividerGo = new GameObject("Divider", typeof(Image));
+        dividerGo.transform.SetParent(parent, false);
+        dividerGo.GetComponent<Image>().color = new Color(0.3f, 0.3f, 0.35f);
+        var dividerRect = dividerGo.GetComponent<RectTransform>();
+        dividerRect.anchorMin = new Vector2(0f, 1f);
+        dividerRect.anchorMax = new Vector2(1f, 1f);
+        dividerRect.pivot = new Vector2(0.5f, 1f);
+        dividerRect.sizeDelta = new Vector2(0f, 2f);
     }
 
-    private void AddButtonRow(RectTransform section, params (string label, Action onClick)[] buttons)
+    private void AddFeatureButtonRow(RectTransform parent, params (string label, Action onClick)[] buttons)
     {
         var rowGo = new GameObject("ButtonRow", typeof(RectTransform));
-        rowGo.transform.SetParent(section, false);
+        rowGo.transform.SetParent(parent, false);
         var rowRect = rowGo.GetComponent<RectTransform>();
-        rowRect.sizeDelta = new Vector2(0f, 48f);
+        rowRect.anchorMin = new Vector2(0f, 1f);
+        rowRect.anchorMax = new Vector2(1f, 1f);
+        rowRect.pivot = new Vector2(0.5f, 1f);
+        rowRect.sizeDelta = new Vector2(0f, 80f);
 
         var rowLayout = rowGo.AddComponent<HorizontalLayoutGroup>();
         rowLayout.spacing = 8f;
+        rowLayout.padding = new RectOffset(0, 0, 0, 0);
         rowLayout.childControlWidth = true;
         rowLayout.childControlHeight = true;
         rowLayout.childForceExpandWidth = true;
@@ -613,11 +813,11 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         foreach (var (label, onClick) in buttons)
         {
-            CreateButton(rowGo.transform, label, onClick);
+            CreateFeatureButton(rowGo.transform, label, onClick);
         }
     }
 
-    private void CreateButton(Transform parent, string label, Action onClick)
+    private void CreateFeatureButton(Transform parent, string label, Action onClick)
     {
         var buttonGo = new GameObject($"Btn_{label}", typeof(Image));
         buttonGo.transform.SetParent(parent, false);
@@ -633,8 +833,12 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         button.onClick.AddListener(() => onClick());
 
-        CreateLabel(buttonGo.GetComponent<RectTransform>(), label, 15, TextAnchor.MiddleCenter, Color.white);
+        CreateLabel(buttonGo.GetComponent<RectTransform>(), label, 22, TextAnchor.MiddleCenter, Color.white);
     }
+
+    // =========================================================
+    // UI helpers
+    // =========================================================
 
     private Text CreateLabel(RectTransform parent, string text, int fontSize, TextAnchor alignment, Color color)
     {
