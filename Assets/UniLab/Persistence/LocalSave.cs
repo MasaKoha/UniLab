@@ -43,10 +43,25 @@ namespace UniLab.Persistence
 #endif
         }
 
+        /// <summary>
+        /// Deletes all LocalSave data.
+        /// In the Editor, only keys registered by LocalSave are removed so that
+        /// PlayerPrefs entries from other systems are preserved.
+        /// In runtime builds, PlayerPrefs.DeleteAll() is used as no registry is available.
+        /// </summary>
         public static void DeleteAll()
         {
+#if UNITY_EDITOR
+            foreach (var key in GetAllKeysInEditor())
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+            PlayerPrefs.DeleteKey(KeyListKey);
+            PlayerPrefs.Save();
+#else
             PlayerPrefs.DeleteAll();
             PlayerPrefs.Save();
+#endif
         }
 
 #if UNITY_EDITOR // Editor-only implementation for viewing and deleting specific save data entries.

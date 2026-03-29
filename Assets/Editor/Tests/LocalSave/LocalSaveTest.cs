@@ -133,6 +133,27 @@ namespace UniLab.Tests.EditMode.Persistence
             Assert.IsFalse(PlayerPrefs.HasKey(key2), "PlayerPrefs should not have key2 after DeleteAll.");
         }
 
+        [Test]
+        public void DeleteAll_InEditor_PreservesNonLocalSavePlayerPrefsKeys()
+        {
+            // Simulate a PlayerPrefs key written by another system (not managed by LocalSave)
+            const string externalKey = "external_system_key";
+            PlayerPrefs.SetString(externalKey, "external_value");
+            PlayerPrefs.Save();
+
+            LocalSave.Save(new SampleData { Score = 1 });
+            LocalSave.DeleteAll();
+
+            Assert.IsFalse(PlayerPrefs.HasKey(typeof(SampleData).FullName),
+                "LocalSave-managed key should be deleted.");
+            Assert.IsTrue(PlayerPrefs.HasKey(externalKey),
+                "Non-LocalSave PlayerPrefs keys must not be deleted by DeleteAll().");
+
+            // Cleanup
+            PlayerPrefs.DeleteKey(externalKey);
+            PlayerPrefs.Save();
+        }
+
         [System.Serializable]
         public class TestData
         {
