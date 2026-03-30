@@ -33,7 +33,7 @@ namespace UniLab.UI.Toast
         {
             CancelCurrentToast();
             _currentToastCts = new CancellationTokenSource();
-            ShowInternalAsync(message, type, durationSeconds, _currentToastCts.Token);
+            ShowInternalAsync(message, type, durationSeconds, _currentToastCts.Token).Forget();
         }
 
         private async UniTaskVoid ShowInternalAsync(
