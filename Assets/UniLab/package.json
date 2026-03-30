@@ -1,0 +1,8 @@
+{
+  "name": "com.unilab",
+  "version": "1.0.0",
+  "displayName": "UniLab",
+  "description": "Shared UI components and utilities for Unity projects.",
+  "unity": "6000.0",
+  "dependencies": {}
+}
