@@ -517,7 +517,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
         canvasGo.AddComponent<GraphicRaycaster>();
 
         // EventSystem (skip if one already exists)
-        if (FindFirstObjectByType<EventSystem>() == null)
+        if (FindAnyObjectByType<EventSystem>() == null)
         {
             var esGo = new GameObject("EventSystem");
             esGo.AddComponent<EventSystem>();

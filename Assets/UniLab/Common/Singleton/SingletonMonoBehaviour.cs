@@ -20,7 +20,7 @@ namespace UniLab.Common
                     return _instance;
                 }
 
-                _instance = FindFirstObjectByType<T>();
+                _instance = FindAnyObjectByType<T>();
 
                 // 既存のインスタンスが見つかった場合は新規生成しない
                 if (_instance != null)

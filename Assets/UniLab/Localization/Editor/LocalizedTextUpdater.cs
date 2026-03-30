@@ -8,7 +8,7 @@ namespace UniLab.Localization.Editor
     {
         public static void UpdateAllLocalizedTexts()
         {
-            var texts = Object.FindObjectsByType<LocalizedText>(FindObjectsSortMode.None);
+            var texts = Object.FindObjectsByType<LocalizedText>(FindObjectsInactive.Exclude);
             foreach (var text in texts)
             {
                 var method = typeof(LocalizedText).GetMethod("UpdateText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
