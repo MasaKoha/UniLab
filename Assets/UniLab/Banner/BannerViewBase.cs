@@ -125,7 +125,7 @@ namespace UniLab.Banner
             {
                 bannerCell.OnSwipe
                     .Subscribe(OnCellSwiped)
-                    .AddTo(this);
+                    .AddTo(destroyCancellationToken);
             }
         }
 
