@@ -37,13 +37,8 @@ namespace UniLab.UI.Popup
                 _cancelButton.GetComponentInChildren<TMP_Text>().text = parameter.CancelLabel;
             }
 
-            _confirmButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Confirm))
-                .AddTo(this);
-
-            _cancelButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Cancel))
-                .AddTo(this);
+            _confirmButton.onClick.AddListener(() => _resultSource.TrySetResult(PopupResult.Confirm));
+            _cancelButton.onClick.AddListener(() => _resultSource.TrySetResult(PopupResult.Cancel));
         }
 
         /// <summary>

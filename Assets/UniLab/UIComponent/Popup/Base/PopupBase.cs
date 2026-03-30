@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
-using R3;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -20,17 +19,15 @@ namespace UniLab.UI.Popup
 
         private void SetEvent()
         {
-            _backgroundButton.OnClickAsObservable()
-                .Subscribe(_ =>
+            _backgroundButton.onClick.AddListener(() =>
+            {
+                if (!Parameter.EnableBackgroundClose)
                 {
-                    if (!Parameter.EnableBackgroundClose)
-                    {
-                        return;
-                    }
+                    return;
+                }
 
-                    OnClose();
-                })
-                .AddTo(this);
+                OnClose();
+            });
         }
 
         public void SetBackgroundButtonActiveIfTop(Stack<PopupBase> popupStack)

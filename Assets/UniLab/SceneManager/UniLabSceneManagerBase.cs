@@ -36,7 +36,7 @@ namespace UniLab.Scene
             SetDontDestroyOnLoad();
             BackKeyInputManager.Instance.OnPressBackKey
                 .Subscribe(_ => GoBack())
-                .AddTo(this);
+                .AddTo(destroyCancellationToken);
         }
 
         private void Update()

@@ -22,7 +22,7 @@ namespace UniLab.UI.Popup
                         popup.SetBackgroundButtonActiveIfTop(_popupStack);
                     }
                 })
-                .AddTo(this);
+                .AddTo(destroyCancellationToken);
         }
 
         public TPopup InstantiatePopup<TPopup>(TPopup popup, IPopupParameter parameter) where TPopup : PopupBase
