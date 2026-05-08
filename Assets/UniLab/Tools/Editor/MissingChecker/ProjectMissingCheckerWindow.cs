@@ -204,7 +204,7 @@ namespace UniLab.Tools.Editor.MissingChecker
                 targetFolder = "Assets/Generated/UniCore";
             }
 
-            EnsureFolderExists(targetFolder);
+            ProjectScanEditorUtility.EnsureFolderExists(targetFolder);
             var assetPath = AssetDatabase.GenerateUniqueAssetPath(
                 Path.Combine(targetFolder, "MissingCheckerSettings.asset"));
             AssetDatabase.CreateAsset(settings, assetPath);
@@ -259,7 +259,7 @@ namespace UniLab.Tools.Editor.MissingChecker
                     {
                         _missingPaths.Add(path);
                         missingSelfGuids.Add(guids[i]);
-                        CollectParentFolderGuids(path, missingParentGuids);
+                        ProjectScanEditorUtility.CollectParentFolderGuids(path, missingParentGuids);
                     }
                 }
 
@@ -289,14 +289,14 @@ namespace UniLab.Tools.Editor.MissingChecker
 
                 if (asset is GameObject prefabRoot)
                 {
-                    if (HasMissingReferences(prefabRoot))
+                    if (MissingReferenceUtility.HasMissingReferences(prefabRoot))
                     {
                         return true;
                     }
                 }
                 else
                 {
-                    if (HasMissingReferences(asset))
+                    if (MissingReferenceUtility.HasMissingReferences(asset))
                     {
                         return true;
                     }
@@ -321,7 +321,7 @@ namespace UniLab.Tools.Editor.MissingChecker
             {
                 foreach (var root in scene.GetRootGameObjects())
                 {
-                    if (HasMissingReferences(root))
+                    if (MissingReferenceUtility.HasMissingReferences(root))
                     {
                         return true;
                     }
@@ -336,80 +336,6 @@ namespace UniLab.Tools.Editor.MissingChecker
             }
 
             return false;
-        }
-
-        private static bool HasMissingReferences(GameObject go)
-        {
-            var components = go.GetComponentsInChildren<Component>(true);
-            foreach (var component in components)
-            {
-                if (component == null)
-                {
-                    return true;
-                }
-
-                if (HasMissingReferences(component))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool HasMissingReferences(Object obj)
-        {
-            var serializedObject = new SerializedObject(obj);
-            var iterator = serializedObject.GetIterator();
-            while (iterator.NextVisible(true))
-            {
-                if (iterator.propertyType != SerializedPropertyType.ObjectReference)
-                {
-                    continue;
-                }
-
-                if (iterator.objectReferenceValue == null && iterator.objectReferenceInstanceIDValue != 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static void CollectParentFolderGuids(string assetPath, HashSet<string> parentGuids)
-        {
-            if (string.IsNullOrEmpty(assetPath))
-            {
-                return;
-            }
-
-            var folder = System.IO.Path.GetDirectoryName(assetPath);
-            if (string.IsNullOrEmpty(folder))
-            {
-                return;
-            }
-
-            folder = folder.Replace('\\', '/');
-            while (!string.IsNullOrEmpty(folder) && folder != "Assets")
-            {
-                if (AssetDatabase.IsValidFolder(folder))
-                {
-                    var guid = AssetDatabase.AssetPathToGUID(folder);
-                    if (!string.IsNullOrEmpty(guid))
-                    {
-                        parentGuids.Add(guid);
-                    }
-                }
-
-                var next = System.IO.Path.GetDirectoryName(folder);
-                if (string.IsNullOrEmpty(next))
-                {
-                    break;
-                }
-
-                folder = next.Replace('\\', '/');
-            }
         }
 
         private static string GetActiveProjectFolderPath()
@@ -486,26 +412,5 @@ namespace UniLab.Tools.Editor.MissingChecker
             return result.Replace('\\', '/');
         }
 
-        private static void EnsureFolderExists(string folderPath)
-        {
-            if (AssetDatabase.IsValidFolder(folderPath))
-            {
-                return;
-            }
-
-            var parent = Path.GetDirectoryName(folderPath)?.Replace('\\', '/');
-            var name = Path.GetFileName(folderPath);
-            if (string.IsNullOrEmpty(parent))
-            {
-                parent = "Assets";
-            }
-
-            if (!AssetDatabase.IsValidFolder(parent))
-            {
-                EnsureFolderExists(parent);
-            }
-
-            AssetDatabase.CreateFolder(parent, name);
-        }
     }
 }

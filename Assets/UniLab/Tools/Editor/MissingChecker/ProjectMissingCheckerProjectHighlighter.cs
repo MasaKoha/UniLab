@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 
@@ -19,8 +20,8 @@ namespace UniLab.Tools.Editor.MissingChecker
         {
             _missingSelfGuids.Clear();
             _missingParentGuids.Clear();
-            FillSet(_missingSelfGuids, selfGuids);
-            FillSet(_missingParentGuids, parentGuids);
+            ProjectScanEditorUtility.FillGuidSet(_missingSelfGuids, selfGuids);
+            ProjectScanEditorUtility.FillGuidSet(_missingParentGuids, parentGuids);
         }
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
@@ -53,22 +54,6 @@ namespace UniLab.Tools.Editor.MissingChecker
                 GUI.color = Color.yellow;
                 EditorGUI.LabelField(iconRect, "⚠");
                 GUI.color = prevColor;
-            }
-        }
-
-        private static void FillSet(HashSet<string> set, IEnumerable<string> guids)
-        {
-            if (guids == null)
-            {
-                return;
-            }
-
-            foreach (var guid in guids)
-            {
-                if (!string.IsNullOrEmpty(guid))
-                {
-                    set.Add(guid);
-                }
             }
         }
     }

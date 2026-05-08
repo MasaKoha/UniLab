@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -9,13 +10,22 @@ namespace UniLab.Tools.Editor.MissingChecker
     [InitializeOnLoad]
     public static class HierarchyMissingChecker
     {
+#if UNITY_6000_4_OR_NEWER
+        private static readonly HashSet<EntityId> _missingIds = new();
+        private static readonly HashSet<EntityId> _missingSelfIds = new();
+#else
         private static readonly HashSet<int> _missingIds = new();
         private static readonly HashSet<int> _missingSelfIds = new();
+#endif
         private static bool _needsRebuild = true;
 
         static HierarchyMissingChecker()
         {
+#if UNITY_6000_4_OR_NEWER
+            EditorApplication.hierarchyWindowItemByEntityIdOnGUI += OnHierarchyItemGUI;
+#else
             EditorApplication.hierarchyWindowItemOnGUI += OnHierarchyItemGUI;
+#endif
             EditorApplication.hierarchyChanged += MarkDirty;
             EditorApplication.projectChanged += MarkDirty;
             EditorApplication.playModeStateChanged += _ => MarkDirty();
@@ -30,7 +40,11 @@ namespace UniLab.Tools.Editor.MissingChecker
             _needsRebuild = true;
         }
 
-        private static void OnHierarchyItemGUI(int instanceId, Rect selectionRect)
+#if UNITY_6000_4_OR_NEWER
+        private static void OnHierarchyItemGUI(EntityId entityId, Rect selectionRect)
+#else
+        private static void OnHierarchyItemGUI(int entityId, Rect selectionRect)
+#endif
         {
             if (Application.isPlaying)
             {
@@ -42,7 +56,7 @@ namespace UniLab.Tools.Editor.MissingChecker
                 RebuildCache();
             }
 
-            if (!_missingIds.Contains(instanceId))
+            if (!_missingIds.Contains(entityId))
             {
                 return;
             }
@@ -54,7 +68,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
             var labelRect = new Rect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
             var bgRect = new Rect(labelRect.x, labelRect.y + 1f, labelRect.width, labelRect.height - 2f);
-            var isSelfMissing = _missingSelfIds.Contains(instanceId);
+            var isSelfMissing = _missingSelfIds.Contains(entityId);
             EditorGUI.DrawRect(bgRect, isSelfMissing ? Settings.HierarchySelfBackgroundColor : Settings.HierarchyParentBackgroundColor);
 
             if (isSelfMissing)
@@ -105,7 +119,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private static bool CollectMissing(GameObject go)
         {
-            var hasMissingInSelf = HasMissingReferences(go);
+            var hasMissingInSelf = MissingReferenceUtility.HasMissingReferences(go);
             var hasMissingInChildren = false;
 
             var transform = go.transform;
@@ -121,43 +135,23 @@ namespace UniLab.Tools.Editor.MissingChecker
             {
                 if (hasMissingInSelf)
                 {
+#if UNITY_6000_4_OR_NEWER
+                    _missingSelfIds.Add(go.GetEntityId());
+#else
                     _missingSelfIds.Add(go.GetInstanceID());
+#endif
                 }
 
+#if UNITY_6000_4_OR_NEWER
+                _missingIds.Add(go.GetEntityId());
+#else
                 _missingIds.Add(go.GetInstanceID());
+#endif
                 return true;
             }
 
             return false;
         }
 
-        private static bool HasMissingReferences(GameObject go)
-        {
-            var components = go.GetComponents<Component>();
-            foreach (var component in components)
-            {
-                if (component == null)
-                {
-                    return true;
-                }
-
-                var serializedObject = new SerializedObject(component);
-                var iterator = serializedObject.GetIterator();
-                while (iterator.NextVisible(true))
-                {
-                    if (iterator.propertyType != SerializedPropertyType.ObjectReference)
-                    {
-                        continue;
-                    }
-
-                    if (iterator.objectReferenceValue == null && iterator.objectReferenceInstanceIDValue != 0)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
     }
 }
