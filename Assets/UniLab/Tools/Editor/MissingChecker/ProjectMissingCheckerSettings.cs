@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 
@@ -21,7 +22,8 @@ namespace UniLab.Tools.Editor.MissingChecker
         public static void SetActive(ProjectMissingCheckerSettings settings)
         {
             _instance = settings;
-            RepaintHierarchyAndProject();
+            EditorApplication.RepaintHierarchyWindow();
+            ProjectScanEditorUtility.RepaintProjectWindow();
         }
 
         public static ProjectMissingCheckerSettings GetOrCreate()
@@ -34,35 +36,10 @@ namespace UniLab.Tools.Editor.MissingChecker
             _instance = AssetDatabase.LoadAssetAtPath<ProjectMissingCheckerSettings>(_settingsAssetPath);
             if (_instance == null)
             {
-                _instance = FindAnySettingsAsset();
+                _instance = ProjectScanEditorUtility.FindSettingsAsset<ProjectMissingCheckerSettings>();
             }
 
             return _instance;
-        }
-
-        private static ProjectMissingCheckerSettings FindAnySettingsAsset()
-        {
-            var guids = AssetDatabase.FindAssets("t:ProjectMissingCheckerSettings");
-            if (guids == null || guids.Length == 0)
-            {
-                return null;
-            }
-
-            var path = AssetDatabase.GUIDToAssetPath(guids[0]);
-            if (string.IsNullOrEmpty(path))
-            {
-                return null;
-            }
-
-            return AssetDatabase.LoadAssetAtPath<ProjectMissingCheckerSettings>(path);
-        }
-
-        private static void RepaintHierarchyAndProject()
-        {
-            EditorApplication.RepaintHierarchyWindow();
-            var method = typeof(EditorApplication).GetMethod("RepaintProjectWindow",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method?.Invoke(null, null);
         }
 
         public string ExtensionsCsv

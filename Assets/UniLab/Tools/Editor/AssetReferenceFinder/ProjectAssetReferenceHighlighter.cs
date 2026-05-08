@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 
@@ -19,9 +20,9 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
         {
             _highlightGuids.Clear();
             _markerGuids.Clear();
-            FillSet(_highlightGuids, highlightGuids);
-            FillSet(_markerGuids, markerGuids);
-            RepaintProjectWindow();
+            ProjectScanEditorUtility.FillGuidSet(_highlightGuids, highlightGuids);
+            ProjectScanEditorUtility.FillGuidSet(_markerGuids, markerGuids);
+            ProjectScanEditorUtility.RepaintProjectWindow();
         }
 
         public static void Clear()
@@ -33,7 +34,7 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
             _highlightGuids.Clear();
             _markerGuids.Clear();
-            RepaintProjectWindow();
+            ProjectScanEditorUtility.RepaintProjectWindow();
         }
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
@@ -65,29 +66,6 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
                 EditorGUI.LabelField(iconRect, "R");
                 GUI.color = prevColor;
             }
-        }
-
-        private static void FillSet(HashSet<string> set, IEnumerable<string> guids)
-        {
-            if (guids == null)
-            {
-                return;
-            }
-
-            foreach (var guid in guids)
-            {
-                if (!string.IsNullOrEmpty(guid))
-                {
-                    set.Add(guid);
-                }
-            }
-        }
-
-        private static void RepaintProjectWindow()
-        {
-            var method = typeof(EditorApplication).GetMethod("RepaintProjectWindow",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method?.Invoke(null, null);
         }
     }
 }

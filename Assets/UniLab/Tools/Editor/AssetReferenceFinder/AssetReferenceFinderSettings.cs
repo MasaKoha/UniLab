@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.IO;
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,7 +18,7 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
         public static void SetActive(AssetReferenceFinderSettings settings)
         {
             _instance = settings;
-            RepaintProjectWindow();
+            ProjectScanEditorUtility.RepaintProjectWindow();
         }
 
         public static AssetReferenceFinderSettings GetOrCreate()
@@ -31,76 +31,15 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
             _instance = AssetDatabase.LoadAssetAtPath<AssetReferenceFinderSettings>(_settingsAssetPath);
             if (_instance == null)
             {
-                _instance = FindAnySettingsAsset();
+                _instance = ProjectScanEditorUtility.FindSettingsAsset<AssetReferenceFinderSettings>();
             }
 
             if (_instance == null)
             {
-                _instance = CreateSettingsAsset();
+                _instance = ProjectScanEditorUtility.CreateSettingsAsset<AssetReferenceFinderSettings>(_settingsAssetPath);
             }
 
             return _instance;
-        }
-
-        private static AssetReferenceFinderSettings FindAnySettingsAsset()
-        {
-            var guids = AssetDatabase.FindAssets("t:AssetReferenceFinderSettings");
-            if (guids == null || guids.Length == 0)
-            {
-                return null;
-            }
-
-            var path = AssetDatabase.GUIDToAssetPath(guids[0]);
-            if (string.IsNullOrEmpty(path))
-            {
-                return null;
-            }
-
-            return AssetDatabase.LoadAssetAtPath<AssetReferenceFinderSettings>(path);
-        }
-
-        private static AssetReferenceFinderSettings CreateSettingsAsset()
-        {
-            var folderPath = Path.GetDirectoryName(_settingsAssetPath)?.Replace('\\', '/');
-            if (string.IsNullOrEmpty(folderPath))
-            {
-                folderPath = "Assets/Generated/UniCore";
-            }
-
-            EnsureFolderExists(folderPath);
-            var settings = CreateInstance<AssetReferenceFinderSettings>();
-            AssetDatabase.CreateAsset(settings, _settingsAssetPath);
-            AssetDatabase.SaveAssets();
-            return settings;
-        }
-
-        private static void EnsureFolderExists(string folderPath)
-        {
-            if (AssetDatabase.IsValidFolder(folderPath))
-            {
-                return;
-            }
-
-            var parent = Path.GetDirectoryName(folderPath)?.Replace('\\', '/');
-            var name = Path.GetFileName(folderPath);
-            if (string.IsNullOrEmpty(parent))
-            {
-                parent = "Assets";
-            }
-
-            if (!AssetDatabase.IsValidFolder(parent))
-            {
-                EnsureFolderExists(parent);
-            }
-
-            AssetDatabase.CreateFolder(parent, name);
-        }
-
-        private static void RepaintProjectWindow()
-        {
-            var method = typeof(EditorApplication).GetMethod("RepaintProjectWindow",
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            method?.Invoke(null, null);
         }
 
         public void SaveAsset()
