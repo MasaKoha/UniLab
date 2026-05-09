@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace UniLab.Tools.Editor.ProjectScanCommon
@@ -16,6 +18,12 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
         /// </summary>
         public static T ProcessScene<T>(string scenePath, Func<Scene, T> processor)
         {
+            if (!File.Exists(scenePath))
+            {
+                Debug.LogWarning($"[SceneScanUtility] Scene not found, skipping: {scenePath}");
+                return default;
+            }
+
             var scene = SceneManager.GetSceneByPath(scenePath);
             var openedAdditively = false;
 
@@ -43,6 +51,12 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
         /// </summary>
         public static void ProcessScene(string scenePath, Action<Scene> processor)
         {
+            if (!File.Exists(scenePath))
+            {
+                Debug.LogWarning($"[SceneScanUtility] Scene not found, skipping: {scenePath}");
+                return;
+            }
+
             var scene = SceneManager.GetSceneByPath(scenePath);
             var openedAdditively = false;
 
