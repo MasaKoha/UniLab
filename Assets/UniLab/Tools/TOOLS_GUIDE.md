@@ -112,8 +112,6 @@ UniLab/
 
 <img src="Documentation~/Images/unreferenced_assets.png" width="605">
 
-<img src="Documentation~/Images/unreferenced_assets_settings.png" width="549">
-
 #### 使い方
 
 1. 「設定ファイル」欄に Settings アセットを指定する
