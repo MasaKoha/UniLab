@@ -1,12 +1,19 @@
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 using System.IO;
 
 namespace UniLab.Tools.Editor
 {
+    /// <summary>
+    /// Provides menu commands to reveal platform-specific folders in the file browser.
+    /// </summary>
     public static class OpenFolder
     {
-        [MenuItem("UniLab/Open Folder/Open PlayerPrefs")]
+        /// <summary>
+        /// Opens the platform-specific PlayerPrefs folder in the file browser.
+        /// </summary>
+        [MenuItem("UniLab/Tools/Open Folder/Open PlayerPrefs")]
         public static void OpenPlayerPrefsFolder()
         {
 #if UNITY_EDITOR_OSX
@@ -17,11 +24,14 @@ namespace UniLab.Tools.Editor
             var path = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Unity");
             EditorUtility.RevealInFinder(path);
 #else
-            Debug.LogWarning("このOSには対応していません");
+            Debug.LogWarning(EditorToolLabels.Get(LabelKey.UnsupportedPlatform));
 #endif
         }
 
-        [MenuItem("UniLab/Open Folder/PersistentDataPath")]
+        /// <summary>
+        /// Opens Application.persistentDataPath in the file browser.
+        /// </summary>
+        [MenuItem("UniLab/Tools/Open Folder/PersistentDataPath")]
         public static void OpenPersistentDataPath()
         {
             EditorUtility.RevealInFinder(Application.persistentDataPath);

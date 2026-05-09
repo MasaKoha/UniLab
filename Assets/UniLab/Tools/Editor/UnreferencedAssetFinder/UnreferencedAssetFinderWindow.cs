@@ -12,9 +12,16 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
     /// </summary>
     public class UnreferencedAssetFinderWindow : EditorWindow
     {
+        private const float CheckboxWidth = 20f;
+        private const int SortModeByPath = 0;
+        private const int SortModeBySize = 1;
+        private const int SortModeByExtension = 2;
+        private static string[] SortModeLabels => EditorToolLabels.SortModeLabels;
+        private static readonly string[] FileSizeUnits = { "KB", "MB", "GB", "TB" };
+
         private readonly List<UnreferencedAssetEntry> _unreferencedEntries = new();
         private readonly List<UnreferencedAssetEntry> _sortedFilteredEntries = new();
-        private Vector2 _scroll;
+        private Vector2 _scrollPosition;
         private bool _isScanning;
         private string _filterExtension = "";
         private int _sortMode;
@@ -24,13 +31,16 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
         private UnreferencedAssetFinderSettings _settings;
 
         /// <summary>
-        /// Represents a single unreferenced asset entry with its metadata.
+        /// Represents a single unreferenced asset entry with its metadata and selection state.
+        /// Changed from struct to class so that IsSelected mutations propagate through shared references
+        /// between _unreferencedEntries and _sortedFilteredEntries.
         /// </summary>
-        private struct UnreferencedAssetEntry
+        private class UnreferencedAssetEntry
         {
             public string Path;
             public string Guid;
             public long FileSize;
+            public bool IsSelected;
         }
 
         /// <summary>
@@ -60,18 +70,18 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("未参照アセットを検索", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.UnreferencedFinderTitle), EditorStyles.boldLabel);
             EditorGUILayout.Space(4);
             DrawSettingsUI();
 
             using (new EditorGUI.DisabledScope(_isScanning))
             {
-                if (GUILayout.Button("全アセットをスキャン"))
+                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.ScanAllAssets)))
                 {
                     ScanAllAssets();
                 }
 
-                if (GUILayout.Button("ハイライト解除"))
+                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.ClearHighlight)))
                 {
                     ClearResults();
                     ProjectUnreferencedAssetHighlighter.Clear();
@@ -84,12 +94,13 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             if (_unreferencedEntries.Count > 0)
             {
                 DrawResultControls();
+                DrawSelectionControls();
                 DrawResultActionButtons();
             }
 
             RebuildSortedFilteredEntriesIfNeeded();
 
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
+            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
             for (int i = 0; i < _sortedFilteredEntries.Count; i++)
             {
                 DrawResultRow(_sortedFilteredEntries[i]);
@@ -101,7 +112,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
         private void DrawSettingsUI()
         {
             EditorGUILayout.BeginVertical("box");
-            EditorGUILayout.LabelField("設定ファイル", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.Settings), EditorStyles.boldLabel);
 
             EditorGUI.BeginChangeCheck();
             _settings = (UnreferencedAssetFinderSettings)EditorGUILayout.ObjectField(
@@ -115,7 +126,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             }
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("設定を開く"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.OpenSettings)))
             {
                 if (_settings != null)
                 {
@@ -127,7 +138,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                 }
             }
 
-            if (GUILayout.Button("設定を取得"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.GetSettings)))
             {
                 _settings = UnreferencedAssetFinderSettings.GetOrCreate();
                 UnreferencedAssetFinderSettings.SetActive(_settings);
@@ -189,7 +200,8 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                     {
                         Path = path,
                         Guid = guid,
-                        FileSize = GetFileSize(path)
+                        FileSize = GetFileSize(path),
+                        IsSelected = false
                     });
                     unreferencedGuids.Add(guid);
                     ProjectScanEditorUtility.CollectParentFolderGuids(path, parentFolderGuids);
@@ -301,7 +313,6 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                 return true;
             }
 
-
             return false;
         }
 
@@ -330,13 +341,20 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
         {
             var totalSize = CalculateTotalFileSize(_unreferencedEntries);
             EditorGUILayout.LabelField($"未参照アセット数: {_unreferencedEntries.Count}  合計サイズ: {FormatFileSize(totalSize)}");
+
+            if (_unreferencedEntries.Count > 0)
+            {
+                var selectedCount = CountSelectedEntries(_unreferencedEntries);
+                var selectedSize = CalculateSelectedFileSize(_unreferencedEntries);
+                EditorGUILayout.LabelField($"選択中: {selectedCount} 件 ({FormatFileSize(selectedSize)})");
+            }
         }
 
         private void DrawResultControls()
         {
             EditorGUI.BeginChangeCheck();
-            _filterExtension = EditorGUILayout.TextField("拡張子フィルタ", _filterExtension);
-            _sortMode = EditorGUILayout.Popup("ソート", _sortMode, new[] { "パス順", "サイズ大", "拡張子" });
+            _filterExtension = EditorGUILayout.TextField(EditorToolLabels.Get(LabelKey.ExtensionFilter), _filterExtension);
+            _sortMode = EditorGUILayout.Popup(EditorToolLabels.Get(LabelKey.Sort), _sortMode, SortModeLabels);
 
             if (EditorGUI.EndChangeCheck())
             {
@@ -344,17 +362,42 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             }
         }
 
+        private void DrawSelectionControls()
+        {
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.SelectAll)))
+            {
+                SetAllSelectionState(_sortedFilteredEntries, true);
+            }
+
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.DeselectAll)))
+            {
+                SetAllSelectionState(_sortedFilteredEntries, false);
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
         private void DrawResultActionButtons()
         {
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("CSV エクスポート"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.CsvExport)))
             {
                 ExportCsv();
             }
 
-            if (GUILayout.Button("未参照アセットを隔離"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.IsolateAssets)))
             {
                 MoveUnreferencedAssetsToIsolationFolder();
+            }
+
+            var selectedCount = CountSelectedEntries(_unreferencedEntries);
+            using (new EditorGUI.DisabledScope(selectedCount == 0))
+            {
+                if (GUILayout.Button($"選択を削除 ({selectedCount})"))
+                {
+                    DeleteSelectedAssets();
+                }
             }
 
             EditorGUILayout.EndHorizontal();
@@ -363,6 +406,9 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
         private static void DrawResultRow(UnreferencedAssetEntry entry)
         {
             EditorGUILayout.BeginHorizontal();
+
+            entry.IsSelected = EditorGUILayout.Toggle(entry.IsSelected, GUILayout.Width(CheckboxWidth));
+
             var fileName = Path.GetFileName(entry.Path);
             if (GUILayout.Button(fileName, EditorStyles.miniButtonLeft))
             {
@@ -374,7 +420,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                 }
             }
 
-            if (GUILayout.Button("開く", EditorStyles.miniButtonRight, GUILayout.Width(50)))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Open), EditorStyles.miniButtonRight, GUILayout.Width(50)))
             {
                 var obj = AssetDatabase.LoadMainAssetAtPath(entry.Path);
                 if (obj != null)
@@ -427,7 +473,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
 
         private static void SortEntries(List<UnreferencedAssetEntry> entries, int sortMode)
         {
-            if (sortMode == 1)
+            if (sortMode == SortModeBySize)
             {
                 entries.Sort((left, right) =>
                 {
@@ -439,7 +485,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                 return;
             }
 
-            if (sortMode == 2)
+            if (sortMode == SortModeByExtension)
             {
                 entries.Sort((left, right) =>
                 {
@@ -483,6 +529,42 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             return totalSize;
         }
 
+        private static int CountSelectedEntries(IReadOnlyList<UnreferencedAssetEntry> entries)
+        {
+            var count = 0;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].IsSelected)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static long CalculateSelectedFileSize(IReadOnlyList<UnreferencedAssetEntry> entries)
+        {
+            var totalSize = 0L;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].IsSelected)
+                {
+                    totalSize += entries[i].FileSize;
+                }
+            }
+
+            return totalSize;
+        }
+
+        private static void SetAllSelectionState(IReadOnlyList<UnreferencedAssetEntry> entries, bool isSelected)
+        {
+            for (int i = 0; i < entries.Count; i++)
+            {
+                entries[i].IsSelected = isSelected;
+            }
+        }
+
         private static string FormatFileSize(long bytes)
         {
             if (bytes < 1024L)
@@ -490,7 +572,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
                 return bytes + " bytes";
             }
 
-            var units = new[] { "KB", "MB", "GB", "TB" };
+            var units = FileSizeUnits;
             var size = bytes / 1024d;
             var unitIndex = 0;
             while (size >= 1024d && unitIndex < units.Length - 1)
@@ -504,12 +586,8 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
 
         private void ExportCsv()
         {
-            var savePath = EditorUtility.SaveFilePanel(
-                "Export Unreferenced Assets CSV",
-                "",
-                "unreferenced-assets.csv",
-                "csv");
-            if (string.IsNullOrEmpty(savePath))
+            var savePath = CsvExportUtility.ShowSavePanel("Export Unreferenced Assets CSV", "unreferenced-assets.csv");
+            if (savePath == null)
             {
                 return;
             }
@@ -519,38 +597,84 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             for (int i = 0; i < _unreferencedEntries.Count; i++)
             {
                 var entry = _unreferencedEntries[i];
-                builder.Append(EscapeCsv(entry.Path));
+                builder.Append(ProjectScanEditorUtility.EscapeCsv(entry.Path));
                 builder.Append(',');
-                builder.Append(EscapeCsv(entry.Guid));
+                builder.Append(ProjectScanEditorUtility.EscapeCsv(entry.Guid));
                 builder.Append(',');
-                builder.Append(EscapeCsv(NormalizeExtension(Path.GetExtension(entry.Path))));
+                builder.Append(ProjectScanEditorUtility.EscapeCsv(NormalizeExtension(Path.GetExtension(entry.Path))));
                 builder.Append(',');
                 builder.Append(entry.FileSize);
                 builder.AppendLine();
             }
 
-            File.WriteAllText(savePath, builder.ToString(), Encoding.UTF8);
+            CsvExportUtility.WriteAndLog(savePath, builder);
             AssetDatabase.Refresh();
         }
 
-        private static string EscapeCsv(string value)
+        private void DeleteSelectedAssets()
         {
-            if (!value.Contains(",") && !value.Contains("\"") && !value.Contains("\n") && !value.Contains("\r"))
+            var selectedCount = CountSelectedEntries(_unreferencedEntries);
+            var selectedSize = CalculateSelectedFileSize(_unreferencedEntries);
+            if (selectedCount == 0)
             {
-                return value;
+                return;
             }
 
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
+            if (!EditorUtility.DisplayDialog(
+                    EditorToolLabels.Get(LabelKey.DeleteSelectedTitle),
+                    selectedCount + " 件 (" + FormatFileSize(selectedSize) + ") のアセットを完全に削除します。\nこの操作は元に戻せません。",
+                    EditorToolLabels.Get(LabelKey.Delete),
+                    EditorToolLabels.Get(LabelKey.Cancel)))
+            {
+                return;
+            }
+
+            for (int i = _unreferencedEntries.Count - 1; i >= 0; i--)
+            {
+                var entry = _unreferencedEntries[i];
+                if (!entry.IsSelected)
+                {
+                    continue;
+                }
+
+                if (AssetDatabase.DeleteAsset(entry.Path))
+                {
+                    _unreferencedEntries.RemoveAt(i);
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to delete asset: " + entry.Path);
+                }
+            }
+
+            _isResultCacheDirty = true;
+            RebuildHighlighterAfterDeletion();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        private void RebuildHighlighterAfterDeletion()
+        {
+            var remainingGuids = new List<string>(_unreferencedEntries.Count);
+            var parentFolderGuids = new HashSet<string>();
+            for (int i = 0; i < _unreferencedEntries.Count; i++)
+            {
+                var entry = _unreferencedEntries[i];
+                remainingGuids.Add(entry.Guid);
+                ProjectScanEditorUtility.CollectParentFolderGuids(entry.Path, parentFolderGuids);
+            }
+
+            ProjectUnreferencedAssetHighlighter.SetUnreferencedGuids(remainingGuids, parentFolderGuids);
         }
 
         private void MoveUnreferencedAssetsToIsolationFolder()
         {
             var isolationFolder = "Assets/_Unused/" + System.DateTime.Now.ToString("yyyy-MM-dd");
             if (!EditorUtility.DisplayDialog(
-                    "未参照アセットを隔離",
+                    EditorToolLabels.Get(LabelKey.IsolateAssets),
                     _unreferencedEntries.Count + " 件のアセットを " + isolationFolder + "/ に移動します",
-                    "移動",
-                    "キャンセル"))
+                    EditorToolLabels.Get(LabelKey.Move),
+                    EditorToolLabels.Get(LabelKey.Cancel)))
             {
                 return;
             }

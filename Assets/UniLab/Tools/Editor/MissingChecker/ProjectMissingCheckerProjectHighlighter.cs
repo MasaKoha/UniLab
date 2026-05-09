@@ -26,7 +26,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
         {
-            if ((_missingSelfGuids.Count == 0 && _missingParentGuids.Count == 0) || string.IsNullOrEmpty(guid))
+            if (Application.isPlaying || (_missingSelfGuids.Count == 0 && _missingParentGuids.Count == 0) || string.IsNullOrEmpty(guid))
             {
                 return;
             }

@@ -4,8 +4,15 @@ using UnityEditor;
 
 namespace UniLab.Tools.Editor.ProjectScanCommon
 {
+    /// <summary>
+    /// Provides extension and folder filter utilities for project-wide asset scanning tools.
+    /// </summary>
     public static class ProjectScanFilterUtility
     {
+        /// <summary>
+        /// Builds a set of normalised extensions from a comma-separated string.
+        /// Returns an empty set when the input is null or whitespace, which means "accept all".
+        /// </summary>
         public static HashSet<string> BuildExtensionFilter(string extensionsCsv)
         {
             var set = new HashSet<string>();
@@ -29,6 +36,10 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
             return set;
         }
 
+        /// <summary>
+        /// Returns true when the asset's extension is contained in the filter set.
+        /// An empty filter set means "accept all extensions".
+        /// </summary>
         public static bool PassExtensionFilter(string path, HashSet<string> extensionFilter)
         {
             if (extensionFilter == null || extensionFilter.Count == 0)
@@ -45,6 +56,10 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
             return true;
         }
 
+        /// <summary>
+        /// Converts a list of folder assets into normalised path strings.
+        /// When the list is empty the caller should treat all folders as valid.
+        /// </summary>
         public static List<string> BuildFolderRoots(IEnumerable<DefaultAsset> folders)
         {
             var roots = new List<string>();
@@ -77,6 +92,10 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
             return roots;
         }
 
+        /// <summary>
+        /// Returns true when the asset resides under one of the specified folder roots.
+        /// An empty root list means "accept all folders".
+        /// </summary>
         public static bool PassFolderFilter(string path, List<string> roots)
         {
             if (roots == null || roots.Count == 0)

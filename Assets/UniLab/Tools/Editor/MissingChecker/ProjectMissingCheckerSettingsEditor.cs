@@ -1,3 +1,4 @@
+using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,12 +12,12 @@ namespace UniLab.Tools.Editor.MissingChecker
             serializedObject.Update();
             var settings = (ProjectMissingCheckerSettings)target;
 
-            EditorGUILayout.LabelField("スキャン対象フォルダ", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("空欄の場合は全フォルダを対象にスキャンします。", MessageType.Info);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.TargetFolders), EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(EditorToolLabels.Get(LabelKey.TargetFoldersHint), MessageType.Info);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("_targetFolders"), true);
             EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField("拡張子 (CSV, ドット不要)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.ExtensionsCsvLabel), EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("_extensionsCsv"), GUIContent.none);
             EditorGUILayout.Space(6);
 
