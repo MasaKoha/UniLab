@@ -39,7 +39,7 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
         {
-            if (_highlightGuids.Count == 0 || string.IsNullOrEmpty(guid))
+            if (Application.isPlaying || _highlightGuids.Count == 0 || string.IsNullOrEmpty(guid))
             {
                 return;
             }

@@ -11,14 +11,17 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
     /// </summary>
     public static class ProjectScanEditorUtility
     {
+        // perf: cache reflection lookup to avoid repeated GetMethod calls
+        private static readonly MethodInfo RepaintProjectWindowMethod =
+            typeof(EditorApplication).GetMethod("RepaintProjectWindow",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+
         /// <summary>
         /// Repaints the Project window via reflection.
         /// </summary>
         public static void RepaintProjectWindow()
         {
-            var method = typeof(EditorApplication).GetMethod("RepaintProjectWindow",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-            method?.Invoke(null, null);
+            RepaintProjectWindowMethod?.Invoke(null, null);
         }
 
         /// <summary>
@@ -139,6 +142,64 @@ namespace UniLab.Tools.Editor.ProjectScanCommon
                     set.Add(guid);
                 }
             }
+        }
+
+        /// <summary>
+        /// Escapes a string value for safe inclusion in a CSV field.
+        /// Wraps the value in double-quotes and escapes inner double-quotes when necessary.
+        /// </summary>
+        public static string EscapeCsv(string value)
+        {
+            if (!value.Contains(",") && !value.Contains("\"") && !value.Contains("\n") && !value.Contains("\r"))
+            {
+                return value;
+            }
+
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        /// <summary>
+        /// Draws a standard asset row with a file-name button (select + ping) and an "開く" button.
+        /// Asset loading is deferred to button click to avoid per-frame AssetDatabase access in OnGUI.
+        /// </summary>
+        public static void DrawAssetRow(string assetPath)
+        {
+            var fileName = Path.GetFileName(assetPath);
+            if (GUILayout.Button(fileName, EditorStyles.miniButtonLeft))
+            {
+                var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                if (asset != null)
+                {
+                    Selection.activeObject = asset;
+                    EditorGUIUtility.PingObject(asset);
+                }
+            }
+
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Open), EditorStyles.miniButtonRight, GUILayout.Width(50)))
+            {
+                var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                if (asset != null)
+                {
+                    AssetDatabase.OpenAsset(asset);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds a "/" separated Hierarchy path from root to the specified Transform.
+        /// </summary>
+        public static string BuildGameObjectPath(Transform target)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            var current = target;
+            while (current != null)
+            {
+                parts.Add(current.name);
+                current = current.parent;
+            }
+
+            parts.Reverse();
+            return string.Join("/", parts);
         }
     }
 }

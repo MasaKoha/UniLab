@@ -1,28 +1,47 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace UniLab.Tools.Editor.MissingChecker
 {
+    /// <summary>
+    /// Editor window that scans project assets for missing references and displays
+    /// field-level detail with foldout per asset.
+    /// </summary>
     public class ProjectMissingCheckerWindow : EditorWindow
     {
-        private readonly List<string> _missingPaths = new();
-        private Vector2 _scroll;
+        /// <summary>
+        /// Represents a single asset entry that contains missing references.
+        /// </summary>
+        private struct MissingAssetEntry
+        {
+            public string Path;
+            public List<MissingFieldInfo> Fields;
+        }
+
+        private readonly List<MissingAssetEntry> _missingEntries = new();
+        private readonly Dictionary<string, bool> _foldoutStates = new();
+        private Vector2 _scrollPosition;
         private bool _isScanning;
         private ProjectMissingCheckerSettings _settings;
-        private const string _settingsAssetPath = "Assets/Generated/UniCore/MissingCheckerSettings.asset";
+        private const string SettingsAssetPath = "Assets/Generated/UniCore/MissingCheckerSettings.asset";
 
-        [MenuItem("UniLab/Tools/Project Missing Checker/Open Window")]
+        /// <summary>
+        /// Opens the Missing Checker editor window.
+        /// </summary>
+        [MenuItem("UniLab/Tools/Missing Checker/Open Window")]
         public static void ShowWindow()
         {
             GetWindow<ProjectMissingCheckerWindow>("Missing Checker");
         }
 
-        [MenuItem("UniLab/Tools/Project Missing Checker/Settings")]
+        /// <summary>
+        /// Selects the Missing Checker settings asset in the Inspector.
+        /// </summary>
+        [MenuItem("UniLab/Tools/Missing Checker/Settings")]
         public static void ShowSettings()
         {
             var settings = ProjectMissingCheckerSettings.GetOrCreate();
@@ -37,7 +56,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("全アセットの Missing 参照をチェック", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.MissingCheckerTitle), EditorStyles.boldLabel);
             EditorGUILayout.Space(4);
             DrawSettingsUI();
 
@@ -45,10 +64,10 @@ namespace UniLab.Tools.Editor.MissingChecker
             {
                 if (_settings == null)
                 {
-                    EditorGUILayout.HelpBox("設定ファイルが見つかりません。先に設定ファイルを作成してください。", MessageType.Warning);
+                    EditorGUILayout.HelpBox(EditorToolLabels.Get(LabelKey.MissingSettingsNotFound), MessageType.Warning);
                 }
 
-                if (GUILayout.Button("全アセットをスキャン"))
+                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.ScanAllAssets)))
                 {
                     if (_settings != null)
                     {
@@ -58,42 +77,64 @@ namespace UniLab.Tools.Editor.MissingChecker
             }
 
             EditorGUILayout.Space(6);
-            EditorGUILayout.LabelField($"Missing 検出数: {_missingPaths.Count}");
+            EditorGUILayout.LabelField($"Missing 検出数: {_missingEntries.Count}");
 
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            foreach (var path in _missingPaths)
+            if (_missingEntries.Count > 0)
             {
-                EditorGUILayout.BeginHorizontal();
-                var fileName = System.IO.Path.GetFileName(path);
-                if (GUILayout.Button(fileName, EditorStyles.miniButtonLeft))
+                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.CsvExport)))
                 {
-                    var obj = AssetDatabase.LoadMainAssetAtPath(path);
-                    if (obj != null)
-                    {
-                        Selection.activeObject = obj;
-                        EditorGUIUtility.PingObject(obj);
-                    }
+                    ExportCsv();
                 }
+            }
 
-                if (GUILayout.Button("開く", EditorStyles.miniButtonRight, GUILayout.Width(50)))
-                {
-                    var obj = AssetDatabase.LoadMainAssetAtPath(path);
-                    if (obj != null)
-                    {
-                        AssetDatabase.OpenAsset(obj);
-                    }
-                }
-
-                EditorGUILayout.EndHorizontal();
+            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+            for (int i = 0; i < _missingEntries.Count; i++)
+            {
+                DrawMissingAssetEntry(_missingEntries[i]);
             }
 
             EditorGUILayout.EndScrollView();
         }
 
+        private void DrawMissingAssetEntry(MissingAssetEntry entry)
+        {
+            if (!_foldoutStates.TryGetValue(entry.Path, out bool isExpanded))
+            {
+                isExpanded = false;
+            }
+
+            var fieldCount = entry.Fields != null ? entry.Fields.Count : 0;
+
+            EditorGUILayout.BeginHorizontal();
+
+            isExpanded = EditorGUILayout.Foldout(isExpanded, $"({fieldCount} fields)", true);
+            _foldoutStates[entry.Path] = isExpanded;
+
+            ProjectScanEditorUtility.DrawAssetRow(entry.Path);
+
+            EditorGUILayout.EndHorizontal();
+
+            if (isExpanded && entry.Fields != null)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField(entry.Path, EditorStyles.miniLabel);
+                for (int fieldIndex = 0; fieldIndex < entry.Fields.Count; fieldIndex++)
+                {
+                    var field = entry.Fields[fieldIndex];
+                    var fieldLabel = string.IsNullOrEmpty(field.PropertyPath)
+                        ? field.ComponentTypeName
+                        : $"{field.ComponentTypeName}.{field.PropertyPath}";
+                    EditorGUILayout.LabelField(fieldLabel, EditorStyles.miniLabel);
+                }
+
+                EditorGUI.indentLevel--;
+            }
+        }
+
         private void DrawSettingsUI()
         {
             EditorGUILayout.BeginVertical("box");
-            EditorGUILayout.LabelField("設定ファイル", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.Settings), EditorStyles.boldLabel);
 
             EditorGUI.BeginChangeCheck();
             _settings = (ProjectMissingCheckerSettings)EditorGUILayout.ObjectField(
@@ -108,7 +149,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
             if (_settings != null)
             {
-                var next = EditorGUILayout.ToggleLeft("ヒエラルキー色付けを有効", _settings.EnableHierarchyHighlight);
+                var next = EditorGUILayout.ToggleLeft(EditorToolLabels.Get(LabelKey.HierarchyHighlightToggle), _settings.EnableHierarchyHighlight);
                 if (next != _settings.EnableHierarchyHighlight)
                 {
                     _settings.EnableHierarchyHighlight = next;
@@ -117,11 +158,11 @@ namespace UniLab.Tools.Editor.MissingChecker
             }
 
             var dropRect = GUILayoutUtility.GetRect(0, 30, GUILayout.ExpandWidth(true));
-            GUI.Box(dropRect, "ここに設定ファイルをドロップ");
+            GUI.Box(dropRect, EditorToolLabels.Get(LabelKey.DropSettingsHere));
             HandleSettingsDrop(dropRect);
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("設定を開く"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.OpenSettings)))
             {
                 if (_settings != null)
                 {
@@ -133,7 +174,7 @@ namespace UniLab.Tools.Editor.MissingChecker
                 }
             }
 
-            if (GUILayout.Button("設定ファイル作成"))
+            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.CreateSettings)))
             {
                 _settings = CreateOrSelectSettingsAsset();
                 ProjectMissingCheckerSettings.SetActive(_settings);
@@ -157,7 +198,6 @@ namespace UniLab.Tools.Editor.MissingChecker
             Selection.activeObject = settings;
             EditorGUIUtility.PingObject(settings);
         }
-
 
         private void HandleSettingsDrop(Rect dropRect)
         {
@@ -191,7 +231,7 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private static ProjectMissingCheckerSettings CreateOrSelectSettingsAsset()
         {
-            var existing = AssetDatabase.LoadAssetAtPath<ProjectMissingCheckerSettings>(_settingsAssetPath);
+            var existing = AssetDatabase.LoadAssetAtPath<ProjectMissingCheckerSettings>(SettingsAssetPath);
             if (existing != null)
             {
                 return existing;
@@ -214,7 +254,8 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private void ScanAllAssets()
         {
-            _missingPaths.Clear();
+            _missingEntries.Clear();
+            _foldoutStates.Clear();
             _isScanning = true;
 
             try
@@ -255,9 +296,14 @@ namespace UniLab.Tools.Editor.MissingChecker
                         break;
                     }
 
-                    if (HasMissingReferencesAtPath(path))
+                    var fields = CollectMissingFieldsAtPath(path);
+                    if (fields.Count > 0)
                     {
-                        _missingPaths.Add(path);
+                        _missingEntries.Add(new MissingAssetEntry
+                        {
+                            Path = path,
+                            Fields = fields
+                        });
                         missingSelfGuids.Add(guids[i]);
                         ProjectScanEditorUtility.CollectParentFolderGuids(path, missingParentGuids);
                     }
@@ -272,70 +318,81 @@ namespace UniLab.Tools.Editor.MissingChecker
             }
         }
 
-        private static bool HasMissingReferencesAtPath(string path)
+        private static List<MissingFieldInfo> CollectMissingFieldsAtPath(string path)
         {
             if (path.EndsWith(".unity"))
             {
-                return HasMissingReferencesInScene(path);
+                return CollectMissingFieldsInScene(path);
             }
 
+            var allFields = new List<MissingFieldInfo>();
             var assets = AssetDatabase.LoadAllAssetsAtPath(path);
             foreach (var asset in assets)
             {
                 if (asset == null)
                 {
-                    return true;
+                    allFields.Add(new MissingFieldInfo("(Null Sub-Asset)", ""));
+                    continue;
                 }
 
                 if (asset is GameObject prefabRoot)
                 {
-                    if (MissingReferenceUtility.HasMissingReferences(prefabRoot))
-                    {
-                        return true;
-                    }
+                    allFields.AddRange(MissingReferenceUtility.CollectMissingFields(prefabRoot));
                 }
                 else
                 {
-                    if (MissingReferenceUtility.HasMissingReferences(asset))
-                    {
-                        return true;
-                    }
+                    allFields.AddRange(MissingReferenceUtility.CollectMissingFields(asset));
                 }
             }
 
-            return false;
+            return allFields;
         }
 
-        private static bool HasMissingReferencesInScene(string path)
+        private static List<MissingFieldInfo> CollectMissingFieldsInScene(string path)
         {
-            var scene = SceneManager.GetSceneByPath(path);
-            var openedAdditively = false;
-
-            if (!scene.isLoaded)
+            return SceneScanUtility.ProcessScene(path, scene =>
             {
-                scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
-                openedAdditively = true;
-            }
-
-            try
-            {
+                var allFields = new List<MissingFieldInfo>();
                 foreach (var root in scene.GetRootGameObjects())
                 {
-                    if (MissingReferenceUtility.HasMissingReferences(root))
-                    {
-                        return true;
-                    }
+                    allFields.AddRange(MissingReferenceUtility.CollectMissingFields(root));
                 }
-            }
-            finally
+
+                return allFields;
+            });
+        }
+
+        private void ExportCsv()
+        {
+            var savePath = CsvExportUtility.ShowSavePanel("Export Missing References CSV", "missing-references.csv");
+            if (savePath == null)
             {
-                if (openedAdditively)
+                return;
+            }
+
+            var builder = new StringBuilder();
+            builder.AppendLine("Path,ComponentType,PropertyPath");
+            for (int entryIndex = 0; entryIndex < _missingEntries.Count; entryIndex++)
+            {
+                var entry = _missingEntries[entryIndex];
+                if (entry.Fields == null || entry.Fields.Count == 0)
                 {
-                    EditorSceneManager.CloseScene(scene, true);
+                    continue;
+                }
+
+                for (int fieldIndex = 0; fieldIndex < entry.Fields.Count; fieldIndex++)
+                {
+                    var field = entry.Fields[fieldIndex];
+                    builder.Append(ProjectScanEditorUtility.EscapeCsv(entry.Path));
+                    builder.Append(',');
+                    builder.Append(ProjectScanEditorUtility.EscapeCsv(field.ComponentTypeName));
+                    builder.Append(',');
+                    builder.Append(ProjectScanEditorUtility.EscapeCsv(field.PropertyPath));
+                    builder.AppendLine();
                 }
             }
 
-            return false;
+            CsvExportUtility.WriteAndLog(savePath, builder);
         }
 
         private static string GetActiveProjectFolderPath()
@@ -411,6 +468,5 @@ namespace UniLab.Tools.Editor.MissingChecker
 
             return result.Replace('\\', '/');
         }
-
     }
 }

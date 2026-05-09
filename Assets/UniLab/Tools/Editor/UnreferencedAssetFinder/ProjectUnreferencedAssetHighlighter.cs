@@ -48,7 +48,7 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
 
         private static void OnProjectItemGUI(string guid, Rect selectionRect)
         {
-            if ((_unreferencedSelfGuids.Count == 0 && _unreferencedParentGuids.Count == 0) || string.IsNullOrEmpty(guid))
+            if (Application.isPlaying || (_unreferencedSelfGuids.Count == 0 && _unreferencedParentGuids.Count == 0) || string.IsNullOrEmpty(guid))
             {
                 return;
             }

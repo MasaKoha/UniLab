@@ -18,6 +18,8 @@ namespace UniLab.Tools.Editor.MissingChecker
         private static readonly HashSet<int> _missingSelfIds = new();
 #endif
         private static bool _needsRebuild = true;
+        private static double _lastRebuildTime = -1;
+        private const double RebuildCooldownSeconds = 0.5;
 
         static HierarchyMissingChecker()
         {
@@ -35,8 +37,15 @@ namespace UniLab.Tools.Editor.MissingChecker
             PrefabStage.prefabStageClosing += _ => MarkDirty();
         }
 
+        // Why: OnHierarchyItemGUI 側にも isPlaying ガードがあるが、
+        // Play 中に無駄なダーティフラグが蓄積されるのを防ぐためここでも弾く。
         private static void MarkDirty()
         {
+            if (Application.isPlaying)
+            {
+                return;
+            }
+
             _needsRebuild = true;
         }
 
@@ -46,6 +55,7 @@ namespace UniLab.Tools.Editor.MissingChecker
         private static void OnHierarchyItemGUI(int entityId, Rect selectionRect)
 #endif
         {
+            // Why: RebuildCache は全 GameObject を SerializedObject で走査するため、Play 中は絶対に走らせない。
             if (Application.isPlaying)
             {
                 return;
@@ -85,6 +95,16 @@ namespace UniLab.Tools.Editor.MissingChecker
 
         private static void RebuildCache()
         {
+            // perf: Edit モードでの連続 Hierarchy 変更（Undo/Redo、Prefab 展開等）による
+            // 全シーン再スキャンスパイクを抑制するデバウンス。
+            // Play 中はここに到達しない（OnHierarchyItemGUI と MarkDirty の両方でガード済み）。
+            var now = EditorApplication.timeSinceStartup;
+            if (now - _lastRebuildTime < RebuildCooldownSeconds)
+            {
+                return;
+            }
+
+            _lastRebuildTime = now;
             _missingIds.Clear();
             _missingSelfIds.Clear();
 
