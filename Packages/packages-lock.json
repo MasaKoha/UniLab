@@ -16,14 +16,6 @@
       "dependencies": {},
       "hash": "73a63b7f672b88f7e9992f6917eb458a8cbb6fa9"
     },
-      "depth": 0,
-      "source": "local",
-      "dependencies": {
-        "com.unity.nuget.newtonsoft-json": "3.2.1",
-        "com.unity.editorcoroutines": "1.0.0",
-        "com.unity.test-framework": "1.3.3"
-      }
-    },
     "com.github-glitchenzo.nugetforunity": {
       "version": "https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity",
       "depth": 0,
@@ -148,7 +140,7 @@
       }
     },
     "com.unity.burst": {
-      "version": "1.8.28",
+      "version": "1.8.29",
       "depth": 3,
       "source": "registry",
       "dependencies": {
@@ -175,13 +167,6 @@
         "com.unity.test-framework": "1.4.6",
         "com.unity.test-framework.performance": "3.0.3"
       }
-    },
-    "com.unity.editorcoroutines": {
-      "version": "1.0.1",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {},
-      "url": "https://packages.unity.com"
     },
     "com.unity.ext.nunit": {
       "version": "2.0.5",
@@ -280,13 +265,6 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
-    "com.unity.nuget.newtonsoft-json": {
-      "version": "3.2.2",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {},
-      "url": "https://packages.unity.com"
-    },
     "com.unity.test-framework": {
       "version": "1.6.0",
       "depth": 0,
@@ -298,7 +276,7 @@
       }
     },
     "com.unity.test-framework.performance": {
-      "version": "3.2.0",
+      "version": "3.4.0",
       "depth": 3,
       "source": "registry",
       "dependencies": {
