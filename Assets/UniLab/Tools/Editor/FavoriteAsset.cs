@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using UniLab.Tools.Editor.ProjectScanCommon;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace UniLab.Tools.Editor
 {
     /// <summary>
-    /// Editor window for managing favorite assets with category grouping.
+    /// Editor window for managing favorite assets with drag-reorderable list.
     /// </summary>
     public class FavoriteAssetsWindow : EditorWindow
     {
         private const float DropAreaHeight = 40f;
         private const float ClearButtonWidth = 100f;
         private const float OpenButtonWidth = 40f;
-        private const float DeleteButtonWidth = 30f;
-        private const float CategoryDropdownWidth = 100f;
-        private static string DefaultCategory => EditorToolLabels.Get(LabelKey.DefaultCategory);
+        private const float DeleteButtonWidth = 20f;
+        private const float ElementSpacing = 4f;
 
         private string _saveFilePath = string.Empty;
 
@@ -25,7 +25,6 @@ namespace UniLab.Tools.Editor
         private class FavoriteEntry
         {
             public string Guid;
-            public string Category;
         }
 
         [Serializable]
@@ -34,24 +33,9 @@ namespace UniLab.Tools.Editor
             public List<FavoriteEntry> Entries = new();
         }
 
-        /// <summary>
-        /// Legacy data format for backward compatibility.
-        /// Only used during migration from the old Favorites (GUID-only) format.
-        /// </summary>
-        [Serializable]
-        private class LegacyFavoriteAssetsData
-        {
-            public List<string> Favorites = new();
-        }
-
         private List<FavoriteEntry> _entries = new();
         private Vector2 _scrollPosition;
-        private readonly Dictionary<string, bool> _categoryFoldouts = new();
-        private string _newCategoryName = string.Empty;
-        private int _selectedCategoryIndex;
-        private bool _isCategoryCacheDirty = true;
-        private string[] _cachedCategoryNames = System.Array.Empty<string>();
-        private Dictionary<string, List<FavoriteEntry>> _cachedEntriesByCategory = new();
+        private ReorderableList _reorderableList;
 
         /// <summary>
         /// Opens the favorite assets window.
@@ -81,176 +65,105 @@ namespace UniLab.Tools.Editor
             HandleDragAndDrop(dropRect, Event.current);
 
             GUILayout.Space(6);
-            DrawCategoryToolbar();
-            GUILayout.Space(6);
-
-            EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.FavoriteAssetList), EditorStyles.boldLabel);
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
-            DrawCategorizedList();
+            _reorderableList?.DoLayoutList();
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawCategoryToolbar()
+        private void RebuildReorderableList()
         {
-            RebuildCategoryCacheIfNeeded();
-            EditorGUILayout.BeginVertical("box");
-
-            // --- Target category for drag-and-drop registration ---
-            _selectedCategoryIndex = ClampCategoryIndex(_selectedCategoryIndex, _cachedCategoryNames.Length);
-            _selectedCategoryIndex = EditorGUILayout.Popup(EditorToolLabels.Get(LabelKey.TargetCategory), _selectedCategoryIndex, _cachedCategoryNames);
-
-            // --- Add new category ---
-            EditorGUILayout.BeginHorizontal();
-            _newCategoryName = EditorGUILayout.TextField(EditorToolLabels.Get(LabelKey.NewCategory), _newCategoryName);
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_newCategoryName)))
-            {
-                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Add), GUILayout.Width(60)))
-                {
-                    AddNewCategory();
-                }
-            }
-
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
+            _reorderableList = new ReorderableList(_entries, typeof(FavoriteEntry), true, true, false, false);
+            _reorderableList.drawHeaderCallback = DrawListHeader;
+            _reorderableList.drawElementCallback = DrawListElement;
+            _reorderableList.onReorderCallback = OnListReorder;
         }
 
-        private void AddNewCategory()
+        private void DrawListHeader(Rect rect)
         {
-            var trimmed = _newCategoryName.Trim();
-            if (string.IsNullOrEmpty(trimmed))
+            EditorGUI.LabelField(rect, EditorToolLabels.Get(LabelKey.FavoriteAssetList));
+        }
+
+        private void DrawListElement(Rect rect, int index, bool isActive, bool isFocused)
+        {
+            if (index < 0 || index >= _entries.Count)
             {
                 return;
             }
 
-            // Register in foldouts so the category is visible even before any entries are assigned
-            _categoryFoldouts[trimmed] = true;
-            _newCategoryName = string.Empty;
-            _isCategoryCacheDirty = true;
-
-            // Auto-select the newly created category as the drop target
-            RebuildCategoryCacheIfNeeded();
-            _selectedCategoryIndex = System.Array.IndexOf(_cachedCategoryNames, trimmed);
-            if (_selectedCategoryIndex < 0)
-            {
-                _selectedCategoryIndex = 0;
-            }
-
-            GUI.FocusControl(null);
-        }
-
-        private void DrawCategorizedList()
-        {
-            RebuildCategoryCacheIfNeeded();
-            var needsSave = false;
-
-            for (int categoryIndex = 0; categoryIndex < _cachedCategoryNames.Length; categoryIndex++)
-            {
-                var category = _cachedCategoryNames[categoryIndex];
-                if (!_categoryFoldouts.ContainsKey(category))
-                {
-                    _categoryFoldouts[category] = true;
-                }
-
-                _cachedEntriesByCategory.TryGetValue(category, out var entriesInCategory);
-                var entryCount = entriesInCategory != null ? entriesInCategory.Count : 0;
-                var headerLabel = category + " (" + entryCount + ")";
-                _categoryFoldouts[category] = EditorGUILayout.Foldout(_categoryFoldouts[category], headerLabel, true);
-
-                if (!_categoryFoldouts[category] || entriesInCategory == null)
-                {
-                    continue;
-                }
-
-                EditorGUI.indentLevel++;
-                for (int entryIndex = 0; entryIndex < entriesInCategory.Count; entryIndex++)
-                {
-                    if (DrawFavoriteEntryRow(entriesInCategory[entryIndex], _cachedCategoryNames))
-                    {
-                        needsSave = true;
-                    }
-                }
-
-                EditorGUI.indentLevel--;
-            }
-
-            if (needsSave)
-            {
-                SaveFavorites();
-            }
-        }
-
-        /// <summary>
-        /// Draws a single favorite entry row.
-        /// Returns true if data was modified and needs saving.
-        /// </summary>
-        private bool DrawFavoriteEntryRow(FavoriteEntry entry, string[] categories)
-        {
+            var entry = _entries[index];
             var path = AssetDatabase.GUIDToAssetPath(entry.Guid);
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-            var modified = false;
 
-            EditorGUILayout.BeginHorizontal();
+            // Why: shrink rect vertically to avoid overlapping adjacent elements
+            rect.y += 2f;
+            rect.height -= 4f;
 
             if (asset == null)
             {
-                EditorGUILayout.LabelField(EditorToolLabels.Get(LabelKey.NotFound));
-                if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Delete), GUILayout.Width(DeleteButtonWidth)))
-                {
-                    RemoveEntry(entry);
-                    SaveFavorites();
-                    GUIUtility.ExitGUI();
-                    return true;
-                }
-
-                EditorGUILayout.EndHorizontal();
-                return false;
+                DrawNotFoundElement(rect, path, entry);
+                return;
             }
 
-            // Asset name button
+            DrawAssetElement(rect, path, asset, entry);
+        }
+
+        private void DrawNotFoundElement(Rect rect, string path, FavoriteEntry entry)
+        {
+            var nameWidth = rect.width - DeleteButtonWidth - ElementSpacing;
+            var nameRect = new Rect(rect.x, rect.y, nameWidth, rect.height);
+            var deleteRect = new Rect(nameRect.xMax + ElementSpacing, rect.y, DeleteButtonWidth, rect.height);
+
+            // Why: asset may exist on disk but fail to load (e.g. missing script reference)
+            var displayName = string.IsNullOrEmpty(path)
+                ? EditorToolLabels.Get(LabelKey.NotFound)
+                : Path.GetFileNameWithoutExtension(path) + " " + EditorToolLabels.Get(LabelKey.Missing);
+            EditorGUI.LabelField(nameRect, displayName);
+
+            if (GUI.Button(deleteRect, "\u00d7"))
+            {
+                RemoveEntry(entry);
+                SaveFavorites();
+                RebuildReorderableList();
+            }
+        }
+
+        private void DrawAssetElement(Rect rect, string path, UnityEngine.Object asset, FavoriteEntry entry)
+        {
+            var nameWidth = rect.width - OpenButtonWidth - DeleteButtonWidth - ElementSpacing * 2;
+            var nameRect = new Rect(rect.x, rect.y, nameWidth, rect.height);
+            var openRect = new Rect(nameRect.xMax + ElementSpacing, rect.y, OpenButtonWidth, rect.height);
+            var deleteRect = new Rect(openRect.xMax + ElementSpacing, rect.y, DeleteButtonWidth, rect.height);
+
+            // --- Asset name button with icon ---
             var icon = AssetDatabase.GetCachedIcon(path) ?? EditorGUIUtility.IconContent("d_DefaultAsset Icon").image;
-            var content = new GUIContent(asset.name, icon);
-            if (GUILayout.Button(content, EditorStyles.miniButtonLeft))
+            // Why: some asset types (asmdef, RenderPipelineGlobalSettings, etc.) return empty Object.name
+            var displayName = string.IsNullOrEmpty(asset.name) ? Path.GetFileNameWithoutExtension(path) : asset.name;
+            var content = new GUIContent(displayName, icon);
+            if (GUI.Button(nameRect, content, EditorStyles.miniButtonLeft))
             {
                 Selection.activeObject = asset;
                 EditorGUIUtility.PingObject(asset);
             }
 
-            // Open button
-            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Open), EditorStyles.miniButtonMid, GUILayout.Width(OpenButtonWidth)))
+            // --- Open button ---
+            if (GUI.Button(openRect, EditorToolLabels.Get(LabelKey.Open), EditorStyles.miniButtonMid))
             {
                 AssetDatabase.OpenAsset(asset);
             }
 
-            // Category change dropdown
-            var currentCategoryIndex = System.Array.IndexOf(categories, entry.Category);
-            if (currentCategoryIndex < 0)
-            {
-                currentCategoryIndex = 0;
-            }
-
-            var newCategoryIndex = EditorGUILayout.Popup(
-                currentCategoryIndex,
-                categories,
-                GUILayout.Width(CategoryDropdownWidth));
-            if (newCategoryIndex != currentCategoryIndex && newCategoryIndex >= 0 && newCategoryIndex < categories.Length)
-            {
-                entry.Category = categories[newCategoryIndex];
-                modified = true;
-                _isCategoryCacheDirty = true;
-            }
-
-            // Delete button
-            if (GUILayout.Button(EditorToolLabels.Get(LabelKey.Delete), EditorStyles.miniButtonRight, GUILayout.Width(DeleteButtonWidth)))
+            // --- Delete button ---
+            if (GUI.Button(deleteRect, "\u00d7", EditorStyles.miniButtonRight))
             {
                 RemoveEntry(entry);
                 SaveFavorites();
-                GUIUtility.ExitGUI();
-                return true;
+                RebuildReorderableList();
             }
+        }
 
-            EditorGUILayout.EndHorizontal();
-            return modified;
+        private void OnListReorder(ReorderableList list)
+        {
+            SaveFavorites();
         }
 
         private void RemoveEntry(FavoriteEntry entry)
@@ -261,11 +174,7 @@ namespace UniLab.Tools.Editor
         private void LoadFavorites()
         {
             _entries = LoadEntriesFromFile();
-            _isCategoryCacheDirty = true;
-            if (MigratePathEntriesToGuids())
-            {
-                SaveFavorites();
-            }
+            RebuildReorderableList();
         }
 
         private void SaveFavorites()
@@ -279,19 +188,22 @@ namespace UniLab.Tools.Editor
             }
 
             File.WriteAllText(_saveFilePath, json);
-            _isCategoryCacheDirty = true;
         }
 
         private void ClearFavoritesIfConfirmed()
         {
-            if (!EditorUtility.DisplayDialog(EditorToolLabels.Get(LabelKey.Confirm), EditorToolLabels.Get(LabelKey.ConfirmClearFavorites), EditorToolLabels.Get(LabelKey.Yes), EditorToolLabels.Get(LabelKey.No)))
+            if (!EditorUtility.DisplayDialog(
+                    EditorToolLabels.Get(LabelKey.Confirm),
+                    EditorToolLabels.Get(LabelKey.ConfirmClearFavorites),
+                    EditorToolLabels.Get(LabelKey.Yes),
+                    EditorToolLabels.Get(LabelKey.No)))
             {
                 return;
             }
 
             _entries.Clear();
-            _categoryFoldouts.Clear();
             SaveFavorites();
+            RebuildReorderableList();
         }
 
         private void HandleDragAndDrop(Rect dropRect, Event evt)
@@ -313,38 +225,27 @@ namespace UniLab.Tools.Editor
             }
 
             DragAndDrop.AcceptDrag();
-            var targetCategory = ResolveTargetCategory();
 
-            foreach (var obj in DragAndDrop.objectReferences)
+            // Why: use paths instead of objectReferences so assets with missing scripts can be registered
+            foreach (var dragPath in DragAndDrop.paths)
             {
-                var path = AssetDatabase.GetAssetPath(obj);
-                if (string.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(dragPath))
                 {
                     continue;
                 }
 
-                var guid = AssetDatabase.AssetPathToGUID(path);
+                var guid = AssetDatabase.AssetPathToGUID(dragPath);
                 if (string.IsNullOrEmpty(guid) || ContainsGuid(guid))
                 {
                     continue;
                 }
 
-                _entries.Add(new FavoriteEntry { Guid = guid, Category = targetCategory });
+                _entries.Add(new FavoriteEntry { Guid = guid });
             }
 
             SaveFavorites();
+            RebuildReorderableList();
             evt.Use();
-        }
-
-        private string ResolveTargetCategory()
-        {
-            var categories = CollectCategoriesIncludingFoldouts();
-            if (_selectedCategoryIndex >= 0 && _selectedCategoryIndex < categories.Count)
-            {
-                return categories[_selectedCategoryIndex];
-            }
-
-            return DefaultCategory;
         }
 
         private bool ContainsGuid(string guid)
@@ -370,167 +271,19 @@ namespace UniLab.Tools.Editor
             try
             {
                 var json = File.ReadAllText(_saveFilePath);
-                return TryLoadNewFormat(json) ?? MigrateFromLegacyFormat(json);
+                var data = JsonUtility.FromJson<FavoriteAssetsData>(json);
+                if (data?.Entries != null)
+                {
+                    return data.Entries;
+                }
+
+                return new List<FavoriteEntry>();
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
                 Debug.LogWarning($"[FavoriteAssets] Failed to load favorites: {exception.Message}");
                 return new List<FavoriteEntry>();
             }
-        }
-
-        private static List<FavoriteEntry> TryLoadNewFormat(string json)
-        {
-            var data = JsonUtility.FromJson<FavoriteAssetsData>(json);
-            if (data?.Entries != null)
-            {
-                return data.Entries;
-            }
-
-            return null;
-        }
-
-        private static List<FavoriteEntry> MigrateFromLegacyFormat(string json)
-        {
-            var legacyData = JsonUtility.FromJson<LegacyFavoriteAssetsData>(json);
-            if (legacyData?.Favorites == null || legacyData.Favorites.Count == 0)
-            {
-                return new List<FavoriteEntry>();
-            }
-
-            var entries = new List<FavoriteEntry>(legacyData.Favorites.Count);
-            for (int i = 0; i < legacyData.Favorites.Count; i++)
-            {
-                var guidOrPath = legacyData.Favorites[i];
-                if (string.IsNullOrEmpty(guidOrPath))
-                {
-                    continue;
-                }
-
-                entries.Add(new FavoriteEntry { Guid = guidOrPath, Category = DefaultCategory });
-            }
-
-            return entries;
-        }
-
-        /// <summary>
-        /// Migrates entries that store asset paths (Assets/... or Packages/...) to GUIDs.
-        /// Returns true if any migration occurred.
-        /// </summary>
-        private bool MigratePathEntriesToGuids()
-        {
-            var migrated = false;
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                var entry = _entries[i];
-                if (!entry.Guid.StartsWith("Assets/") && !entry.Guid.StartsWith("Packages/"))
-                {
-                    continue;
-                }
-
-                var guid = AssetDatabase.AssetPathToGUID(entry.Guid);
-                if (string.IsNullOrEmpty(guid))
-                {
-                    continue;
-                }
-
-                entry.Guid = guid;
-                migrated = true;
-            }
-
-            return migrated;
-        }
-
-        /// <summary>
-        /// Collects unique category names from current entries, always including the default category.
-        /// </summary>
-        private List<string> CollectCategories()
-        {
-            var categories = new List<string> { DefaultCategory };
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                var category = _entries[i].Category;
-                if (string.IsNullOrEmpty(category))
-                {
-                    continue;
-                }
-
-                if (!categories.Contains(category))
-                {
-                    categories.Add(category);
-                }
-            }
-
-            return categories;
-        }
-
-        /// <summary>
-        /// Collects categories from entries plus any categories that exist only in foldouts
-        /// (e.g. newly created categories with no entries yet).
-        /// </summary>
-        private List<string> CollectCategoriesIncludingFoldouts()
-        {
-            var categories = CollectCategories();
-            foreach (var foldoutCategory in _categoryFoldouts.Keys)
-            {
-                if (!categories.Contains(foldoutCategory))
-                {
-                    categories.Add(foldoutCategory);
-                }
-            }
-
-            return categories;
-        }
-
-        private void RebuildCategoryCacheIfNeeded()
-        {
-            if (!_isCategoryCacheDirty)
-            {
-                return;
-            }
-
-            var categories = CollectCategoriesIncludingFoldouts();
-            _cachedCategoryNames = categories.ToArray();
-
-            _cachedEntriesByCategory.Clear();
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                var entryCategory = _entries[i].Category;
-                if (string.IsNullOrEmpty(entryCategory))
-                {
-                    entryCategory = DefaultCategory;
-                }
-
-                if (!_cachedEntriesByCategory.TryGetValue(entryCategory, out var list))
-                {
-                    list = new List<FavoriteEntry>();
-                    _cachedEntriesByCategory[entryCategory] = list;
-                }
-
-                list.Add(_entries[i]);
-            }
-
-            _isCategoryCacheDirty = false;
-        }
-
-        private static int ClampCategoryIndex(int index, int count)
-        {
-            if (count <= 0)
-            {
-                return 0;
-            }
-
-            if (index < 0)
-            {
-                return 0;
-            }
-
-            if (index >= count)
-            {
-                return count - 1;
-            }
-
-            return index;
         }
 
         private Rect DrawDropArea()
