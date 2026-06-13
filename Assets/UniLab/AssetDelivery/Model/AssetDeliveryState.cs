@@ -1,32 +1,32 @@
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Represents the runtime state that application loading UI observes while asset delivery is prepared or downloading.
+    /// asset delivery の準備中またはダウンロード中に、アプリケーションのロード UI が監視する runtime 状態を表します。
     /// </summary>
     public enum AssetDeliveryState
     {
         /// <summary>
-        /// The service has not been initialized by the boot sequence.
+        /// サービスは起動シーケンスによってまだ初期化されていません。
         /// </summary>
         NotInitialized,
 
         /// <summary>
-        /// The boot sequence is initializing the delivery system and loading catalog data.
+        /// 起動シーケンスが配信システムを初期化し、catalog データをロードしています。
         /// </summary>
         Initializing,
 
         /// <summary>
-        /// The delivery system is ready for update checks, downloads, and scoped asset loading.
+        /// 配信システムは更新確認、ダウンロード、scoped asset loading を実行できます。
         /// </summary>
         Ready,
 
         /// <summary>
-        /// The service is downloading dependencies requested by the application.
+        /// サービスはアプリケーションから要求された依存関係をダウンロードしています。
         /// </summary>
         Downloading,
 
         /// <summary>
-        /// The last initialization or download operation failed and the application may retry initialization.
+        /// 直近の初期化またはダウンロード操作が失敗し、アプリケーションは初期化を再試行できます。
         /// </summary>
         Failed
     }

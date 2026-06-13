@@ -5,14 +5,14 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Editor
 {
     /// <summary>
-    /// Provides shared access to the active Addressables settings asset.
+    /// 有効な Addressables settings asset への共有アクセスを提供します。
     /// </summary>
     internal static class AddressableSettingsAccessor
     {
         private const string SettingsMissingMessage = "Addressables settings are not initialized.";
 
         /// <summary>
-        /// Gets the active Addressables settings asset when it is initialized.
+        /// 初期化済みの場合に、有効な Addressables settings asset を取得します。
         /// </summary>
         public static bool TryGetSettings(out AddressableAssetSettings settings)
         {

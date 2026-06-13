@@ -3,22 +3,22 @@ using System.Collections.Generic;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Carries catalog update results so the boot sequence can decide whether download preparation should continue.
+    /// 起動シーケンスがダウンロード準備を続行するか判断できるよう、catalog 更新結果を保持します。
     /// </summary>
     public readonly struct CatalogUpdateInfo
     {
         /// <summary>
-        /// Gets whether the catalog check found and applied catalog updates.
+        /// catalog 確認で更新を検出し、適用したかどうかを取得します。
         /// </summary>
         public bool HasUpdate { get; }
 
         /// <summary>
-        /// Gets the catalog identifiers updated during the check so callers can log or inspect the change set.
+        /// 呼び出し側がログ出力や変更内容の確認を行えるよう、確認中に更新された catalog 識別子を取得します。
         /// </summary>
         public IReadOnlyList<string> UpdatedCatalogIds { get; }
 
         /// <summary>
-        /// Creates catalog update information returned from the delivery service to the boot sequence.
+        /// delivery service から起動シーケンスへ返す catalog 更新情報を作成します。
         /// </summary>
         public CatalogUpdateInfo(bool hasUpdate, IReadOnlyList<string> updatedCatalogIds)
         {

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace UniLab.AssetDelivery.Sample
 {
     /// <summary>
-    /// Starts the standalone asset delivery sample without dependency injection.
+    /// dependency injection を使わずに、単体の asset delivery sample を開始します。
     /// </summary>
     public sealed class AssetDeliverySampleBootstrap : MonoBehaviour
     {
@@ -30,7 +30,7 @@ namespace UniLab.AssetDelivery.Sample
             _presenter?.Dispose();
             _service?.Dispose();
 
-            // Destroy the generated UI so a standalone teardown does not leave an orphan Canvas.
+            // 単体実行の終了時に孤立した Canvas を残さないよう、生成した UI を破棄する。
             if (_canvasObject != null)
             {
                 Destroy(_canvasObject);

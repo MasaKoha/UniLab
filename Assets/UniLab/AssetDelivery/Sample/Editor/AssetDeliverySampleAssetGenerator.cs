@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Sample.Editor
 {
     /// <summary>
-    /// Generates Addressables sample assets required by the Asset Delivery sample scene.
+    /// Asset Delivery sample scene に必要な Addressables sample asset を生成します。
     /// </summary>
     public static class AssetDeliverySampleAssetGenerator
     {
@@ -33,7 +33,7 @@ namespace UniLab.AssetDelivery.Sample.Editor
         private static readonly Color SecondCheckerColor = new Color(SecondCheckerColorRed, SecondCheckerColorGreen, SecondCheckerColorBlue, CheckerColorAlpha);
 
         /// <summary>
-        /// Generates the Addressables placeholder sprite used by the Asset Delivery sample.
+        /// Asset Delivery sample で使用する Addressables placeholder sprite を生成します。
         /// </summary>
         [MenuItem(MenuPath)]
         public static void GeneratePlaceholderAsset()

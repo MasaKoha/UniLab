@@ -10,7 +10,7 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Provides the Addressables-backed implementation of the application-facing asset delivery service.
+    /// アプリケーション向けのアセット配信サービスを Addressables で実装します。
     /// </summary>
     public sealed class AddressablesAssetDeliveryService : IAssetDeliveryService, IDisposable
     {
@@ -18,17 +18,17 @@ namespace UniLab.AssetDelivery
         private readonly Subject<DownloadProgress> _downloadProgress = new();
 
         /// <summary>
-        /// Gets the current delivery state that boot and loading UI observe for state transitions.
+        /// 起動処理とロード UI が状態遷移を監視する現在の配信状態を取得します。
         /// </summary>
         public ReadOnlyReactiveProperty<AssetDeliveryState> State => _state;
 
         /// <summary>
-        /// Emits dependency download progress without terminating the stream on delivery failures.
+        /// 配信失敗時もストリームを終了せず、依存関係のダウンロード進捗を通知します。
         /// </summary>
         public Observable<DownloadProgress> OnDownloadProgress => _downloadProgress;
 
         /// <summary>
-        /// Initializes Addressables and moves the service into the ready state when initialization succeeds.
+        /// Addressables を初期化し、成功時にサービスを準備完了状態へ移行します。
         /// </summary>
         public async UniTask InitializeAsync(CancellationToken cancellationToken)
         {
@@ -52,7 +52,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Checks remote catalogs and applies discovered updates before returning the catalog change summary.
+        /// リモート catalog を確認して検出した更新を適用し、catalog の変更概要を返します。
         /// </summary>
         public async UniTask<CatalogUpdateInfo> CheckForUpdatesAsync(CancellationToken cancellationToken)
         {
@@ -74,7 +74,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Gets the total dependency download size for labels so callers can gate optional download UI.
+        /// 呼び出し側が任意ダウンロード UI の表示を制御できるよう、label の依存関係ダウンロード総量を取得します。
         /// </summary>
         public async UniTask<long> GetDownloadSizeAsync(IReadOnlyList<string> labels, CancellationToken cancellationToken)
         {
@@ -89,7 +89,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Downloads label dependencies and reports progress while preserving cached bundles after handle release.
+        /// label の依存関係をダウンロードし、handle 解放後もキャッシュ済み bundle を保持しながら進捗を通知します。
         /// </summary>
         public async UniTask DownloadAsync(IReadOnlyList<string> labels, CancellationToken cancellationToken)
         {
@@ -126,7 +126,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Creates a scoped asset loader so callers can bind Addressables handle release to screen lifetime.
+        /// 呼び出し側が Addressables handle の解放を画面 lifetime に紐づけられる scoped asset loader を作成します。
         /// </summary>
         public IAssetScope CreateScope()
         {
@@ -134,7 +134,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Cleans cached bundles when debug tools or storage recovery flows request cache cleanup.
+        /// デバッグツールやストレージ復旧フローから要求されたときに、キャッシュ済み bundle を削除します。
         /// </summary>
         public async UniTask<bool> ClearCacheAsync(CancellationToken cancellationToken)
         {
@@ -149,7 +149,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Releases observable resources owned by this service instance.
+        /// このサービスインスタンスが所有する Observable リソースを解放します。
         /// </summary>
         public void Dispose()
         {
@@ -168,7 +168,7 @@ namespace UniLab.AssetDelivery
                 var status = handle.GetDownloadStatus();
                 if (HasProgressChanged(status, lastDownloadedBytes, lastTotalBytes, lastRatio))
                 {
-                    // perf: progress is polled every frame, so emit only when Addressables reports changed values.
+                    // perf: 進捗は毎フレームポーリングされるため、Addressables が変更を報告した場合だけ通知する。
                     _downloadProgress.OnNext(new DownloadProgress(status.DownloadedBytes, status.TotalBytes, status.Percent));
                     lastDownloadedBytes = status.DownloadedBytes;
                     lastTotalBytes = status.TotalBytes;

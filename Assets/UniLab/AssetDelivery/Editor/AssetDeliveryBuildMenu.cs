@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Editor
 {
     /// <summary>
-    /// Provides UniLab menu commands for Addressables player content builds.
+    /// Addressables player content build 用の UniLab メニューコマンドを提供します。
     /// </summary>
     public static class AssetDeliveryBuildMenu
     {
@@ -21,7 +21,7 @@ namespace UniLab.AssetDelivery.Editor
         private const string ContentUpdateCompletedMessage = "Addressables content update build completed.";
 
         /// <summary>
-        /// Builds new Addressables player content using the active Addressables settings.
+        /// 有効な Addressables settings を使って、新しい Addressables player content をビルドします。
         /// </summary>
         [MenuItem(NewBuildMenuPath)]
         public static void BuildNew()
@@ -48,7 +48,7 @@ namespace UniLab.AssetDelivery.Editor
         }
 
         /// <summary>
-        /// Builds an Addressables content update from the previous content state file.
+        /// 前回の content state file から Addressables content update をビルドします。
         /// </summary>
         [MenuItem(ContentUpdateMenuPath)]
         public static void BuildContentUpdate()

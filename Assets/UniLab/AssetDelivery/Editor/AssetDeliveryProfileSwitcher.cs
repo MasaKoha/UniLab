@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Editor
 {
     /// <summary>
-    /// Provides UniLab menu commands for switching the active Addressables profile.
+    /// 有効な Addressables profile を切り替える UniLab メニューコマンドを提供します。
     /// </summary>
     public static class AssetDeliveryProfileSwitcher
     {
@@ -19,7 +19,7 @@ namespace UniLab.AssetDelivery.Editor
         private const string ProfileSwitchedMessageFormat = "Addressables active profile switched to: {0}";
 
         /// <summary>
-        /// Switches the active Addressables profile to the development environment.
+        /// 有効な Addressables profile を開発環境に切り替えます。
         /// </summary>
         [MenuItem(DevelopmentMenuPath)]
         public static void SwitchToDevelopment()
@@ -28,7 +28,7 @@ namespace UniLab.AssetDelivery.Editor
         }
 
         /// <summary>
-        /// Switches the active Addressables profile to the staging environment.
+        /// 有効な Addressables profile をステージング環境に切り替えます。
         /// </summary>
         [MenuItem(StagingMenuPath)]
         public static void SwitchToStaging()
@@ -37,7 +37,7 @@ namespace UniLab.AssetDelivery.Editor
         }
 
         /// <summary>
-        /// Switches the active Addressables profile to the production environment.
+        /// 有効な Addressables profile を本番環境に切り替えます。
         /// </summary>
         [MenuItem(ProductionMenuPath)]
         public static void SwitchToProduction()
@@ -46,7 +46,7 @@ namespace UniLab.AssetDelivery.Editor
         }
 
         /// <summary>
-        /// Switches the active Addressables profile by profile name.
+        /// profile 名を指定して、有効な Addressables profile を切り替えます。
         /// </summary>
         public static void SwitchProfile(string profileName)
         {

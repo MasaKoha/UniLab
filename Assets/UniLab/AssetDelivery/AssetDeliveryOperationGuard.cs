@@ -4,12 +4,12 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Converts Addressables operation failures into asset delivery exceptions.
+    /// Addressables 操作の失敗を asset delivery 例外に変換します。
     /// </summary>
     internal static class AssetDeliveryOperationGuard
     {
         /// <summary>
-        /// Throws an asset delivery exception when an Addressables operation handle failed.
+        /// Addressables operation handle が失敗している場合に asset delivery 例外を送出します。
         /// </summary>
         public static void ThrowIfFailed(AsyncOperationHandle handle, string message)
         {
@@ -23,7 +23,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Converts an exception into an asset delivery exception while preserving existing asset delivery exceptions.
+        /// 既存の asset delivery 例外を保持しつつ、例外を asset delivery 例外に変換します。
         /// </summary>
         public static AssetDeliveryException ToAssetDeliveryException(Exception exception, string message)
         {
