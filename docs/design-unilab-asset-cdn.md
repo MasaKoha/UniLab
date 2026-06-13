@@ -198,14 +198,39 @@ sequenceDiagram
 
 ---
 
-## アセットの配置（グループ・パッキング・ラベル）
+## アセットの配置（フォルダ規約・グループ・パッキング・ラベル）
 
-**グループ分割（配信ライフサイクルで分ける）**
+### フォルダ規約（分類の真実）
 
-| グループ | 変更可否 | 配置 | 例 |
-|---|---|---|---|
-| `Local_Boot` | Cannot Change Post Release | アプリ同梱（StreamingAssets） | 起動必須の最小限：ブートシーン・共通 UI |
-| `Remote_<feature>` | Can Change Post Release | CDN | `Remote_Characters` / `Remote_Stages` / `Remote_UI` / `Remote_Audio` |
+ソースは **`Assets/AssetResource/{Internal|External}/<Sub>/`** に置く。トップ階層が配信種別を、直下サブフォルダがグループ単位を決める。
+
+```
+Assets/AssetResource/        ← ルートは設定で変更可（既定 Assets/AssetResource）
+├── Internal/<Sub>/...   → Local（同梱）  グループ Local_<Sub>
+└── External/<Sub>/...   → Remote（CDN）  グループ Remote_<Sub>
+```
+
+| カテゴリ | フォルダ | グループ | 変更可否 | バンドル出力 |
+|---|---|---|---|---|
+| **Local（同梱）** | `Internal/<Sub>` | `Local_<Sub>` | Cannot Change（StaticContent=true） | アプリ同梱（StreamingAssets へ**自動・不可視**出力） |
+| **Remote（CDN）** | `External/<Sub>` | `Remote_<Sub>` | Can Change（StaticContent=false） | CDN（`ServerData/`→アップロード） |
+
+- **ソースのフォルダ位置は自由**（Addressables は GUID 参照）。`Internal/External` 直下のサブフォルダ構成は任意。直置きは既定グループ `Local_Internal` / `Remote_External`
+- **StreamingAssets はソースの置き場ではない**。Local バンドルのビルド成果物が自動的に入るだけで、開発者は意識しない
+- 両カテゴリとも `IAssetScope.LoadAssetAsync` で透過的にロード（アプリコードは Local/Remote を意識しない）。実行時トークン（BaseUrl/ContentPath）は **Remote だけ**に効く
+- アドレス（ランタイムキー）= **カテゴリルート相対パス・拡張子なし**（`External/Characters/hero.prefab` → `Characters/hero`）。Internal/External 間で同一相対パスがあると衝突するため、セットアップ時に重複アドレスを警告する
+
+### セットアップ自動化（エディタメニュー）
+
+`UniLab.AssetVault.Editor` に以下を用意。手作業の Profile/グループ設定を排除する。
+
+| メニュー | 役割 |
+|---|---|
+| `UniLab/AssetVault/Setup/Sync AssetResource` | フォルダ規約を Addressables に同期（冪等）。Profile 変数（`RemoteLoadPath`=実行時トークン定数 / `RemoteBuildPath`=`ServerData/[BuildTarget]`）設定、`Internal/External` 走査、サブフォルダ→グループ生成、アセットを `CreateOrMoveEntry` で登録、schema（Build/Load Path・AppendHash・StaticContent）設定、重複アドレス警告 |
+| `UniLab/AssetVault/Setup/Open Setup Settings` | `AssetVaultSetupSettings`（ルートパス変更用 ScriptableObject）を Inspector で開く |
+
+- RemoteLoadPath のトークンは `typeof(AssetVaultRuntime).FullName` から組み立て（リネーム耐性）
+- **env は実行時 BaseUrl で切替 → Addressables Profile は1つでよい**
 
 **バンドルのパッキング**
 
@@ -269,6 +294,7 @@ sequenceDiagram
 | `AssetVaultRuntime` | runtime（static） | `static string BaseUrl`（ホスト込み基底）/ `static string ContentPath`（版セグメント）。`InitializeAsync` 前にアプリ層がセット。RemoteLoadPath の実行時トークンが参照 |
 | `IContentVersionResolver` | runtime（抽象） | 解決済み `BaseUrl` 配下の `version.json` を取得して版を返す。実装はアプリ層 / BFF。デバッグ上書きの優先度もここで解決 |
 | `RemoteContentVersionResolver` | runtime（既定実装） | `{BaseUrl}/version.json` を `UnityWebRequest`（タイムアウト付き）で取得・パース。取得処理は注入可能でテスタブル |
+| `AssetVaultSetupSettings` / `AssetVaultSetupMenu` | editor | フォルダ規約から Addressables を自動構成（上記「セットアップ自動化」）。ルートパスは設定で変更可 |
 
 - 既存の `IAssetVaultService` / 状態機械 / 差分DL / `IAssetScope` は**不変**。起動シーケンスに「env→BaseUrl 解決 → version.json 解決 → 静的プロパティ設定 → Init」を足すだけ
 - env → `BaseUrl` のマッピングは**アプリ config** が持つ（AssetVault はホストを知らない）
