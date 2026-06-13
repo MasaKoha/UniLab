@@ -27,23 +27,23 @@ namespace UniLab.Tests.EditMode.AssetVault
         }
 
         /// <summary>
-        /// 既定の環境名が prod であることを検証します。
+        /// 既定の基底 URL が null であることを検証します。
         /// </summary>
         [Test]
-        public void Environment_DefaultValue_IsProd()
+        public void BaseUrl_DefaultValue_IsNull()
         {
-            Assert.AreEqual("prod", AssetVaultRuntime.Environment);
+            Assert.IsNull(AssetVaultRuntime.BaseUrl);
         }
 
         /// <summary>
-        /// Environment の set と get が反映されることを検証します。
+        /// BaseUrl の set と get が反映されることを検証します。
         /// </summary>
         [Test]
-        public void Environment_SetValue_ReturnsAssignedValue()
+        public void BaseUrl_SetValue_ReturnsAssignedValue()
         {
-            AssetVaultRuntime.Environment = "staging";
+            AssetVaultRuntime.BaseUrl = "https://dev1.xxx.xxx/app";
 
-            Assert.AreEqual("staging", AssetVaultRuntime.Environment);
+            Assert.AreEqual("https://dev1.xxx.xxx/app", AssetVaultRuntime.BaseUrl);
         }
 
         /// <summary>
@@ -59,7 +59,7 @@ namespace UniLab.Tests.EditMode.AssetVault
 
         private static void ResetRuntime()
         {
-            AssetVaultRuntime.Environment = "prod";
+            AssetVaultRuntime.BaseUrl = null;
             AssetVaultRuntime.ContentPath = null;
         }
     }

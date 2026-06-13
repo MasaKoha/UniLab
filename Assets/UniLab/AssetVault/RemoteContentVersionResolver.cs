@@ -15,21 +15,20 @@ namespace UniLab.AssetVault
         private readonly Func<string, CancellationToken, UniTask<string>> _fetchAsync;
 
         /// <summary>
-        /// コンテンツ配信の基底 URL と環境名から version.json の URL を作成します。
+        /// 解決済みの基底 URL から version.json の URL を作成します。
         /// requestTimeoutSeconds は起動必須の取得が無応答の CDN で無限に待たないための上限です。
         /// </summary>
-        public RemoteContentVersionResolver(string contentBaseUrl, string environment, int requestTimeoutSeconds = 15)
-            : this(contentBaseUrl, environment, CreateUnityWebRequestFetcher(requestTimeoutSeconds))
+        public RemoteContentVersionResolver(string baseUrl, int requestTimeoutSeconds = 15)
+            : this(baseUrl, CreateUnityWebRequestFetcher(requestTimeoutSeconds))
         {
         }
 
         /// <summary>
-        /// コンテンツ配信の基底 URL と環境名、version.json 取得処理から resolver を作成します。
+        /// 解決済みの基底 URL と version.json 取得処理から resolver を作成します。
         /// </summary>
-        public RemoteContentVersionResolver(string contentBaseUrl, string environment, Func<string, CancellationToken, UniTask<string>> fetchAsync)
+        public RemoteContentVersionResolver(string baseUrl, Func<string, CancellationToken, UniTask<string>> fetchAsync)
         {
-            var normalizedContentBaseUrl = contentBaseUrl.TrimEnd('/');
-            _url = $"{normalizedContentBaseUrl}/{environment}/version.json";
+            _url = $"{baseUrl.TrimEnd('/')}/version.json";
             _fetchAsync = fetchAsync;
         }
 
