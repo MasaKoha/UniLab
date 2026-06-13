@@ -114,6 +114,6 @@ asmdef の Version Defines 機能でパッケージ存在時のみシンボル�
 
 | 項目 | 選択肢 | 備考 |
 |---|---|---|
-| リモートカタログ配信先 | Unity CCD / Supabase Storage / 自前 CDN | AssetVault 側は Addressables Profile で抽象化済みのため設計には影響しない |
+| リモートカタログ配信先 | 自前 CDN（S3 + CloudFront）に確定 | URL 規約・バージョニング・配置は [design-unilab-asset-cdn.md](design-unilab-asset-cdn.md) で確定済み |
 | レシート検証サーバ | topia の ASP.NET Core / Supabase Edge Functions / ローカル検証のみ | `IReceiptValidator` 差し替えで対応。エンドポイント仕様は別途 |
 | Unity IAP パッケージバージョン | 4.x（IDetailedStoreListener）/ 5.x（新 API） | 実装着手時に最新の LTS サポート状況を確認して決定。`IIAPService` の公開 API は両対応可能な形にしてある |
