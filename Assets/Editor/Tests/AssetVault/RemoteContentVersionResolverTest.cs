@@ -12,15 +12,14 @@ namespace UniLab.Tests.EditMode.AssetVault
     public class RemoteContentVersionResolverTest
     {
         /// <summary>
-        /// 基底 URL 末尾のスラッシュが重複せず version.json の URL が作られることを検証します。
+        /// 基底 URL から version.json の URL が作られることを検証します。
         /// </summary>
         [Test]
-        public void ResolveAsync_NormalizesUrl_WhenBaseUrlEndsWithSlash()
+        public void ResolveAsync_BuildsVersionJsonUrl_FromBaseUrl()
         {
             string requestedUrl = null;
             var resolver = new RemoteContentVersionResolver(
                 "https://cdn/app/",
-                "prod",
                 (url, cancellationToken) =>
                 {
                     requestedUrl = url;
@@ -29,7 +28,7 @@ namespace UniLab.Tests.EditMode.AssetVault
 
             resolver.ResolveAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-            Assert.AreEqual("https://cdn/app/prod/version.json", requestedUrl);
+            Assert.AreEqual("https://cdn/app/version.json", requestedUrl);
         }
 
         /// <summary>
@@ -40,7 +39,6 @@ namespace UniLab.Tests.EditMode.AssetVault
         {
             var resolver = new RemoteContentVersionResolver(
                 "https://cdn/app",
-                "prod",
                 (url, cancellationToken) => UniTask.FromResult("{\"contentVersion\":\"00052\",\"path\":\"01J9Z8K3Q4XR\"}"));
 
             var contentVersionInfo = resolver.ResolveAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -58,7 +56,6 @@ namespace UniLab.Tests.EditMode.AssetVault
             var expectedException = new AssetVaultException("failed");
             var resolver = new RemoteContentVersionResolver(
                 "https://cdn/app",
-                "prod",
                 (url, cancellationToken) => throw expectedException);
 
             var actualException = Assert.Throws<AssetVaultException>(
@@ -75,7 +72,6 @@ namespace UniLab.Tests.EditMode.AssetVault
         {
             var resolver = new RemoteContentVersionResolver(
                 "https://cdn/app",
-                "prod",
                 (url, cancellationToken) => UniTask.FromResult("not json"));
 
             Assert.Throws<AssetVaultException>(
@@ -90,7 +86,6 @@ namespace UniLab.Tests.EditMode.AssetVault
         {
             var resolver = new RemoteContentVersionResolver(
                 "https://cdn/app",
-                "prod",
                 (url, cancellationToken) => throw new OperationCanceledException());
 
             Assert.Throws<OperationCanceledException>(
