@@ -75,13 +75,13 @@ classDiagram
     }
 
     class CatalogUpdateInfo {
-        <<readonly record struct>>
+        <<readonly struct>>
         +bool HasUpdate
         +IReadOnlyList~string~ UpdatedCatalogIds
     }
 
     class DownloadProgress {
-        <<readonly record struct>>
+        <<readonly struct>>
         +long DownloadedBytes
         +long TotalBytes
         +float Ratio
@@ -103,6 +103,8 @@ classDiagram
     IAssetDeliveryService ..> DownloadProgress
     IAssetDeliveryService ..> AssetDeliveryState
 ```
+
+> **言語バージョン制約**: 本プロジェクトは Unity 6000.4（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`CatalogUpdateInfo` / `DownloadProgress` は `readonly struct` で実装する（値の等価比較は使用しないため `IEquatable` 実装も不要）。
 
 ---
 
@@ -210,5 +212,5 @@ sequenceDiagram
 
 ## perf 方針
 
-- `DownloadProgress` は `readonly record struct`。進捗通知は毎フレーム発火し得るためボクシング・アロケーションを避ける
+- `DownloadProgress` は `readonly struct`。進捗通知は毎フレーム発火し得るためボクシング・アロケーションを避ける（Unity は **C# 9** までのため `record struct` は使用不可）
 - 進捗ポーリングは `PercentComplete` を毎フレーム読むのではなく、`GetDownloadStatus()` の値が変化したときのみ `Subject.OnNext` する
