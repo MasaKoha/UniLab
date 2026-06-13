@@ -95,6 +95,7 @@ asmdef の Version Defines 機能でパッケージ存在時のみシンボル�
 - DI は VContainer。各基盤はインターフェース + 実装のペアで登録する
 - 通信エラー等の例外系は Exception、ビジネス結果（購入キャンセル・更新なし等）は Result 型/enum で表現する
 - `async void` 禁止、Subscribe は必ず Dispose 管理
+- 言語バージョンは Unity 6000.4 = **C# 9** まで。`record` / `record struct`（C# 10 機能）は **使用不可**。値型は `readonly struct` で実装する（等価比較が必要な場合のみ `IEquatable<T>` を手実装）
 
 ---
 
