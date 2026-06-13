@@ -23,12 +23,12 @@ namespace UniLab.AssetDelivery
                 _handles.Add(handle);
 
                 var asset = await handle.ToUniTask(cancellationToken: cancellationToken);
-                ThrowIfFailed(handle, $"Failed to load asset by key '{key}'.");
+                AssetDeliveryOperationGuard.ThrowIfFailed(handle, $"Failed to load asset by key '{key}'.");
                 return asset;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw ToAssetDeliveryException(exception, $"Failed to load asset by key '{key}'.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, $"Failed to load asset by key '{key}'.");
             }
         }
 
@@ -43,12 +43,12 @@ namespace UniLab.AssetDelivery
                 _handles.Add(handle);
 
                 var gameObject = await handle.ToUniTask(cancellationToken: cancellationToken);
-                ThrowIfFailed(handle, $"Failed to instantiate asset by key '{key}'.");
+                AssetDeliveryOperationGuard.ThrowIfFailed(handle, $"Failed to instantiate asset by key '{key}'.");
                 return gameObject;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw ToAssetDeliveryException(exception, $"Failed to instantiate asset by key '{key}'.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, $"Failed to instantiate asset by key '{key}'.");
             }
         }
 
@@ -65,25 +65,5 @@ namespace UniLab.AssetDelivery
             _handles.Clear();
         }
 
-        private static void ThrowIfFailed(AsyncOperationHandle handle, string message)
-        {
-            if (handle.Status != AsyncOperationStatus.Failed)
-            {
-                return;
-            }
-
-            var exception = handle.OperationException ?? new InvalidOperationException(message);
-            throw new AssetDeliveryException(message, exception);
-        }
-
-        private static AssetDeliveryException ToAssetDeliveryException(Exception exception, string message)
-        {
-            if (exception is AssetDeliveryException assetDeliveryException)
-            {
-                return assetDeliveryException;
-            }
-
-            return new AssetDeliveryException(message, exception);
-        }
     }
 }

@@ -1,6 +1,5 @@
 using System.IO;
 using UnityEditor;
-using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
@@ -15,7 +14,6 @@ namespace UniLab.AssetDelivery.Editor
         private const string BaseMenuPath = "UniLab/AssetDelivery/Build/";
         private const string NewBuildMenuPath = BaseMenuPath + "New Build";
         private const string ContentUpdateMenuPath = BaseMenuPath + "Update a Previous Build (Diff)";
-        private const string SettingsMissingMessage = "Addressables settings are not initialized.";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";
         private const string NewBuildFailedMessage = "Addressables new build failed.";
         private const string ContentUpdateFailedMessage = "Addressables content update build failed.";
@@ -28,10 +26,8 @@ namespace UniLab.AssetDelivery.Editor
         [MenuItem(NewBuildMenuPath)]
         public static void BuildNew()
         {
-            var settings = AddressableAssetSettingsDefaultObject.Settings;
-            if (settings == null)
+            if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
             {
-                Debug.LogError(SettingsMissingMessage);
                 return;
             }
 
@@ -57,10 +53,8 @@ namespace UniLab.AssetDelivery.Editor
         [MenuItem(ContentUpdateMenuPath)]
         public static void BuildContentUpdate()
         {
-            var settings = AddressableAssetSettingsDefaultObject.Settings;
-            if (settings == null)
+            if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
             {
-                Debug.LogError(SettingsMissingMessage);
                 return;
             }
 
