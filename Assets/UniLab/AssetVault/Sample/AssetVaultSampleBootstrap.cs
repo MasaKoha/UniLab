@@ -2,27 +2,27 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace UniLab.AssetDelivery.Sample
+namespace UniLab.AssetVault.Sample
 {
     /// <summary>
-    /// dependency injection を使わずに、単体の asset delivery sample を開始します。
+    /// dependency injection を使わずに、単体の asset vault sample を開始します。
     /// </summary>
-    public sealed class AssetDeliverySampleBootstrap : MonoBehaviour
+    public sealed class AssetVaultSampleBootstrap : MonoBehaviour
     {
         [SerializeField] private string _downloadLabel = "sample";
         [SerializeField] private string _assetKey = "sample_sprite";
 
-        private AssetDeliverySamplePresenter _presenter;
-        private AddressablesAssetDeliveryService _service;
+        private AssetVaultSamplePresenter _presenter;
+        private AddressablesAssetVaultService _service;
         private GameObject _canvasObject;
 
         private void Awake()
         {
             EnsureEventSystem();
             _canvasObject = CreateCanvas();
-            _service = new AddressablesAssetDeliveryService();
-            var view = new AssetDeliverySampleView(_canvasObject.transform);
-            _presenter = new AssetDeliverySamplePresenter(_service, view, _downloadLabel, _assetKey);
+            _service = new AddressablesAssetVaultService();
+            var view = new AssetVaultSampleView(_canvasObject.transform);
+            _presenter = new AssetVaultSamplePresenter(_service, view, _downloadLabel, _assetKey);
         }
 
         private void OnDestroy()
@@ -50,7 +50,7 @@ namespace UniLab.AssetDelivery.Sample
 
         private static GameObject CreateCanvas()
         {
-            var canvasObject = new GameObject("AssetDeliverySampleCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvasObject = new GameObject("AssetVaultSampleCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
 
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;

@@ -1,8 +1,8 @@
 {
-    "name": "UniLab.AssetDelivery.Editor",
+    "name": "UniLab.AssetVault.Editor",
     "rootNamespace": "",
     "references": [
-        "UniLab.AssetDelivery",
+        "UniLab.AssetVault",
         "Unity.Addressables",
         "Unity.Addressables.Editor",
         "Unity.ResourceManager"

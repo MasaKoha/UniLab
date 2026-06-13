@@ -4,15 +4,15 @@ using Cysharp.Threading.Tasks;
 using R3;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Sample
+namespace UniLab.AssetVault.Sample
 {
     /// <summary>
-    /// asset delivery sample view と delivery service を連携させます。
+    /// asset vault sample view と vault service を連携させます。
     /// </summary>
-    public sealed class AssetDeliverySamplePresenter : IDisposable
+    public sealed class AssetVaultSamplePresenter : IDisposable
     {
-        private readonly IAssetDeliveryService _service;
-        private readonly IAssetDeliverySampleView _view;
+        private readonly IAssetVaultService _service;
+        private readonly IAssetVaultSampleView _view;
         private readonly string _downloadLabel;
         private readonly string _assetKey;
         private readonly CompositeDisposable _compositeDisposable = new();
@@ -20,11 +20,11 @@ namespace UniLab.AssetDelivery.Sample
         private readonly IAssetScope _scope;
 
         /// <summary>
-        /// presenter を作成し、sample UI のイベントを delivery service に接続します。
+        /// presenter を作成し、sample UI のイベントを vault service に接続します。
         /// </summary>
-        public AssetDeliverySamplePresenter(
-            IAssetDeliveryService service,
-            IAssetDeliverySampleView view,
+        public AssetVaultSamplePresenter(
+            IAssetVaultService service,
+            IAssetVaultSampleView view,
             string downloadLabel,
             string assetKey)
         {
@@ -59,14 +59,14 @@ namespace UniLab.AssetDelivery.Sample
         {
             try
             {
-                _view.SetMessage("Initializing asset delivery.");
+                _view.SetMessage("Initializing asset vault.");
                 await _service.InitializeAsync(cancellationToken);
-                _view.SetMessage("Asset delivery initialized.");
+                _view.SetMessage("Asset vault initialized.");
             }
             catch (OperationCanceledException)
             {
             }
-            catch (AssetDeliveryException exception)
+            catch (AssetVaultException exception)
             {
                 _view.SetMessage(exception.Message);
             }
@@ -99,7 +99,7 @@ namespace UniLab.AssetDelivery.Sample
             catch (OperationCanceledException)
             {
             }
-            catch (AssetDeliveryException exception)
+            catch (AssetVaultException exception)
             {
                 _view.SetMessage(exception.Message);
             }
@@ -117,7 +117,7 @@ namespace UniLab.AssetDelivery.Sample
             catch (OperationCanceledException)
             {
             }
-            catch (AssetDeliveryException exception)
+            catch (AssetVaultException exception)
             {
                 _view.SetMessage(exception.Message);
             }
@@ -127,15 +127,15 @@ namespace UniLab.AssetDelivery.Sample
         {
             try
             {
-                _view.SetMessage("Clearing asset delivery cache.");
+                _view.SetMessage("Clearing asset vault cache.");
                 var cleared = await _service.ClearCacheAsync(cancellationToken);
                 _view.SetProgress(0f);
-                _view.SetMessage(cleared ? "Asset delivery cache cleared." : "No asset delivery cache was cleared.");
+                _view.SetMessage(cleared ? "Asset vault cache cleared." : "No asset vault cache was cleared.");
             }
             catch (OperationCanceledException)
             {
             }
-            catch (AssetDeliveryException exception)
+            catch (AssetVaultException exception)
             {
                 _view.SetMessage(exception.Message);
             }

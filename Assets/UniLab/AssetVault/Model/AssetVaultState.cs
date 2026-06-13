@@ -1,9 +1,9 @@
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
-    /// asset delivery の準備中またはダウンロード中に、アプリケーションのロード UI が監視する runtime 状態を表します。
+    /// asset vault の準備中またはダウンロード中に、アプリケーションのロード UI が監視する runtime 状態を表します。
     /// </summary>
-    public enum AssetDeliveryState
+    public enum AssetVaultState
     {
         /// <summary>
         /// サービスは起動シーケンスによってまだ初期化されていません。

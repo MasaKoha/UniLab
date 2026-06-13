@@ -1,14 +1,14 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Editor
+namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// 有効な Addressables profile を切り替える UniLab メニューコマンドを提供します。
     /// </summary>
-    public static class AssetDeliveryProfileSwitcher
+    public static class AssetVaultProfileSwitcher
     {
-        private const string BaseMenuPath = "UniLab/AssetDelivery/Profile/";
+        private const string BaseMenuPath = "UniLab/AssetVault/Profile/";
         private const string Development = "dev";
         private const string Staging = "staging";
         private const string Production = "prod";

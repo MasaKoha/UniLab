@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     internal sealed class AssetScope : IAssetScope
     {
@@ -23,12 +23,12 @@ namespace UniLab.AssetDelivery
                 _handles.Add(handle);
 
                 var asset = await handle.ToUniTask(cancellationToken: cancellationToken);
-                AssetDeliveryOperationGuard.ThrowIfFailed(handle, $"Failed to load asset by key '{key}'.");
+                AssetVaultOperationGuard.ThrowIfFailed(handle, $"Failed to load asset by key '{key}'.");
                 return asset;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, $"Failed to load asset by key '{key}'.");
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, $"Failed to load asset by key '{key}'.");
             }
         }
 
@@ -43,12 +43,12 @@ namespace UniLab.AssetDelivery
                 _handles.Add(handle);
 
                 var gameObject = await handle.ToUniTask(cancellationToken: cancellationToken);
-                AssetDeliveryOperationGuard.ThrowIfFailed(handle, $"Failed to instantiate asset by key '{key}'.");
+                AssetVaultOperationGuard.ThrowIfFailed(handle, $"Failed to instantiate asset by key '{key}'.");
                 return gameObject;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, $"Failed to instantiate asset by key '{key}'.");
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, $"Failed to instantiate asset by key '{key}'.");
             }
         }
 

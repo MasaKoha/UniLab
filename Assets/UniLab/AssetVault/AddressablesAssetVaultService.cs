@@ -7,20 +7,20 @@ using R3;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
     /// アプリケーション向けのアセット配信サービスを Addressables で実装します。
     /// </summary>
-    public sealed class AddressablesAssetDeliveryService : IAssetDeliveryService, IDisposable
+    public sealed class AddressablesAssetVaultService : IAssetVaultService, IDisposable
     {
-        private readonly ReactiveProperty<AssetDeliveryState> _state = new(AssetDeliveryState.NotInitialized);
+        private readonly ReactiveProperty<AssetVaultState> _state = new(AssetVaultState.NotInitialized);
         private readonly Subject<DownloadProgress> _downloadProgress = new();
 
         /// <summary>
         /// 起動処理とロード UI が状態遷移を監視する現在の配信状態を取得します。
         /// </summary>
-        public ReadOnlyReactiveProperty<AssetDeliveryState> State => _state;
+        public ReadOnlyReactiveProperty<AssetVaultState> State => _state;
 
         /// <summary>
         /// 配信失敗時もストリームを終了せず、依存関係のダウンロード進捗を通知します。
@@ -32,22 +32,22 @@ namespace UniLab.AssetDelivery
         /// </summary>
         public async UniTask InitializeAsync(CancellationToken cancellationToken)
         {
-            _state.Value = AssetDeliveryState.Initializing;
+            _state.Value = AssetVaultState.Initializing;
 
             try
             {
                 await Addressables.InitializeAsync().ToUniTask(cancellationToken: cancellationToken);
-                _state.Value = AssetDeliveryState.Ready;
+                _state.Value = AssetVaultState.Ready;
             }
             catch (OperationCanceledException)
             {
-                _state.Value = AssetDeliveryState.NotInitialized;
+                _state.Value = AssetVaultState.NotInitialized;
                 throw;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                _state.Value = AssetDeliveryState.Failed;
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to initialize asset delivery.");
+                _state.Value = AssetVaultState.Failed;
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, "Failed to initialize asset vault.");
             }
         }
 
@@ -69,7 +69,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to check or apply catalog updates.");
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, "Failed to check or apply catalog updates.");
             }
         }
 
@@ -84,7 +84,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to get dependency download size.");
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, "Failed to get dependency download size.");
             }
         }
 
@@ -93,7 +93,7 @@ namespace UniLab.AssetDelivery
         /// </summary>
         public async UniTask DownloadAsync(IReadOnlyList<string> labels, CancellationToken cancellationToken)
         {
-            _state.Value = AssetDeliveryState.Downloading;
+            _state.Value = AssetVaultState.Downloading;
             var handle = default(AsyncOperationHandle);
             var hasHandle = false;
 
@@ -103,18 +103,18 @@ namespace UniLab.AssetDelivery
                 hasHandle = true;
 
                 await PollDownloadProgressAsync(handle, cancellationToken);
-                AssetDeliveryOperationGuard.ThrowIfFailed(handle, "Failed to download asset dependencies.");
-                _state.Value = AssetDeliveryState.Ready;
+                AssetVaultOperationGuard.ThrowIfFailed(handle, "Failed to download asset dependencies.");
+                _state.Value = AssetVaultState.Ready;
             }
             catch (OperationCanceledException)
             {
-                _state.Value = AssetDeliveryState.Ready;
+                _state.Value = AssetVaultState.Ready;
                 throw;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                _state.Value = AssetDeliveryState.Failed;
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to download asset dependencies.");
+                _state.Value = AssetVaultState.Failed;
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, "Failed to download asset dependencies.");
             }
             finally
             {
@@ -144,7 +144,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to clear asset delivery cache.");
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, "Failed to clear asset vault cache.");
             }
         }
 

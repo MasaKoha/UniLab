@@ -2,7 +2,7 @@ using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Editor
+namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// 有効な Addressables settings asset への共有アクセスを提供します。

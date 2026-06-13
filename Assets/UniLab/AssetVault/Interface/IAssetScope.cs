@@ -3,7 +3,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
     /// scope の破棄で追跡中の全 handle を 1 つの lifetime 境界で解放できる、画面または scene 単位の asset loading を提供します。

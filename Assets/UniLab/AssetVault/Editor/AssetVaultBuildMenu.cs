@@ -4,14 +4,14 @@ using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Editor
+namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// Addressables player content build 用の UniLab メニューコマンドを提供します。
     /// </summary>
-    public static class AssetDeliveryBuildMenu
+    public static class AssetVaultBuildMenu
     {
-        private const string BaseMenuPath = "UniLab/AssetDelivery/Build/";
+        private const string BaseMenuPath = "UniLab/AssetVault/Build/";
         private const string NewBuildMenuPath = BaseMenuPath + "New Build";
         private const string ContentUpdateMenuPath = BaseMenuPath + "Update a Previous Build (Diff)";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";

@@ -1,4 +1,4 @@
-# UniLab.AssetDelivery 設計書（Addressable 配信基盤）
+# UniLab.AssetVault 設計書（Addressable 配信基盤）
 作成日: 2026-06-13
 
 > 全体方針は [design-unilab-foundation-overview.md](design-unilab-foundation-overview.md) を参照。
@@ -15,29 +15,29 @@ Addressables の生 API をアプリ層から完全に隠蔽し、以下を提�
 - スコープベースの**ハンドルライフサイクル管理**（Release 漏れの構造的防止）
 - キャッシュクリア
 
-アプリ層は `IAssetDeliveryService` のみを参照する。`UnityEngine.AddressableAssets` への using はこのアセンブリの外に一切漏らさない。
+アプリ層は `IAssetVaultService` のみを参照する。`UnityEngine.AddressableAssets` への using はこのアセンブリの外に一切漏らさない。
 
 ---
 
 ## 成果物
 
 ```
-Assets/UniLab/AssetDelivery/
-├── UniLab.AssetDelivery.asmdef
+Assets/UniLab/AssetVault/
+├── UniLab.AssetVault.asmdef
 ├── Interface/
-│   ├── IAssetDeliveryService.cs
+│   ├── IAssetVaultService.cs
 │   └── IAssetScope.cs
 ├── Model/
 │   ├── CatalogUpdateInfo.cs
 │   ├── DownloadProgress.cs
-│   └── AssetDeliveryState.cs
-├── AddressablesAssetDeliveryService.cs
+│   └── AssetVaultState.cs
+├── AddressablesAssetVaultService.cs
 ├── AssetScope.cs
-├── AssetDeliveryException.cs
+├── AssetVaultException.cs
 └── Editor/
-    ├── UniLab.AssetDelivery.Editor.asmdef
-    ├── AssetDeliveryBuildMenu.cs    ← 新規ビルド / 差分ビルド
-    └── AssetDeliveryProfileSwitcher.cs ← dev / staging / prod Profile 切り替え
+    ├── UniLab.AssetVault.Editor.asmdef
+    ├── AssetVaultBuildMenu.cs    ← 新規ビルド / 差分ビルド
+    └── AssetVaultProfileSwitcher.cs ← dev / staging / prod Profile 切り替え
 ```
 
 ---
@@ -46,9 +46,9 @@ Assets/UniLab/AssetDelivery/
 
 ```mermaid
 classDiagram
-    class IAssetDeliveryService {
+    class IAssetVaultService {
         <<interface>>
-        +ReadOnlyReactiveProperty~AssetDeliveryState~ State
+        +ReadOnlyReactiveProperty~AssetVaultState~ State
         +Observable~DownloadProgress~ OnDownloadProgress
         +InitializeAsync(ct) UniTask
         +CheckForUpdatesAsync(ct) UniTask~CatalogUpdateInfo~
@@ -65,8 +65,8 @@ classDiagram
         +Dispose() スコープ内全ハンドルを Release
     }
 
-    class AddressablesAssetDeliveryService {
-        -ReactiveProperty~AssetDeliveryState~ _state
+    class AddressablesAssetVaultService {
+        -ReactiveProperty~AssetVaultState~ _state
         -Subject~DownloadProgress~ _downloadProgress
     }
 
@@ -87,7 +87,7 @@ classDiagram
         +float Ratio
     }
 
-    class AssetDeliveryState {
+    class AssetVaultState {
         <<enum>>
         NotInitialized
         Initializing
@@ -96,12 +96,12 @@ classDiagram
         Failed
     }
 
-    IAssetDeliveryService <|.. AddressablesAssetDeliveryService
+    IAssetVaultService <|.. AddressablesAssetVaultService
     IAssetScope <|.. AssetScope
-    AddressablesAssetDeliveryService ..> AssetScope : CreateScope()
-    IAssetDeliveryService ..> CatalogUpdateInfo
-    IAssetDeliveryService ..> DownloadProgress
-    IAssetDeliveryService ..> AssetDeliveryState
+    AddressablesAssetVaultService ..> AssetScope : CreateScope()
+    IAssetVaultService ..> CatalogUpdateInfo
+    IAssetVaultService ..> DownloadProgress
+    IAssetVaultService ..> AssetVaultState
 ```
 
 > **言語バージョン制約**: 本プロジェクトは Unity 6000.4（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`CatalogUpdateInfo` / `DownloadProgress` は `readonly struct` で実装する（値の等価比較は使用しないため `IEquatable` 実装も不要）。
@@ -110,7 +110,7 @@ classDiagram
 
 ## 公開 API 設計
 
-### IAssetDeliveryService
+### IAssetVaultService
 
 | メンバー | 誰が呼ぶか / 何が起きるか |
 |---|---|
@@ -130,7 +130,7 @@ classDiagram
 ```csharp
 // SceneLifetimeScope での登録例（利用側）
 builder.Register(resolver =>
-        resolver.Resolve<IAssetDeliveryService>().CreateScope(),
+        resolver.Resolve<IAssetVaultService>().CreateScope(),
     Lifetime.Scoped);
 // → Scoped Dispose 時に IAssetScope.Dispose() が呼ばれ全ハンドル解放
 ```
@@ -155,12 +155,12 @@ stateDiagram-v2
 
 ## 起動フロー（アプリ層との協調）
 
-確認ダイアログ・進捗 UI は**アプリ層の責務**。AssetDelivery は判断材料（サイズ・進捗）を返すだけ。
+確認ダイアログ・進捗 UI は**アプリ層の責務**。AssetVault は判断材料（サイズ・進捗）を返すだけ。
 
 ```mermaid
 sequenceDiagram
     participant Boot as BootSequence（アプリ層）
-    participant ADS as IAssetDeliveryService
+    participant ADS as IAssetVaultService
     participant UI as IPopupService（アプリ層が利用）
 
     Boot->>ADS: InitializeAsync()
@@ -183,8 +183,8 @@ sequenceDiagram
 |---|---|
 | カタログ更新なし | `CatalogUpdateInfo.HasUpdate == false`（正常系） |
 | ダウンロードサイズ 0 | 戻り値 `0`（正常系） |
-| ネットワーク断・カタログ取得失敗 | `AssetDeliveryException`（InnerException に Addressables の例外を保持） |
-| キーが存在しない | `AssetDeliveryException`（実装バグ扱い。Result にしない） |
+| ネットワーク断・カタログ取得失敗 | `AssetVaultException`（InnerException に Addressables の例外を保持） |
+| キーが存在しない | `AssetVaultException`（実装バグ扱い。Result にしない） |
 
 `DownloadAsync` 失敗時は途中までのキャッシュは保持される（Addressables 標準挙動）。リトライは同メソッド再呼び出しで差分から再開される。
 
@@ -200,7 +200,7 @@ sequenceDiagram
 
 - `Cannot Change Post Release` グループ（ビルトイン相当）と `Can Change Post Release` グループ（配信対象）を分ける
 - 差分配信は Addressables 標準の Content Update ビルドを使う。`addressables_content_state.bin` をビルドごとに保管する
-- エディタメニュー `UniLab/AssetDelivery/Build` に「新規ビルド」「差分ビルド」を用意する
+- エディタメニュー `UniLab/AssetVault/Build` に「新規ビルド」「差分ビルド」を用意する
 
 ---
 

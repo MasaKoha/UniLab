@@ -1,15 +1,15 @@
-# UniLab.AssetDelivery 利用ガイド
+# UniLab.AssetVault 利用ガイド
 
-Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.AssetDelivery` の概要・使い方・運用を1枚にまとめたガイド。
+Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.AssetVault` の概要・使い方・運用を1枚にまとめたガイド。
 
-- 設計の詳細仕様: [design-unilab-asset-delivery.md](design-unilab-asset-delivery.md)
+- 設計の詳細仕様: [design-unilab-asset-vault.md](design-unilab-asset-vault.md)
 - 全体方針（疎結合・C# 9 制約など）: [design-unilab-foundation-overview.md](design-unilab-foundation-overview.md)
 
 ---
 
 ## 概要
 
-アプリ層は `IAssetDeliveryService` と `IAssetScope` のみを参照する。`UnityEngine.AddressableAssets` への依存は基盤アセンブリ内に閉じており、配信先（CCD / Supabase Storage / 自前 CDN）の違いはランタイムコードに現れない。
+アプリ層は `IAssetVaultService` と `IAssetScope` のみを参照する。`UnityEngine.AddressableAssets` への依存は基盤アセンブリ内に閉じており、配信先（CCD / Supabase Storage / 自前 CDN）の違いはランタイムコードに現れない。
 
 主な機能:
 
@@ -25,10 +25,10 @@ Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.As
 
 | アセンブリ | 役割 |
 |---|---|
-| `UniLab.AssetDelivery` | ランタイム本体（IF・Model・実装） |
-| `UniLab.AssetDelivery.Editor` | ビルドメニュー・Profile 切り替え |
-| `UniLab.AssetDelivery.Sample` | 動作確認サンプル（MVP・uGUI コード生成） |
-| `UniLab.AssetDelivery.Sample.Editor` | サンプル用プレースホルダ生成メニュー |
+| `UniLab.AssetVault` | ランタイム本体（IF・Model・実装） |
+| `UniLab.AssetVault.Editor` | ビルドメニュー・Profile 切り替え |
+| `UniLab.AssetVault.Sample` | 動作確認サンプル（MVP・uGUI コード生成） |
+| `UniLab.AssetVault.Sample.Editor` | サンプル用プレースホルダ生成メニュー |
 
 参照: `Logger` / `R3.Unity` / `UniTask` / `UniTask.Addressables` / `Unity.Addressables` / `Unity.ResourceManager`。
 
@@ -38,11 +38,11 @@ Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.As
 
 ## 公開 API
 
-### IAssetDeliveryService
+### IAssetVaultService
 
 | メンバー | 用途 |
 |---|---|
-| `State` | `ReadOnlyReactiveProperty<AssetDeliveryState>`。ローディング UI の出し分けに購読する |
+| `State` | `ReadOnlyReactiveProperty<AssetVaultState>`。ローディング UI の出し分けに購読する |
 | `OnDownloadProgress` | `Observable<DownloadProgress>`。`DownloadAsync` 実行中のみ発火。OnError は流さない |
 | `InitializeAsync` | 起動時に1回。Addressables 初期化 + カタログロード |
 | `CheckForUpdatesAsync` | カタログ更新確認 → 更新があれば適用し `CatalogUpdateInfo` を返す |
@@ -80,11 +80,11 @@ Failed → Initializing（リトライ）
 
 ```csharp
 // RootLifetimeScope
-builder.Register<IAssetDeliveryService, AddressablesAssetDeliveryService>(Lifetime.Singleton);
+builder.Register<IAssetVaultService, AddressablesAssetVaultService>(Lifetime.Singleton);
 
 // SceneLifetimeScope
 builder.Register(resolver =>
-        resolver.Resolve<IAssetDeliveryService>().CreateScope(),
+        resolver.Resolve<IAssetVaultService>().CreateScope(),
     Lifetime.Scoped);
 ```
 
@@ -93,17 +93,17 @@ builder.Register(resolver =>
 確認ダイアログ・進捗 UI はアプリ層の責務。基盤は判断材料（サイズ・進捗）を返すだけ。
 
 ```csharp
-await _assetDelivery.InitializeAsync(cancellationToken);
+await _assetVault.InitializeAsync(cancellationToken);
 
-var update = await _assetDelivery.CheckForUpdatesAsync(cancellationToken);
+var update = await _assetVault.CheckForUpdatesAsync(cancellationToken);
 if (update.HasUpdate)
 {
     var labels = new[] { "preload" };
-    var sizeBytes = await _assetDelivery.GetDownloadSizeAsync(labels, cancellationToken);
+    var sizeBytes = await _assetVault.GetDownloadSizeAsync(labels, cancellationToken);
     if (sizeBytes > 0)
     {
         // ここでアプリ層が「○○MB ダウンロードします」確認 UI を出す
-        await _assetDelivery.DownloadAsync(labels, cancellationToken);
+        await _assetVault.DownloadAsync(labels, cancellationToken);
     }
 }
 ```
@@ -111,11 +111,11 @@ if (update.HasUpdate)
 ### 3. 状態・進捗の購読
 
 ```csharp
-_assetDelivery.State
-    .Subscribe(state => _loadingView.SetVisible(state == AssetDeliveryState.Downloading))
+_assetVault.State
+    .Subscribe(state => _loadingView.SetVisible(state == AssetVaultState.Downloading))
     .AddTo(_disposables);
 
-_assetDelivery.OnDownloadProgress
+_assetVault.OnDownloadProgress
     .Subscribe(progress => _progressBar.Value = progress.Ratio)
     .AddTo(_disposables);
 ```
@@ -130,16 +130,16 @@ var character = await _assetScope.InstantiateAsync("title_character", parent, ca
 
 ### エラーの扱い
 
-- ネットワーク断・カタログ取得失敗・キー不在は `AssetDeliveryException`（`InnerException` に Addressables の元例外）
+- ネットワーク断・カタログ取得失敗・キー不在は `AssetVaultException`（`InnerException` に Addressables の元例外）
 - 「更新なし」「サイズ0」などビジネス正常系は例外でなく戻り値で表現する
 
 ---
 
 ## サンプル
 
-`Assets/UniLab/AssetDelivery/Sample/` に DI なし単体・uGUI コード生成の動作確認サンプルがある。
+`Assets/UniLab/AssetVault/Sample/` に DI なし単体・uGUI コード生成の動作確認サンプルがある。
 
-1. 空 GameObject に `AssetDeliverySampleBootstrap` を付ける（`_downloadLabel` / `_assetKey` を Inspector で変更可）
+1. 空 GameObject に `AssetVaultSampleBootstrap` を付ける（`_downloadLabel` / `_assetKey` を Inspector で変更可）
 2. Play → State 初期表示は `NotInitialized`
 3. **Initialize → Check And Download → Load Asset → Clear Cache** の順に操作
 
@@ -147,7 +147,7 @@ var character = await _assetScope.InstantiateAsync("title_character", parent, ca
 
 リポジトリには Addressables 設定とプレースホルダ Sprite を同梱済みで、クローン後そのまま Play で動く。設定をやり直したい場合はメニューから再生成できる:
 
-- **`UniLab/AssetDelivery/Sample/Generate Placeholder Asset`**
+- **`UniLab/AssetVault/Sample/Generate Placeholder Asset`**
   - Addressables 設定を生成/取得
   - 市松模様 256×256 PNG を `Sample/Generated/sample_sprite.png` に生成し Sprite としてインポート
   - address `sample_sprite` / label `sample` で Default Group に登録
@@ -168,7 +168,7 @@ Addressables 標準の Content Update Workflow に乗せている。差分は**�
 | Cannot Change Post Release | アプリ同梱の静的コンテンツ | リリース後変更不可 |
 | Can Change Post Release | サーバ配信・差し替え対象 | 差分配信対象 |
 
-### ビルド（`UniLab/AssetDelivery/Build` メニュー）
+### ビルド（`UniLab/AssetVault/Build` メニュー）
 
 - **New Build**: フルビルド。`addressables_content_state.bin` が出力される。**これをリリースごとに保管する**のが差分管理の生命線（CI でアーティファクト保存推奨）
 - **Update a Previous Build (Diff)**: 保管した `content_state.bin` を基準に、変更アセットのバンドルと新カタログだけを再ビルド
@@ -187,10 +187,10 @@ Profile の RemoteLoadPath が指す配信先に、新カタログ + 変更バ�
 
 ### 実ビルド配信モード（Download/Clear Cache を試す）
 
-1. `UniLab/AssetDelivery/Build > New Build`
+1. `UniLab/AssetVault/Build > New Build`
 2. Addressables Groups ウィンドウの Play Mode Script を「Use Existing Build (requires built groups)」に切替
 3. Play → Download でバンドルがキャッシュされ、Clear Cache が機能する
 
 ### 環境切り替え
 
-`UniLab/AssetDelivery/Profile` メニューで dev / staging / prod の Addressables Profile を切り替える。
+`UniLab/AssetVault/Profile` メニューで dev / staging / prod の Addressables Profile を切り替える。

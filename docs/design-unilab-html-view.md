@@ -84,7 +84,7 @@ Assets/UniLab/HtmlView/
     └── ResourcesHtmlImageLoader.cs ← デフォルト実装
 
 Assets/UniLab/Integration/
-└── AddressablesHtmlImageLoader.cs ← IAssetDeliveryService 経由の画像ロード
+└── AddressablesHtmlImageLoader.cs ← IAssetVaultService 経由の画像ロード
 ```
 
 ---
