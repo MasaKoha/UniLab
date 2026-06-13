@@ -84,7 +84,7 @@ Assets/UniLab/HtmlView/
     └── ResourcesHtmlImageLoader.cs ← デフォルト実装
 
 Assets/UniLab/Integration/
-└── AddressablesHtmlImageLoader.cs ← IAssetDeliveryService 経由の画像ロード
+└── AddressablesHtmlImageLoader.cs ← IAssetVaultService 経由の画像ロード
 ```
 
 ---
@@ -182,6 +182,8 @@ classDiagram
     IHtmlImageLoader <|.. AddressablesHtmlImageLoader
     HtmlViewBuilder --> HtmlViewTheme
 ```
+
+> **言語バージョン制約**: 本プロジェクトは Unity 6000.4（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。値型は `readonly struct` で実装する（等価比較が必要な場合のみ `IEquatable<T>` を手実装）。
 
 ---
 
