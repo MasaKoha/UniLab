@@ -47,7 +47,7 @@ namespace UniLab.AssetDelivery
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 _state.Value = AssetDeliveryState.Failed;
-                throw ToAssetDeliveryException(exception, "Failed to initialize asset delivery.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to initialize asset delivery.");
             }
         }
 
@@ -69,7 +69,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw ToAssetDeliveryException(exception, "Failed to check or apply catalog updates.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to check or apply catalog updates.");
             }
         }
 
@@ -84,7 +84,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw ToAssetDeliveryException(exception, "Failed to get dependency download size.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to get dependency download size.");
             }
         }
 
@@ -103,7 +103,7 @@ namespace UniLab.AssetDelivery
                 hasHandle = true;
 
                 await PollDownloadProgressAsync(handle, cancellationToken);
-                ThrowIfFailed(handle, "Failed to download asset dependencies.");
+                AssetDeliveryOperationGuard.ThrowIfFailed(handle, "Failed to download asset dependencies.");
                 _state.Value = AssetDeliveryState.Ready;
             }
             catch (OperationCanceledException)
@@ -114,7 +114,7 @@ namespace UniLab.AssetDelivery
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 _state.Value = AssetDeliveryState.Failed;
-                throw ToAssetDeliveryException(exception, "Failed to download asset dependencies.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to download asset dependencies.");
             }
             finally
             {
@@ -144,7 +144,7 @@ namespace UniLab.AssetDelivery
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                throw ToAssetDeliveryException(exception, "Failed to clear asset delivery cache.");
+                throw AssetDeliveryOperationGuard.ToAssetDeliveryException(exception, "Failed to clear asset delivery cache.");
             }
         }
 
@@ -201,25 +201,5 @@ namespace UniLab.AssetDelivery
             return Math.Abs(status.Percent - lastRatio) > float.Epsilon;
         }
 
-        private static void ThrowIfFailed(AsyncOperationHandle handle, string message)
-        {
-            if (handle.Status != AsyncOperationStatus.Failed)
-            {
-                return;
-            }
-
-            var exception = handle.OperationException ?? new InvalidOperationException(message);
-            throw new AssetDeliveryException(message, exception);
-        }
-
-        private static AssetDeliveryException ToAssetDeliveryException(Exception exception, string message)
-        {
-            if (exception is AssetDeliveryException assetDeliveryException)
-            {
-                return assetDeliveryException;
-            }
-
-            return new AssetDeliveryException(message, exception);
-        }
     }
 }

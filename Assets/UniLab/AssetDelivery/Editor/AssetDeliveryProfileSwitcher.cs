@@ -1,5 +1,4 @@
 using UnityEditor;
-using UnityEditor.AddressableAssets;
 using UnityEngine;
 
 namespace UniLab.AssetDelivery.Editor
@@ -16,7 +15,6 @@ namespace UniLab.AssetDelivery.Editor
         private const string DevelopmentMenuPath = BaseMenuPath + "Development";
         private const string StagingMenuPath = BaseMenuPath + "Staging";
         private const string ProductionMenuPath = BaseMenuPath + "Production";
-        private const string SettingsMissingMessage = "Addressables settings are not initialized.";
         private const string ProfileMissingMessageFormat = "Addressables profile was not found: {0}";
         private const string ProfileSwitchedMessageFormat = "Addressables active profile switched to: {0}";
 
@@ -52,10 +50,8 @@ namespace UniLab.AssetDelivery.Editor
         /// </summary>
         public static void SwitchProfile(string profileName)
         {
-            var settings = AddressableAssetSettingsDefaultObject.Settings;
-            if (settings == null)
+            if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
             {
-                Debug.LogError(SettingsMissingMessage);
                 return;
             }
 
