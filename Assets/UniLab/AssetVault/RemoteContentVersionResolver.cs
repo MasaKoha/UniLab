@@ -12,17 +12,25 @@ namespace UniLab.AssetVault
     public sealed class RemoteContentVersionResolver : IContentVersionResolver
     {
         private readonly string _url;
-        private readonly int _requestTimeoutSeconds;
+        private readonly Func<string, CancellationToken, UniTask<string>> _fetchAsync;
 
         /// <summary>
         /// コンテンツ配信の基底 URL と環境名から version.json の URL を作成します。
         /// requestTimeoutSeconds は起動必須の取得が無応答の CDN で無限に待たないための上限です。
         /// </summary>
         public RemoteContentVersionResolver(string contentBaseUrl, string environment, int requestTimeoutSeconds = 15)
+            : this(contentBaseUrl, environment, CreateUnityWebRequestFetcher(requestTimeoutSeconds))
+        {
+        }
+
+        /// <summary>
+        /// コンテンツ配信の基底 URL と環境名、version.json 取得処理から resolver を作成します。
+        /// </summary>
+        public RemoteContentVersionResolver(string contentBaseUrl, string environment, Func<string, CancellationToken, UniTask<string>> fetchAsync)
         {
             var normalizedContentBaseUrl = contentBaseUrl.TrimEnd('/');
             _url = $"{normalizedContentBaseUrl}/{environment}/version.json";
-            _requestTimeoutSeconds = requestTimeoutSeconds;
+            _fetchAsync = fetchAsync;
         }
 
         /// <summary>
@@ -32,23 +40,37 @@ namespace UniLab.AssetVault
         {
             try
             {
-                using (var request = UnityWebRequest.Get(_url))
+                var json = await _fetchAsync(_url, cancellationToken);
+                var contentVersionJson = JsonUtility.FromJson<ContentVersionJson>(json);
+                if (contentVersionJson == null)
                 {
-                    request.timeout = _requestTimeoutSeconds;
-                    await request.SendWebRequest().ToUniTask(cancellationToken: cancellationToken);
-                    if (request.result != UnityWebRequest.Result.Success)
-                    {
-                        throw new AssetVaultException($"Failed to resolve content version from {_url}. Error: {request.error}");
-                    }
-
-                    var dto = JsonUtility.FromJson<ContentVersionJson>(request.downloadHandler.text);
-                    return new ContentVersionInfo(dto.contentVersion, dto.path);
+                    throw new AssetVaultException($"Failed to resolve content version from {_url}. Invalid version json.");
                 }
+
+                return new ContentVersionInfo(contentVersionJson.contentVersion, contentVersionJson.path);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 throw AssetVaultOperationGuard.ToAssetVaultException(exception, $"Failed to resolve content version from {_url}.");
             }
+        }
+
+        private static Func<string, CancellationToken, UniTask<string>> CreateUnityWebRequestFetcher(int requestTimeoutSeconds)
+        {
+            return async (url, cancellationToken) =>
+            {
+                using (var request = UnityWebRequest.Get(url))
+                {
+                    request.timeout = requestTimeoutSeconds;
+                    await request.SendWebRequest().ToUniTask(cancellationToken: cancellationToken);
+                    if (request.result != UnityWebRequest.Result.Success)
+                    {
+                        throw new AssetVaultException($"Failed to resolve content version from {url}. Error: {request.error}");
+                    }
+
+                    return request.downloadHandler.text;
+                }
+            };
         }
 
         [Serializable]
