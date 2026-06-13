@@ -5,47 +5,47 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Sample
 {
     /// <summary>
-    /// Defines the sample UI contract that the presenter observes and updates.
+    /// presenter が監視および更新する sample UI の contract を定義します。
     /// </summary>
     public interface IAssetDeliverySampleView : IDisposable
     {
         /// <summary>
-        /// Gets the event emitted by the view when the user requests service initialization.
+        /// ユーザーがサービス初期化を要求したときに view から通知されるイベントを取得します。
         /// </summary>
         Observable<Unit> OnInitializeRequested { get; }
 
         /// <summary>
-        /// Gets the event emitted by the view when the user requests catalog check and dependency download.
+        /// ユーザーが catalog 確認と依存関係ダウンロードを要求したときに view から通知されるイベントを取得します。
         /// </summary>
         Observable<Unit> OnCheckAndDownloadRequested { get; }
 
         /// <summary>
-        /// Gets the event emitted by the view when the user requests scoped sprite loading.
+        /// ユーザーが scoped sprite loading を要求したときに view から通知されるイベントを取得します。
         /// </summary>
         Observable<Unit> OnLoadAssetRequested { get; }
 
         /// <summary>
-        /// Gets the event emitted by the view when the user requests cache cleanup.
+        /// ユーザーが cache cleanup を要求したときに view から通知されるイベントを取得します。
         /// </summary>
         Observable<Unit> OnClearCacheRequested { get; }
 
         /// <summary>
-        /// Updates the delivery state text shown by the presenter.
+        /// presenter が表示する配信状態テキストを更新します。
         /// </summary>
         void SetStateText(string text);
 
         /// <summary>
-        /// Updates the download progress shown by the presenter.
+        /// presenter が表示するダウンロード進捗を更新します。
         /// </summary>
         void SetProgress(float ratio);
 
         /// <summary>
-        /// Updates the loaded sprite preview shown by the presenter.
+        /// presenter が表示するロード済み sprite の preview を更新します。
         /// </summary>
         void SetLoadedSprite(Sprite sprite);
 
         /// <summary>
-        /// Updates the operation message shown by the presenter.
+        /// presenter が表示する操作メッセージを更新します。
         /// </summary>
         void SetMessage(string text);
     }

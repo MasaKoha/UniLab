@@ -13,7 +13,7 @@ namespace UniLab.AssetDelivery
         private readonly List<AsyncOperationHandle> _handles = new();
 
         /// <summary>
-        /// Loads an asset by key and keeps its Addressables handle owned by this scope.
+        /// key で asset をロードし、その Addressables handle をこの scope の所有にします。
         /// </summary>
         public async UniTask<T> LoadAssetAsync<T>(string key, CancellationToken cancellationToken)
         {
@@ -33,7 +33,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Instantiates a GameObject by key and keeps its Addressables handle owned by this scope.
+        /// key で GameObject を生成し、その Addressables handle をこの scope の所有にします。
         /// </summary>
         public async UniTask<GameObject> InstantiateAsync(string key, Transform parent, CancellationToken cancellationToken)
         {
@@ -53,7 +53,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Releases every handle loaded through this scope so screen lifetime owns asset lifetime.
+        /// この scope 経由でロードした全 handle を解放し、画面 lifetime が asset lifetime を所有するようにします。
         /// </summary>
         public void Dispose()
         {

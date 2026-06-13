@@ -1,28 +1,28 @@
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Reports dependency download progress to UI subscribers as an allocation-conscious value type for frequent updates.
+    /// 頻繁に更新される UI 購読者向けに、依存関係のダウンロード進捗を allocation に配慮した値型として通知します。
     /// </summary>
-    // perf: emitted frequently during downloads; struct avoids per-tick heap allocation.
+    // perf: ダウンロード中に高頻度で発行されるため、struct で tick ごとのヒープ確保を避ける。
     public readonly struct DownloadProgress
     {
         /// <summary>
-        /// Gets the number of bytes that have already been downloaded for the active dependency download.
+        /// 実行中の依存関係ダウンロードで、すでにダウンロード済みのバイト数を取得します。
         /// </summary>
         public long DownloadedBytes { get; }
 
         /// <summary>
-        /// Gets the total number of bytes expected for the active dependency download.
+        /// 実行中の依存関係ダウンロードで想定される総バイト数を取得します。
         /// </summary>
         public long TotalBytes { get; }
 
         /// <summary>
-        /// Gets the normalized download completion ratio used by progress UI.
+        /// progress UI が使用する、正規化されたダウンロード完了率を取得します。
         /// </summary>
         public float Ratio { get; }
 
         /// <summary>
-        /// Creates progress information emitted by the delivery service while a download is running.
+        /// ダウンロード実行中に delivery service が通知する進捗情報を作成します。
         /// </summary>
         public DownloadProgress(long downloadedBytes, long totalBytes, float ratio)
         {

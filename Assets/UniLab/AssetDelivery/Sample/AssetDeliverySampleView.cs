@@ -17,27 +17,27 @@ namespace UniLab.AssetDelivery.Sample
         private readonly Font _font;
 
         /// <summary>
-        /// Gets the event emitted when the Initialize button is clicked.
+        /// Initialize ボタンがクリックされたときに通知されるイベントを取得します。
         /// </summary>
         public Observable<Unit> OnInitializeRequested => _initializeRequested;
 
         /// <summary>
-        /// Gets the event emitted when the Check And Download button is clicked.
+        /// Check And Download ボタンがクリックされたときに通知されるイベントを取得します。
         /// </summary>
         public Observable<Unit> OnCheckAndDownloadRequested => _checkAndDownloadRequested;
 
         /// <summary>
-        /// Gets the event emitted when the Load Asset button is clicked.
+        /// Load Asset ボタンがクリックされたときに通知されるイベントを取得します。
         /// </summary>
         public Observable<Unit> OnLoadAssetRequested => _loadAssetRequested;
 
         /// <summary>
-        /// Gets the event emitted when the Clear Cache button is clicked.
+        /// Clear Cache ボタンがクリックされたときに通知されるイベントを取得します。
         /// </summary>
         public Observable<Unit> OnClearCacheRequested => _clearCacheRequested;
 
         /// <summary>
-        /// Builds the generated uGUI sample view under the provided Canvas transform.
+        /// 指定された Canvas transform 配下に、生成型の uGUI sample view を構築します。
         /// </summary>
         public AssetDeliverySampleView(Transform parent)
         {
@@ -56,7 +56,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Updates the current delivery state text.
+        /// 現在の配信状態テキストを更新します。
         /// </summary>
         public void SetStateText(string text)
         {
@@ -64,7 +64,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Updates the normalized download progress.
+        /// 正規化されたダウンロード進捗を更新します。
         /// </summary>
         public void SetProgress(float ratio)
         {
@@ -72,7 +72,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Updates the loaded sprite preview.
+        /// ロード済み sprite の preview を更新します。
         /// </summary>
         public void SetLoadedSprite(Sprite sprite)
         {
@@ -81,7 +81,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Updates the latest operation message.
+        /// 最新の操作メッセージを更新します。
         /// </summary>
         public void SetMessage(string text)
         {
@@ -89,7 +89,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Releases streams exposed by the generated view.
+        /// 生成された view が公開している stream を解放します。
         /// </summary>
         public void Dispose()
         {

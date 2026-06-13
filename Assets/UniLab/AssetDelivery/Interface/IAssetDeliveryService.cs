@@ -6,47 +6,47 @@ using R3;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Defines the application-facing asset delivery API that hides Addressables details from boot and loading flows.
+    /// 起動処理やロードフローから Addressables の詳細を隠す、アプリケーション向け asset delivery API を定義します。
     /// </summary>
     public interface IAssetDeliveryService
     {
         /// <summary>
-        /// Gets the current delivery state that application loading UI observes to switch visible states.
+        /// アプリケーションのロード UI が表示状態の切り替えに使う、現在の配信状態を取得します。
         /// </summary>
         ReadOnlyReactiveProperty<AssetDeliveryState> State { get; }
 
         /// <summary>
-        /// Emits dependency download progress while DownloadAsync is running so progress UI can update without polling.
+        /// DownloadAsync の実行中に依存関係のダウンロード進捗を通知し、progress UI がポーリングなしで更新できるようにします。
         /// </summary>
         Observable<DownloadProgress> OnDownloadProgress { get; }
 
         /// <summary>
-        /// Initializes the delivery system once during boot so catalog and runtime delivery services are ready.
+        /// 起動時に配信システムを一度だけ初期化し、catalog と runtime delivery service を利用可能にします。
         /// </summary>
         UniTask InitializeAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Checks for remote catalog updates during boot and returns the result after applying any discovered catalog changes.
+        /// 起動時にリモート catalog の更新を確認し、検出した catalog 変更を適用してから結果を返します。
         /// </summary>
         UniTask<CatalogUpdateInfo> CheckForUpdatesAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Gets the dependency download size for labels so the application can decide whether a confirmation dialog is needed.
+        /// アプリケーションが確認ダイアログの要否を判断できるよう、label の依存関係ダウンロードサイズを取得します。
         /// </summary>
         UniTask<long> GetDownloadSizeAsync(IReadOnlyList<string> labels, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Downloads dependencies for labels before gameplay or screen entry while reporting progress through OnDownloadProgress.
+        /// gameplay や画面遷移の前に label の依存関係をダウンロードし、OnDownloadProgress で進捗を通知します。
         /// </summary>
         UniTask DownloadAsync(IReadOnlyList<string> labels, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Creates a screen or scene lifetime scope that callers use for all asset loads to centralize release ownership.
+        /// 呼び出し側が全 asset load に使う画面または scene lifetime の scope を作成し、解放の所有権を集約します。
         /// </summary>
         IAssetScope CreateScope();
 
         /// <summary>
-        /// Clears cached delivery data when debug tools or storage pressure recovery flows request cache cleanup.
+        /// デバッグツールやストレージ逼迫時の復旧フローから要求されたときに、キャッシュ済み配信データを削除します。
         /// </summary>
         UniTask<bool> ClearCacheAsync(CancellationToken cancellationToken);
     }

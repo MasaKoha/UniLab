@@ -10,6 +10,7 @@ Unity プロジェクト向けの共通ライブラリ・エディタツール�
 ## Documentation
 
 - [Tools Guide](TOOLS_GUIDE.md) — エディタツールの使い方ガイド
+- [AssetDelivery 利用ガイド](asset-delivery-guide.md) — 概要・使い方・サンプル・差分配信運用の統合ガイド
 
 ## Design Docs
 

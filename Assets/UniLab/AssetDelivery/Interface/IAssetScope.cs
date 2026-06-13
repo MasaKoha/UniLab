@@ -6,17 +6,17 @@ using UnityEngine;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Provides screen or scene scoped asset loading so disposing the scope releases every tracked handle through one lifetime boundary.
+    /// scope の破棄で追跡中の全 handle を 1 つの lifetime 境界で解放できる、画面または scene 単位の asset loading を提供します。
     /// </summary>
     public interface IAssetScope : IDisposable
     {
         /// <summary>
-        /// Loads an asset by key for the owning screen or scene and tracks its handle until the scope is disposed.
+        /// 所有元の画面または scene 向けに key で asset をロードし、scope が破棄されるまで handle を追跡します。
         /// </summary>
         UniTask<T> LoadAssetAsync<T>(string key, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Instantiates a GameObject by key under the requested parent and tracks its handle until the scope is disposed.
+        /// 指定された parent 配下に key で GameObject を生成し、scope が破棄されるまで handle を追跡します。
         /// </summary>
         UniTask<GameObject> InstantiateAsync(string key, Transform parent, CancellationToken cancellationToken);
     }

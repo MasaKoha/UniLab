@@ -7,7 +7,7 @@ using UnityEngine;
 namespace UniLab.AssetDelivery.Sample
 {
     /// <summary>
-    /// Coordinates the asset delivery sample view with the delivery service.
+    /// asset delivery sample view と delivery service を連携させます。
     /// </summary>
     public sealed class AssetDeliverySamplePresenter : IDisposable
     {
@@ -20,7 +20,7 @@ namespace UniLab.AssetDelivery.Sample
         private readonly IAssetScope _scope;
 
         /// <summary>
-        /// Creates the presenter and wires sample UI events to the delivery service.
+        /// presenter を作成し、sample UI のイベントを delivery service に接続します。
         /// </summary>
         public AssetDeliverySamplePresenter(
             IAssetDeliveryService service,
@@ -34,7 +34,7 @@ namespace UniLab.AssetDelivery.Sample
             _assetKey = assetKey;
             _scope = _service.CreateScope();
 
-            // --- Setup subscriptions ---
+            // --- 購読のセットアップ ---
             _compositeDisposable.Add(_service.State.Subscribe(state => _view.SetStateText(state.ToString())));
             _compositeDisposable.Add(_service.OnDownloadProgress.Subscribe(progress => _view.SetProgress(progress.Ratio)));
             _compositeDisposable.Add(_view.OnInitializeRequested.Subscribe(_ => InitializeAsync(_cancellationTokenSource.Token).Forget()));
@@ -44,7 +44,7 @@ namespace UniLab.AssetDelivery.Sample
         }
 
         /// <summary>
-        /// Cancels in-flight operations and releases scoped assets and subscriptions.
+        /// 実行中の操作をキャンセルし、scoped asset と購読を解放します。
         /// </summary>
         public void Dispose()
         {

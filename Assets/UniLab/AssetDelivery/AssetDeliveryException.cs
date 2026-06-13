@@ -3,12 +3,12 @@ using System;
 namespace UniLab.AssetDelivery
 {
     /// <summary>
-    /// Represents delivery failures that application boot and loading flows should handle as retryable infrastructure errors.
+    /// アプリケーションの起動処理やロードフローが、再試行可能な基盤エラーとして扱うべき配信失敗を表します。
     /// </summary>
     public class AssetDeliveryException : Exception
     {
         /// <summary>
-        /// Creates an asset delivery exception with a caller-facing failure message.
+        /// 呼び出し側に提示する失敗メッセージを持つ asset delivery 例外を作成します。
         /// </summary>
         public AssetDeliveryException(string message)
             : base(message)
@@ -16,7 +16,7 @@ namespace UniLab.AssetDelivery
         }
 
         /// <summary>
-        /// Creates an asset delivery exception that preserves the underlying platform or Addressables failure for diagnostics.
+        /// 診断用に、原因となったプラットフォームまたは Addressables の失敗を保持する asset delivery 例外を作成します。
         /// </summary>
         public AssetDeliveryException(string message, Exception innerException)
             : base(message, innerException)
