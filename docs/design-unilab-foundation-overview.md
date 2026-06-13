@@ -67,7 +67,7 @@ graph TD
 Assets/UniLab/
 ├── UniLab.asmdef                     ← 既存本体（Popup v2 はここに含む）
 ├── AssetDelivery/
-│   └── UniLab.AssetDelivery.asmdef   ← 参照: Logger, R3, UniTask, Unity.Addressables
+│   └── UniLab.AssetDelivery.asmdef   ← 参照: Logger, R3, UniTask, UniTask.Addressables, Unity.Addressables, Unity.ResourceManager
 ├── IAP/
 │   └── UniLab.IAP.asmdef             ← 参照: Logger, R3, UniTask, UnityEngine.Purchasing
 └── Integration/
