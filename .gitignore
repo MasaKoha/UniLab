@@ -77,3 +77,8 @@ crashlytics-build.properties
 /[Aa]ssets/Packages/
 /Assets/TextMesh Pro/
 /Assets/TextMesh Pro.meta
+
+# 機密・ローカル限定ノート（公開しない作業メモ等）
+*.secret.*
+.env
+.env.local
