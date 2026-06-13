@@ -18,10 +18,17 @@ namespace UniLab.MasterData
     {
         private const string MasterExtension = ".master";
         private const string CatalogExtension = ".catalog";
+        private const string MasterDirectoryName = "MasterData";
         private byte[] _key;
         private byte[] _iv;
-        public string SavePath => $"{Application.persistentDataPath}/MasterData";
+        public string SavePath => $"{Application.persistentDataPath}/{MasterDirectoryName}";
         private string CatalogFileName => Convert.ToBase64String(Encoding.UTF8.GetBytes(nameof(MasterCatalog))) + CatalogExtension;
+
+        /// <summary>
+        /// Directory that local (non-downloaded) masters are read from by <see cref="LoadMastersFromStreamingAssetsAsync"/>.
+        /// Defaults to StreamingAssets/MasterData. Override in tests to point at a temporary directory.
+        /// </summary>
+        protected virtual string LocalMasterSourceDirectory => Path.Combine(Application.streamingAssetsPath, MasterDirectoryName);
 
         // Stores masters by type
         private readonly Dictionary<Type, object> _masters = new();
@@ -55,6 +62,68 @@ namespace UniLab.MasterData
             {
                 await LoadMasterFromDiskAsync(type);
             }
+        }
+
+        /// <summary>
+        /// Loads every master from a local source (StreamingAssets by default) instead of downloading from a server.
+        /// Use this for local-only titles that ship encrypted masters inside the build; the server catalog/download
+        /// pipeline (<see cref="LoadMastersAsync"/>) is intentionally bypassed. <see cref="SetKey"/> must be called first.
+        /// Reads {LocalMasterSourceDirectory}/{Base64(masterName)}.master, AES-decrypts, and MessagePack-deserializes each entry.
+        /// </summary>
+        public async UniTask LoadMastersFromStreamingAssetsAsync()
+        {
+            foreach (var type in MasterList)
+            {
+                await LoadMasterFromStreamingAssetsAsync(type);
+            }
+        }
+
+        private async UniTask LoadMasterFromStreamingAssetsAsync(Type masterType)
+        {
+            if (masterType == null)
+            {
+                return;
+            }
+
+            var base64Name = Convert.ToBase64String(Encoding.UTF8.GetBytes(masterType.Name));
+            var loadPath = Path.Combine(LocalMasterSourceDirectory, $"{base64Name}{MasterExtension}");
+            var encrypted = await ReadAllBytesFromLocalSourceAsync(loadPath);
+            if (encrypted == null)
+            {
+                return;
+            }
+
+            var decrypted = AesEncryptionUtility.Decrypt(encrypted, _key, _iv);
+            var master = MessagePackSerializer.Deserialize(masterType, decrypted) as MasterBase;
+            if (master != null)
+            {
+                _masters[masterType] = master;
+            }
+        }
+
+        // Reads a local master binary. StreamingAssets lives inside the compressed APK on Android, where direct file
+        // IO is unavailable, so that platform must go through UnityWebRequest; every other platform uses plain file IO.
+        private async UniTask<byte[]> ReadAllBytesFromLocalSourceAsync(string path)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using var request = UnityWebRequest.Get(path);
+            await request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                var message = $"Failed to read local master: {path} => {request.error}";
+                _onError.OnNext(message);
+                throw new IOException(message);
+            }
+
+            return request.downloadHandler.data;
+#else
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            return await File.ReadAllBytesAsync(path);
+#endif
         }
 
         public TMaster GetMaster<TMaster>() where TMaster : MasterBase
