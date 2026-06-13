@@ -1,0 +1,22 @@
+{
+    "name": "UniLab.AssetDelivery",
+    "rootNamespace": "",
+    "references": [
+        "GUID:a8c40b3ab2ca249628aab9b762adccf8",
+        "GUID:77221876cc6b8244180b96e320b1bcd4",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        { "name": "com.unity.addressables", "expression": "1.0.0", "define": "UNILAB_ADDRESSABLES" }
+    ],
+    "noEngineReferences": false
+}
