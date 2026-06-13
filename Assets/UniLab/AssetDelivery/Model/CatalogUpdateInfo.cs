@@ -5,7 +5,7 @@ namespace UniLab.AssetDelivery
     /// <summary>
     /// Carries catalog update results so the boot sequence can decide whether download preparation should continue.
     /// </summary>
-    public readonly record struct CatalogUpdateInfo
+    public readonly struct CatalogUpdateInfo
     {
         /// <summary>
         /// Gets whether the catalog check found and applied catalog updates.
