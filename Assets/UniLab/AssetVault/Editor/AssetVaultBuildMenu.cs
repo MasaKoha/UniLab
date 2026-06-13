@@ -26,7 +26,7 @@ namespace UniLab.AssetVault.Editor
         [MenuItem(NewBuildMenuPath)]
         public static void BuildNew()
         {
-            if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
+            if (!AddressableSettingsAccessor.TryGetSettings(out _))
             {
                 return;
             }
