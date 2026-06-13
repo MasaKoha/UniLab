@@ -4,7 +4,7 @@ namespace UniLab.AssetDelivery
     /// Reports dependency download progress to UI subscribers as an allocation-conscious value type for frequent updates.
     /// </summary>
     // perf: emitted frequently during downloads; struct avoids per-tick heap allocation.
-    public readonly record struct DownloadProgress
+    public readonly struct DownloadProgress
     {
         /// <summary>
         /// Gets the number of bytes that have already been downloaded for the active dependency download.
