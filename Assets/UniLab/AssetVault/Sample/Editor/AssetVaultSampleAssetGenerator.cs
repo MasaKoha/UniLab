@@ -5,17 +5,17 @@ using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Sample.Editor
+namespace UniLab.AssetVault.Sample.Editor
 {
     /// <summary>
-    /// Asset Delivery sample scene に必要な Addressables sample asset を生成します。
+    /// Asset Vault sample scene に必要な Addressables sample asset を生成します。
     /// </summary>
-    public static class AssetDeliverySampleAssetGenerator
+    public static class AssetVaultSampleAssetGenerator
     {
-        private const string MenuPath = "UniLab/AssetDelivery/Sample/Generate Placeholder Asset";
+        private const string MenuPath = "UniLab/AssetVault/Sample/Generate Placeholder Asset";
         private const string Address = "sample_sprite";
         private const string Label = "sample";
-        private const string GeneratedDirectory = "Assets/UniLab/AssetDelivery/Sample/Generated";
+        private const string GeneratedDirectory = "Assets/UniLab/AssetVault/Sample/Generated";
         private const string SpriteAssetPath = GeneratedDirectory + "/sample_sprite.png";
         private const int TextureSize = 256;
         private const int CheckerSize = 32;
@@ -27,13 +27,13 @@ namespace UniLab.AssetDelivery.Sample.Editor
         private const float SecondCheckerColorBlue = 0.2f;
         private const float CheckerColorAlpha = 1.0f;
         private const string SettingsMissingMessage = "Addressables settings could not be created.";
-        private const string SuccessMessageFormat = "Generated Asset Delivery sample placeholder at {0}. Address: {1}, Label: {2}";
+        private const string SuccessMessageFormat = "Generated Asset Vault sample placeholder at {0}. Address: {1}, Label: {2}";
 
         private static readonly Color FirstCheckerColor = new Color(FirstCheckerColorRed, FirstCheckerColorGreen, FirstCheckerColorBlue, CheckerColorAlpha);
         private static readonly Color SecondCheckerColor = new Color(SecondCheckerColorRed, SecondCheckerColorGreen, SecondCheckerColorBlue, CheckerColorAlpha);
 
         /// <summary>
-        /// Asset Delivery sample で使用する Addressables placeholder sprite を生成します。
+        /// Asset Vault sample で使用する Addressables placeholder sprite を生成します。
         /// </summary>
         [MenuItem(MenuPath)]
         public static void GeneratePlaceholderAsset()

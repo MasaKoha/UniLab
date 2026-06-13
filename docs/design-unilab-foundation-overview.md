@@ -9,7 +9,7 @@ UniLab に以下の3基盤を追加する。いずれも**プロジェクト非�
 
 | 基盤 | アセンブリ | 設計書 |
 |---|---|---|
-| Addressable 配信基盤 | `UniLab.AssetDelivery` | [design-unilab-asset-delivery.md](design-unilab-asset-delivery.md) |
+| Addressable 配信基盤 | `UniLab.AssetVault` | [design-unilab-asset-vault.md](design-unilab-asset-vault.md) |
 | UnityIAP 課金基盤 | `UniLab.IAP` | [design-unilab-iap.md](design-unilab-iap.md) |
 | ポップアップ基盤 v2 | `UniLab`（既存 Popup の汎用化） | [design-unilab-popup-v2.md](design-unilab-popup-v2.md) |
 
@@ -34,8 +34,8 @@ graph TD
         Popup[Popup v2<br/>IPopupService]
     end
 
-    subgraph AD["UniLab.AssetDelivery"]
-        ADS[IAssetDeliveryService]
+    subgraph AD["UniLab.AssetVault"]
+        ADS[IAssetVaultService]
     end
 
     subgraph IAP["UniLab.IAP"]
@@ -56,7 +56,7 @@ graph TD
 |---|---|
 | ポップアップの View を Addressables からロードしたい | Popup は `IPopupViewProvider` を注入で受ける。Addressables 実装は `UniLab.Integration` に置く |
 | 課金完了/失敗をポップアップで通知したい | IAP は結果（`PurchaseResult`）を返すだけで UI を知らない。表示はアプリ層の Presenter が行う |
-| ダウンロード確認ダイアログを出したい | AssetDelivery は必要サイズを返すだけ。確認 UI はアプリ層が組む |
+| ダウンロード確認ダイアログを出したい | AssetVault は必要サイズを返すだけ。確認 UI はアプリ層が組む |
 | レシートをサーバ検証したい | IAP は `IReceiptValidator` を注入で受ける。実装（Supabase / ASP.NET Core）はアプリ層 |
 
 ---
@@ -66,16 +66,16 @@ graph TD
 ```
 Assets/UniLab/
 ├── UniLab.asmdef                     ← 既存本体（Popup v2 はここに含む）
-├── AssetDelivery/
-│   └── UniLab.AssetDelivery.asmdef   ← 参照: Logger, R3, UniTask, UniTask.Addressables, Unity.Addressables, Unity.ResourceManager
+├── AssetVault/
+│   └── UniLab.AssetVault.asmdef   ← 参照: Logger, R3, UniTask, UniTask.Addressables, Unity.Addressables, Unity.ResourceManager
 ├── IAP/
 │   └── UniLab.IAP.asmdef             ← 参照: Logger, R3, UniTask, UnityEngine.Purchasing
 └── Integration/
-    └── UniLab.Integration.asmdef     ← 参照: UniLab, UniLab.AssetDelivery（アダプタ専用）
+    └── UniLab.Integration.asmdef     ← 参照: UniLab, UniLab.AssetVault（アダプタ専用）
 ```
 
 - `UniLab` 本体は Addressables / Purchasing パッケージに**依存させない**。利用プロジェクトが課金不要なら `IAP/` フォルダごと持ち込まなければよい
-- `UniLab.Integration` は `UniLab.AssetDelivery` を無条件参照する。したがって **Addressables 未導入プロジェクトには `AssetDelivery/` と `Integration/` をフォルダごと持ち込まない**（asmdef の条件付き参照は採用しない。運用で切る）
+- `UniLab.Integration` は `UniLab.AssetVault` を無条件参照する。したがって **Addressables 未導入プロジェクトには `AssetVault/` と `Integration/` をフォルダごと持ち込まない**（asmdef の条件付き参照は採用しない。運用で切る）
 - Version Defines（後述）は Integration 内の個別アダプタの細かい切り替えではなく、`UniLab` 本体側にオプショナルコードを書く場合のガードに使う
 
 ### Version Defines
@@ -101,11 +101,11 @@ asmdef の Version Defines 機能でパッケージ存在時のみシンボル�
 
 ## 実装順序
 
-ポップアップ v2 → AssetDelivery → Integration → IAP の順で実装する。
+ポップアップ v2 → AssetVault → Integration → IAP の順で実装する。
 
 1. **Popup v2 コア**: 外部パッケージ依存ゼロで完結し（`SerializeFieldPopupViewProvider` まで）、他2基盤の動作確認 UI としても使うため最初
-2. **AssetDelivery**: IAP より検証コストが低い（サンドボックス申請等が不要）
-3. **Integration**: `AddressablesPopupViewProvider` 等のアダプタは AssetDelivery 完成後に実装する
+2. **AssetVault**: IAP より検証コストが低い（サンドボックス申請等が不要）
+3. **Integration**: `AddressablesPopupViewProvider` 等のアダプタは AssetVault 完成後に実装する
 4. **IAP**: ストア設定・サンドボックステストが必要なため最後。インターフェース定義だけは先行してよい
 
 ---
@@ -114,6 +114,6 @@ asmdef の Version Defines 機能でパッケージ存在時のみシンボル�
 
 | 項目 | 選択肢 | 備考 |
 |---|---|---|
-| リモートカタログ配信先 | Unity CCD / Supabase Storage / 自前 CDN | AssetDelivery 側は Addressables Profile で抽象化済みのため設計には影響しない |
+| リモートカタログ配信先 | Unity CCD / Supabase Storage / 自前 CDN | AssetVault 側は Addressables Profile で抽象化済みのため設計には影響しない |
 | レシート検証サーバ | topia の ASP.NET Core / Supabase Edge Functions / ローカル検証のみ | `IReceiptValidator` 差し替えで対応。エンドポイント仕様は別途 |
 | Unity IAP パッケージバージョン | 4.x（IDetailedStoreListener）/ 5.x（新 API） | 実装着手時に最新の LTS サポート状況を確認して決定。`IIAPService` の公開 API は両対応可能な形にしてある |

@@ -2,9 +2,9 @@ using R3;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace UniLab.AssetDelivery.Sample
+namespace UniLab.AssetVault.Sample
 {
-    internal sealed class AssetDeliverySampleView : IAssetDeliverySampleView
+    internal sealed class AssetVaultSampleView : IAssetVaultSampleView
     {
         private readonly Subject<Unit> _initializeRequested = new();
         private readonly Subject<Unit> _checkAndDownloadRequested = new();
@@ -39,7 +39,7 @@ namespace UniLab.AssetDelivery.Sample
         /// <summary>
         /// 指定された Canvas transform 配下に、生成型の uGUI sample view を構築します。
         /// </summary>
-        public AssetDeliverySampleView(Transform parent)
+        public AssetVaultSampleView(Transform parent)
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
@@ -101,7 +101,7 @@ namespace UniLab.AssetDelivery.Sample
 
         private static GameObject CreateRoot(Transform parent)
         {
-            var root = new GameObject("AssetDeliverySampleView", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(VerticalLayoutGroup));
+            var root = new GameObject("AssetVaultSampleView", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(VerticalLayoutGroup));
             root.transform.SetParent(parent, false);
 
             var rectTransform = root.GetComponent<RectTransform>();

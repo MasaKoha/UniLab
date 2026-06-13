@@ -94,7 +94,7 @@ classDiagram
 
     class AddressablesPopupViewProvider {
         <<UniLab.Integration>>
-        -IAssetDeliveryService _assetDeliveryService
+        -IAssetVaultService _assetVaultService
         -IAssetScope _ownScope 専用スコープを自己生成
         型名→Addressables キー規約でロード
     }
@@ -163,14 +163,14 @@ View の入手経路を抽象化する。**Popup 基盤は Addressables を知�
 | 実装 | 供給元 | 用途 |
 |---|---|---|
 | `SerializeFieldPopupViewProvider` | インスペクタ登録プレハブ | 小規模・組み込みポップアップ（Confirm 等） |
-| `AddressablesPopupViewProvider` | `IAssetDeliveryService`（UniLab.AssetDelivery） | 配信アセット内のポップアップ。`UniLab.Integration` に配置 |
+| `AddressablesPopupViewProvider` | `IAssetVaultService`（UniLab.AssetVault） | 配信アセット内のポップアップ。`UniLab.Integration` に配置 |
 | `CompositePopupViewProvider` | 上記のフォールバックチェーン | SerializeField に無ければ Addressables を見る。`UniLab.Integration` に配置 |
 
 Addressables キーは規約ベース（`Popup/{型名}.prefab`）とし、マッピングテーブルの手書きを不要にする。
 
 #### AssetScope のライフタイム
 
-`AddressablesPopupViewProvider` は Singleton（AppLifetimeScope）であり、SceneLifetimeScope に登録される Scoped な `IAssetScope` を**掴んではならない**（captive dependency になる）。代わりに `IAssetDeliveryService.CreateScope()` で**専用スコープを自己生成**し、`Release(popup)` 時に対応ハンドルを解放、自身の Dispose で専用スコープごと破棄する。
+`AddressablesPopupViewProvider` は Singleton（AppLifetimeScope）であり、SceneLifetimeScope に登録される Scoped な `IAssetScope` を**掴んではならない**（captive dependency になる）。代わりに `IAssetVaultService.CreateScope()` で**専用スコープを自己生成**し、`Release(popup)` 時に対応ハンドルを解放、自身の Dispose で専用スコープごと破棄する。
 
 ---
 

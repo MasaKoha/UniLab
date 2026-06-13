@@ -1,11 +1,13 @@
 {
-    "name": "UniLab.AssetDelivery.Sample",
+    "name": "UniLab.AssetVault",
     "rootNamespace": "",
     "references": [
-        "UniLab.AssetDelivery",
+        "GUID:a8c40b3ab2ca249628aab9b762adccf8",
         "GUID:77221876cc6b8244180b96e320b1bcd4",
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
-        "UnityEngine.UI"
+        "GUID:593a5b492d29ac6448b1ebf7f035ef33",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -14,6 +16,8 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        { "name": "com.unity.addressables", "expression": "1.0.0", "define": "UNILAB_ADDRESSABLES" }
+    ],
     "noEngineReferences": false
 }

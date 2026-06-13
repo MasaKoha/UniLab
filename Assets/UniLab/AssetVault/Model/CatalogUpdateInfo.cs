@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
     /// 起動シーケンスがダウンロード準備を続行するか判断できるよう、catalog 更新結果を保持します。
@@ -18,7 +18,7 @@ namespace UniLab.AssetDelivery
         public IReadOnlyList<string> UpdatedCatalogIds { get; }
 
         /// <summary>
-        /// delivery service から起動シーケンスへ返す catalog 更新情報を作成します。
+        /// vault service から起動シーケンスへ返す catalog 更新情報を作成します。
         /// </summary>
         public CatalogUpdateInfo(bool hasUpdate, IReadOnlyList<string> updatedCatalogIds)
         {

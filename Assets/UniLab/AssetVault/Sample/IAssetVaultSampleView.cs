@@ -2,12 +2,12 @@ using System;
 using R3;
 using UnityEngine;
 
-namespace UniLab.AssetDelivery.Sample
+namespace UniLab.AssetVault.Sample
 {
     /// <summary>
     /// presenter が監視および更新する sample UI の contract を定義します。
     /// </summary>
-    public interface IAssetDeliverySampleView : IDisposable
+    public interface IAssetVaultSampleView : IDisposable
     {
         /// <summary>
         /// ユーザーがサービス初期化を要求したときに view から通知されるイベントを取得します。

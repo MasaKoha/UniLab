@@ -1,4 +1,4 @@
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
     /// 頻繁に更新される UI 購読者向けに、依存関係のダウンロード進捗を allocation に配慮した値型として通知します。
@@ -22,7 +22,7 @@ namespace UniLab.AssetDelivery
         public float Ratio { get; }
 
         /// <summary>
-        /// ダウンロード実行中に delivery service が通知する進捗情報を作成します。
+        /// ダウンロード実行中に vault service が通知する進捗情報を作成します。
         /// </summary>
         public DownloadProgress(long downloadedBytes, long totalBytes, float ratio)
         {

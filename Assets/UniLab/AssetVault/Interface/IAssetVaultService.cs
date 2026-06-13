@@ -3,17 +3,17 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
 
-namespace UniLab.AssetDelivery
+namespace UniLab.AssetVault
 {
     /// <summary>
-    /// 起動処理やロードフローから Addressables の詳細を隠す、アプリケーション向け asset delivery API を定義します。
+    /// 起動処理やロードフローから Addressables の詳細を隠す、アプリケーション向け asset vault API を定義します。
     /// </summary>
-    public interface IAssetDeliveryService
+    public interface IAssetVaultService
     {
         /// <summary>
         /// アプリケーションのロード UI が表示状態の切り替えに使う、現在の配信状態を取得します。
         /// </summary>
-        ReadOnlyReactiveProperty<AssetDeliveryState> State { get; }
+        ReadOnlyReactiveProperty<AssetVaultState> State { get; }
 
         /// <summary>
         /// DownloadAsync の実行中に依存関係のダウンロード進捗を通知し、progress UI がポーリングなしで更新できるようにします。
@@ -21,7 +21,7 @@ namespace UniLab.AssetDelivery
         Observable<DownloadProgress> OnDownloadProgress { get; }
 
         /// <summary>
-        /// 起動時に配信システムを一度だけ初期化し、catalog と runtime delivery service を利用可能にします。
+        /// 起動時に配信システムを一度だけ初期化し、catalog と runtime vault service を利用可能にします。
         /// </summary>
         UniTask InitializeAsync(CancellationToken cancellationToken);
 
