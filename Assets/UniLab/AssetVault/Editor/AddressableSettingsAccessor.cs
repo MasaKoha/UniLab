@@ -25,5 +25,15 @@ namespace UniLab.AssetVault.Editor
 
             return true;
         }
+
+        /// <summary>
+        /// 有効な Addressables settings asset をエラーログを出さずに取得します。
+        /// 状態表示など、未初期化が正常系であり得る読み取り用途で使います。
+        /// </summary>
+        public static bool TryGetSettingsSilently(out AddressableAssetSettings settings)
+        {
+            settings = AddressableAssetSettingsDefaultObject.Settings;
+            return settings != null;
+        }
     }
 }
