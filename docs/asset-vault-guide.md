@@ -197,8 +197,16 @@ Profile の RemoteLoadPath が指す配信先に、新カタログ + 変更バ�
 
 QA で「prod アプリで dev のアセットを見る」「特定の版フォルダを読む」を試す場合は、`UniLab > AssetVault > Dashboard` ダッシュボードの **Debug Override** セクションで環境プリセットをドロップダウンから選び、Enable Override を有効化する。Play 突入時に選択プリセットの `BaseUrl` / `ContentPath` が `AssetVaultRuntime` へ反映される。
 
-プリセットは `AssetVaultDebugEnvironmentSettings`（`Assets/Generated/UniLab/` 配下、未追跡）の ScriptableObject が持つ。初回は Development / Staging / Production の雛形がシードされるので、`Edit Presets` ボタンで開いて実際の CDN ホストに書き換える。有効/無効と選択プリセット名は EditorPrefs に保持され、開発者ごとに独立する。
+プリセット・有効/無効・選択プリセット名は `AssetVaultDebugEnvironmentSettings`（ScriptableObject、`Assets/UniLab/AssetVault/Debug/` 配下、gitignore 対象）にまとめて保持する。初回は Development / Staging / Production の雛形がシードされるので、`Edit Presets` ボタンで開いて実際の CDN ホストに書き換える。
+
+この機能は専用アセンブリ `UniLab.AssetVault.Debug`（`defineConstraints: UNITY_EDITOR || DEVELOPMENT_BUILD`）に属し、**Editor Play と development ビルドでのみ有効**、release ビルドではコードごとストリップされる。適用は `AssetVaultDebugBootstrap`（`RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`）が行い、アプリ初期化前に `AssetVaultRuntime` へ反映する（厳密な前後はアプリ責務）。
+
+設定アセットの正本は Resources の外に置くため、何もしなければプレイヤービルドに同梱されない。`AssetVaultDebugBuildProcessor` が **development ビルド時のみ** Resources へ一時複製し、ビルド後に除去する。これにより release ビルドにはコードもアセットも含まれない。
 
 ### ダッシュボード
 
-`UniLab > AssetVault > Dashboard` で、Setup（AssetResource 同期・設定アセットを開く）/ Build（New Build・Content Update）/ Sample（プレースホルダ生成）/ Debug Override / Status（RemoteLoadPath 現値・Local/Remote グループ数・AssetResource フォルダ有無）を一望・操作できる。各操作は MenuItem からも実行可能。
+`UniLab > AssetVault > Dashboard` で、Setup（同期ルール走査・設定アセットを開く）/ Build（New Build・Content Update）/ Sample（プレースホルダ生成）/ Debug Override / Status（RemoteLoadPath 現値・Local/Remote グループ数・同期ルール数/有効フォルダ数）を一望・操作できる。各ボタンには説明文を併記。各操作は MenuItem からも実行可能。
+
+#### 同期ルール（Sync AssetResource）
+
+同期対象は固定のフォルダ規約ではなく、設定アセット `AssetVaultSetupSettings` の**同期ルール一覧**で定義する。各ルールは「対象フォルダ（DefaultAsset 参照）＋配信先（Local=同梱 / Remote=CDN）」を持ち、プロジェクトごとのフォルダ構成へ対応できる。`Sync AssetResource` は各ルールのフォルダ配下を走査し、サブフォルダ単位で Addressables グループ（`Local_<名>` / `Remote_<名>`）を生成する。新規作成時に既定の `Assets/AssetResource/Local`(Local)・`Remote`(Remote) が在れば初期ルールをシードする。

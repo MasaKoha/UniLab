@@ -10,17 +10,15 @@ namespace UniLab.AssetVault.Editor
             string remoteLoadPath,
             int localGroupCount,
             int remoteGroupCount,
-            string rootPath,
-            bool internalFolderExists,
-            bool externalFolderExists)
+            int syncRuleCount,
+            int validFolderCount)
         {
             SettingsInitialized = settingsInitialized;
             RemoteLoadPath = remoteLoadPath;
             LocalGroupCount = localGroupCount;
             RemoteGroupCount = remoteGroupCount;
-            RootPath = rootPath;
-            InternalFolderExists = internalFolderExists;
-            ExternalFolderExists = externalFolderExists;
+            SyncRuleCount = syncRuleCount;
+            ValidFolderCount = validFolderCount;
         }
 
         /// <summary>Addressables settings が初期化済みかどうかです。</summary>
@@ -35,13 +33,10 @@ namespace UniLab.AssetVault.Editor
         /// <summary>Remote_ プレフィックスの Addressables グループ数です。</summary>
         public int RemoteGroupCount { get; }
 
-        /// <summary>AssetResource のルートパスです。</summary>
-        public string RootPath { get; }
+        /// <summary>登録済みの同期ルール数です。</summary>
+        public int SyncRuleCount { get; }
 
-        /// <summary>AssetResource/Internal フォルダが存在するかどうかです。</summary>
-        public bool InternalFolderExists { get; }
-
-        /// <summary>AssetResource/External フォルダが存在するかどうかです。</summary>
-        public bool ExternalFolderExists { get; }
+        /// <summary>対象フォルダが実在する（解決できる）同期ルール数です。</summary>
+        public int ValidFolderCount { get; }
     }
 }

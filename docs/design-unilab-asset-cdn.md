@@ -200,25 +200,26 @@ sequenceDiagram
 
 ## アセットの配置（フォルダ規約・グループ・パッキング・ラベル）
 
-### フォルダ規約（分類の真実）
+### 同期ルール（分類の真実）
 
-ソースは **`Assets/AssetResource/{Internal|External}/<Sub>/`** に置く。トップ階層が配信種別を、直下サブフォルダがグループ単位を決める。
+分類は固定フォルダ規約ではなく、設定アセット `AssetVaultSetupSettings` の**同期ルール一覧**で定義する。各ルールが「対象フォルダ（DefaultAsset 参照）＋配信先（Local/Remote）」を持ち、フォルダ名・階層・個数の前提を置かない。各ルールのフォルダ直下サブフォルダがグループ単位を決める。
 
 ```
-Assets/AssetResource/        ← ルートは設定で変更可（既定 Assets/AssetResource）
-├── Internal/<Sub>/...   → Local（同梱）  グループ Local_<Sub>
-└── External/<Sub>/...   → Remote（CDN）  グループ Remote_<Sub>
+（ルール例。フォルダ名・配置はプロジェクト任意）
+ルール: <Folder=Assets/AssetResource/Local>   Delivery=Local   → サブフォルダ Sub → グループ Local_<Sub>
+ルール: <Folder=Assets/AssetResource/Remote>  Delivery=Remote  → サブフォルダ Sub → グループ Remote_<Sub>
 ```
 
-| カテゴリ | フォルダ | グループ | 変更可否 | バンドル出力 |
+| 配信先 | ルール | グループ | 変更可否 | バンドル出力 |
 |---|---|---|---|---|
-| **Local（同梱）** | `Internal/<Sub>` | `Local_<Sub>` | Cannot Change（StaticContent=true） | アプリ同梱（StreamingAssets へ**自動・不可視**出力） |
-| **Remote（CDN）** | `External/<Sub>` | `Remote_<Sub>` | Can Change（StaticContent=false） | CDN（`ServerData/`→アップロード） |
+| **Local（同梱）** | Folder + Delivery=Local | `Local_<Sub>` | Cannot Change（StaticContent=true） | アプリ同梱（StreamingAssets へ**自動・不可視**出力） |
+| **Remote（CDN）** | Folder + Delivery=Remote | `Remote_<Sub>` | Can Change（StaticContent=false） | CDN（`ServerData/`→アップロード） |
 
-- **ソースのフォルダ位置は自由**（Addressables は GUID 参照）。`Internal/External` 直下のサブフォルダ構成は任意。直置きは既定グループ `Local_Internal` / `Remote_External`
+- **ソースのフォルダ位置は自由**（Addressables は GUID 参照）。各ルールフォルダ直下のサブフォルダ構成は任意。直置きはルートフォルダ名から作る既定グループ（`Local_<FolderName>` / `Remote_<FolderName>`）
 - **StreamingAssets はソースの置き場ではない**。Local バンドルのビルド成果物が自動的に入るだけで、開発者は意識しない
-- 両カテゴリとも `IAssetScope.LoadAssetAsync` で透過的にロード（アプリコードは Local/Remote を意識しない）。実行時トークン（BaseUrl/ContentPath）は **Remote だけ**に効く
-- アドレス（ランタイムキー）= **カテゴリルート相対パス・拡張子なし**（`External/Characters/hero.prefab` → `Characters/hero`）。Internal/External 間で同一相対パスがあると衝突するため、セットアップ時に重複アドレスを警告する
+- 両配信先とも `IAssetScope.LoadAssetAsync` で透過的にロード（アプリコードは Local/Remote を意識しない）。実行時トークン（BaseUrl/ContentPath）は **Remote だけ**に効く
+- アドレス（ランタイムキー）= **ルールフォルダ相対パス・拡張子なし**（`Assets/.../Remote/Characters/hero.prefab` → `Characters/hero`）。ルール間で同一相対パスがあると衝突するため、セットアップ時に重複アドレスを警告する
+- 新規作成時、既定の `Assets/AssetResource/Local`(Local)・`Remote`(Remote) が在れば初期ルールをシードする
 
 ### セットアップ自動化（エディタメニュー）
 
@@ -226,8 +227,8 @@ Assets/AssetResource/        ← ルートは設定で変更可（既定 Assets/
 
 | メニュー | 役割 |
 |---|---|
-| `UniLab/AssetVault/Setup/Sync AssetResource` | フォルダ規約を Addressables に同期（冪等）。Profile 変数（`RemoteLoadPath`=実行時トークン定数 / `RemoteBuildPath`=`ServerData/[BuildTarget]`）設定、`Internal/External` 走査、サブフォルダ→グループ生成、アセットを `CreateOrMoveEntry` で登録、schema（Build/Load Path・AppendHash・StaticContent）設定、重複アドレス警告 |
-| `UniLab/AssetVault/Setup/Open Setup Settings` | `AssetVaultSetupSettings`（ルートパス変更用 ScriptableObject）を Inspector で開く |
+| `UniLab/AssetVault/Setup/Sync AssetResource` | 同期ルールを Addressables に同期（冪等）。Profile 変数（`RemoteLoadPath`=実行時トークン定数 / `RemoteBuildPath`=`ServerData/[BuildTarget]`）設定、各ルールフォルダ走査、サブフォルダ→グループ生成、アセットを `CreateOrMoveEntry` で登録、schema（Build/Load Path・AppendHash・StaticContent）設定、重複アドレス警告 |
+| `UniLab/AssetVault/Setup/Open Setup Settings` | `AssetVaultSetupSettings`（同期ルール一覧の ScriptableObject）を Inspector で開く |
 
 - RemoteLoadPath のトークンは `typeof(AssetVaultRuntime).FullName` から組み立て（リネーム耐性）
 - **env は実行時 BaseUrl で切替 → Addressables Profile は1つでよい**

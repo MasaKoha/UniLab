@@ -1,3 +1,4 @@
+using UniLab.AssetVault.Debugging;
 using UnityEditor;
 using UnityEngine;
 
@@ -58,13 +59,17 @@ namespace UniLab.AssetVault.Editor
         private void DrawSetupSection()
         {
             DrawHeader("Setup");
-            if (GUILayout.Button("Sync AssetResource"))
+            if (DrawActionButton(
+                "Sync AssetResource",
+                "設定アセットの同期ルール（フォルダ＋Local/Remote）を走査し、Addressables のグループ・アドレス・プロファイルパスを自動構成します。ルールやフォルダ内容を変えた後に実行します。"))
             {
                 AssetVaultEditorOperations.SyncAssetResource();
                 RefreshStatus();
             }
 
-            if (GUILayout.Button("Open Setup Settings"))
+            if (DrawActionButton(
+                "Open Setup Settings",
+                "ルートフォルダ参照などを持つ設定アセット (AssetVaultSetupSettings) を選択して Inspector に表示します。"))
             {
                 AssetVaultEditorOperations.OpenSetupSettings();
             }
@@ -73,13 +78,17 @@ namespace UniLab.AssetVault.Editor
         private void DrawBuildSection()
         {
             DrawHeader("Build");
-            if (GUILayout.Button("New Build"))
+            if (DrawActionButton(
+                "New Build",
+                "Addressables を新規フルビルドします。初回、またはグループ構成・規約を変更したときに実行します（content state を作り直します）。"))
             {
                 AssetVaultEditorOperations.BuildNew();
                 RefreshStatus();
             }
 
-            if (GUILayout.Button("Content Update (Diff)"))
+            if (DrawActionButton(
+                "Content Update (Diff)",
+                "前回の content state からの差分だけをビルドします。配信済みアプリ向けにアセットを追加・更新するときに使います（先に New Build が必要）。"))
             {
                 AssetVaultEditorOperations.BuildContentUpdate();
                 RefreshStatus();
@@ -89,7 +98,9 @@ namespace UniLab.AssetVault.Editor
         private void DrawSampleSection()
         {
             DrawHeader("Sample");
-            if (GUILayout.Button("Generate Placeholder Asset"))
+            if (DrawActionButton(
+                "Generate Placeholder Asset",
+                "動作確認用のプレースホルダーアセットを生成します（Sample asmdef のメニュー経由。Sample 未導入時は警告のみ）。"))
             {
                 if (!EditorApplication.ExecuteMenuItem(GeneratePlaceholderMenuPath))
                 {
@@ -105,64 +116,73 @@ namespace UniLab.AssetVault.Editor
         {
             DrawHeader("Debug Override");
             EditorGUILayout.HelpBox(
-                "Play 突入時に、選択した環境プリセットで AssetVaultRuntime の BaseUrl / ContentPath を上書きします（別環境・別版の検証用）。",
+                "選択した環境プリセットで AssetVaultRuntime の BaseUrl / ContentPath を上書きします（別環境・別版の検証用）。"
+                + "設定はアセットに保存され、Editor Play と development ビルドで適用されます（release では無効）。",
                 MessageType.Info);
 
-            AssetVaultDebugOverride.Enabled = EditorGUILayout.ToggleLeft("Enable Override", AssetVaultDebugOverride.Enabled);
-
             var settings = AssetVaultDebugEnvironmentSettings.GetOrCreate();
-            var presets = settings.Presets;
-            if (presets.Count <= 0)
+            using (var changeCheck = new EditorGUI.ChangeCheckScope())
             {
-                EditorGUILayout.HelpBox("プリセットが未登録です。設定アセットで環境を追加してください。", MessageType.Warning);
-                if (GUILayout.Button("Edit Presets"))
+                settings.OverrideEnabled = EditorGUILayout.ToggleLeft("Enable Override", settings.OverrideEnabled);
+
+                var presets = settings.Presets;
+                if (presets.Count <= 0)
                 {
-                    Selection.activeObject = settings;
+                    EditorGUILayout.HelpBox("プリセットが未登録です。設定アセットで環境を追加してください。", MessageType.Warning);
+                }
+                else
+                {
+                    using (new EditorGUI.DisabledScope(!settings.OverrideEnabled))
+                    {
+                        using (new LabelWidthScope(LabelWidth))
+                        {
+                            DrawPresetPopup(settings);
+                            var preset = settings.ResolveSelectedPreset();
+                            EditorGUILayout.LabelField("BaseUrl", preset != null ? preset.BaseUrl : string.Empty);
+                            EditorGUILayout.LabelField("ContentPath", preset != null ? preset.ContentPath : string.Empty);
+                        }
+                    }
                 }
 
-                return;
-            }
-
-            using (new EditorGUI.DisabledScope(!AssetVaultDebugOverride.Enabled))
-            {
-                using (new LabelWidthScope(LabelWidth))
+                if (changeCheck.changed)
                 {
-                    DrawPresetPopup(presets);
-                    var preset = AssetVaultDebugOverride.ResolveSelectedPreset();
-                    EditorGUILayout.LabelField("BaseUrl", preset != null ? preset.BaseUrl : string.Empty);
-                    EditorGUILayout.LabelField("ContentPath", preset != null ? preset.ContentPath : string.Empty);
+                    EditorUtility.SetDirty(settings);
                 }
             }
 
-            if (GUILayout.Button("Edit Presets"))
+            if (DrawActionButton(
+                "Edit Presets",
+                "環境プリセット (表示名・BaseUrl・ContentPath) を編集する設定アセットを選択して Inspector に表示します。"))
             {
                 Selection.activeObject = settings;
             }
         }
 
-        private static void DrawPresetPopup(System.Collections.Generic.IReadOnlyList<AssetVaultDebugEnvironmentPreset> presets)
+        private static void DrawPresetPopup(AssetVaultDebugEnvironmentSettings settings)
         {
+            var presets = settings.Presets;
             var presetNames = new string[presets.Count];
             for (var index = 0; index < presets.Count; index++)
             {
                 presetNames[index] = presets[index].DisplayName;
             }
 
-            var selectedName = AssetVaultDebugOverride.SelectedPresetName;
-            var selectedIndex = System.Array.IndexOf(presetNames, selectedName);
+            var selectedIndex = System.Array.IndexOf(presetNames, settings.SelectedPresetName);
             if (selectedIndex < 0)
             {
                 selectedIndex = 0;
             }
 
             var newIndex = EditorGUILayout.Popup("Environment", selectedIndex, presetNames);
-            AssetVaultDebugOverride.SelectedPresetName = presetNames[newIndex];
+            settings.SelectedPresetName = presetNames[newIndex];
         }
 
         private void DrawStatusSection()
         {
             DrawHeader("Status");
-            if (GUILayout.Button("Refresh"))
+            if (DrawActionButton(
+                "Refresh",
+                "現在の Addressables 構成 (RemoteLoadPath・Local/Remote グループ数・AssetResource フォルダ有無) を再取得します。"))
             {
                 RefreshStatus();
             }
@@ -183,9 +203,8 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.LabelField("RemoteLoadPath", _status.RemoteLoadPath);
                 EditorGUILayout.LabelField("Local Groups", _status.LocalGroupCount.ToString());
                 EditorGUILayout.LabelField("Remote Groups", _status.RemoteGroupCount.ToString());
-                EditorGUILayout.LabelField("AssetResource Root", _status.RootPath);
-                EditorGUILayout.LabelField("Internal Folder", _status.InternalFolderExists ? "存在" : "なし");
-                EditorGUILayout.LabelField("External Folder", _status.ExternalFolderExists ? "存在" : "なし");
+                EditorGUILayout.LabelField("Sync Rules", _status.SyncRuleCount.ToString());
+                EditorGUILayout.LabelField("Valid Folders", _status.ValidFolderCount.ToString());
             }
         }
 
@@ -199,6 +218,17 @@ namespace UniLab.AssetVault.Editor
         private static void DrawHeader(string title)
         {
             EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
+        }
+
+        /// <summary>
+        /// 操作ボタンと、その下に折り返し表示する説明文を描画します。説明はホバー時のツールチップにも使います。
+        /// </summary>
+        /// <returns>ボタンが押された場合は true。</returns>
+        private static bool DrawActionButton(string label, string description)
+        {
+            var clicked = GUILayout.Button(new GUIContent(label, description));
+            EditorGUILayout.LabelField(description, EditorStyles.wordWrappedMiniLabel);
+            return clicked;
         }
 
         /// <summary>

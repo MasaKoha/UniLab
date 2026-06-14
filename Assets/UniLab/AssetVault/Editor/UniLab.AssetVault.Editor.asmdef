@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "UniLab.AssetVault",
+        "UniLab.AssetVault.Debug",
         "Unity.Addressables",
         "Unity.Addressables.Editor",
         "Unity.ResourceManager"
