@@ -20,28 +20,37 @@ namespace UniLab.AssetVault.Debugging
         /// </summary>
         public const string ResourceName = "AssetVaultDebugEnvironmentSettings";
 
-        private const string DefaultContentPath = "latest";
-
+        // 有効化と選択は UI からは変更させず、コード（Activate/Deactivate）からのみ設定する。
         [SerializeField] private bool _overrideEnabled;
         [SerializeField] private string _selectedPresetName = string.Empty;
         [SerializeField] private List<AssetVaultDebugEnvironmentPreset> _presets = new List<AssetVaultDebugEnvironmentPreset>();
 
-        /// <summary>上書きを適用するかどうかです（実機 dev ビルドにも焼き込まれます）。</summary>
-        public bool OverrideEnabled
-        {
-            get => _overrideEnabled;
-            set => _overrideEnabled = value;
-        }
+        /// <summary>上書きを適用するかどうかです（実機 dev ビルドにも焼き込まれます）。設定は <see cref="Activate"/> / <see cref="Deactivate"/> から行います。</summary>
+        public bool OverrideEnabled => _overrideEnabled;
 
-        /// <summary>適用するプリセットの表示名です。</summary>
-        public string SelectedPresetName
-        {
-            get => _selectedPresetName;
-            set => _selectedPresetName = value;
-        }
+        /// <summary>適用するプリセットの表示名です。設定は <see cref="Activate"/> から行います。</summary>
+        public string SelectedPresetName => _selectedPresetName;
 
         /// <summary>登録済みのデバッグ環境プリセット一覧です。</summary>
         public IReadOnlyList<AssetVaultDebugEnvironmentPreset> Presets => _presets;
+
+        /// <summary>
+        /// 指定したプリセットを選択して上書きを有効化します。UI からは選べず、QA/開発のコード経由で呼びます。
+        /// 存在しない名前を渡した場合も値は保持し、適用時に解決失敗として警告されます。
+        /// </summary>
+        public void Activate(string presetName)
+        {
+            _selectedPresetName = presetName;
+            _overrideEnabled = true;
+            MarkDirty();
+        }
+
+        /// <summary>上書きを無効化します（選択名は保持）。UI からは操作できず、コード経由で呼びます。</summary>
+        public void Deactivate()
+        {
+            _overrideEnabled = false;
+            MarkDirty();
+        }
 
         /// <summary>
         /// 現在選択中のプリセットを解決します。未登録・名称不一致は null、未選択時は先頭プリセットを返します。
@@ -102,9 +111,20 @@ namespace UniLab.AssetVault.Debugging
         // TODO: 既定の BaseUrl は実際の CDN ホストに置き換えること。新規作成時の雛形として 3 環境をシードする。
         private void SeedDefaults()
         {
-            _presets.Add(new AssetVaultDebugEnvironmentPreset("Development", "https://dev.example.com/app", DefaultContentPath));
-            _presets.Add(new AssetVaultDebugEnvironmentPreset("Staging", "https://stg.example.com/app", DefaultContentPath));
-            _presets.Add(new AssetVaultDebugEnvironmentPreset("Production", "https://prod.example.com/app", DefaultContentPath));
+            _presets.Add(new AssetVaultDebugEnvironmentPreset("Development", "https://dev.example.com/app"));
+            _presets.Add(new AssetVaultDebugEnvironmentPreset("Staging", "https://stg.example.com/app"));
+            _presets.Add(new AssetVaultDebugEnvironmentPreset("Production", "https://prod.example.com/app"));
+        }
+
+        private void MarkDirty()
+        {
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssets();
+        }
+#else
+        // プレイヤービルドでは選択変更を永続化できないため何もしない（値はビルド時点のもの）。
+        private void MarkDirty()
+        {
         }
 #endif
     }

@@ -28,7 +28,7 @@ namespace UniLab.AssetVault.Editor
         private const string LocalGroupPrefix = "Local_";
         private const string RemoteGroupPrefix = "Remote_";
         private const string CategorySkippedMessageFormat = "AssetVault setup skipped because folder was not found: {0}";
-        private const string RuleSkippedMessage = "AssetVault setup skipped a rule with an unset or non-folder reference.";
+        private const string LocalFolderMissingMessage = "AssetVault setup aborted: the Local folder is required but not set. Assign it in AssetVaultSetupSettings.";
         private const string DuplicateAddressWarningLineFormat = "重複アドレス: {0}（{1} と {2}）";
         private const string SyncCompletedMessage = "AssetVault Addressables setup completed.";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";
@@ -115,6 +115,15 @@ namespace UniLab.AssetVault.Editor
                 return false;
             }
 
+            var assetVaultSetupSettings = AssetVaultSetupSettings.GetOrCreate();
+            var localFolderPath = assetVaultSetupSettings.LocalFolderPath;
+            if (localFolderPath == null)
+            {
+                // Local は必須。未設定なら構成を一切変更せず中断する。
+                Debug.LogError(LocalFolderMissingMessage);
+                return false;
+            }
+
             EnsureProfileValue(settings, LocalBuildPathVariableName, LocalBuildPathValue);
             EnsureProfileValue(settings, LocalLoadPathVariableName, LocalLoadPathValue);
             EnsureProfileValue(settings, RemoteBuildPathVariableName, RemoteBuildPathValue);
@@ -125,11 +134,14 @@ namespace UniLab.AssetVault.Editor
             settings.profileSettings.SetValue(settings.activeProfileId, RemoteLoadPathVariableName, CreateRemoteLoadPath());
             settings.profileSettings.SetValue(settings.activeProfileId, RemoteBuildPathVariableName, RemoteBuildPathValue);
 
-            var assetVaultSetupSettings = AssetVaultSetupSettings.GetOrCreate();
             var duplicateAddressCollector = new DuplicateAddressCollector();
-            foreach (var rule in assetVaultSetupSettings.SyncRules)
+            SyncCategory(settings, localFolderPath, true, duplicateAddressCollector);
+
+            // Remote は任意。設定されている場合のみ同期する。
+            var remoteFolderPath = assetVaultSetupSettings.RemoteFolderPath;
+            if (remoteFolderPath != null)
             {
-                SyncRule(settings, rule, duplicateAddressCollector);
+                SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector);
             }
 
             EditorUtility.SetDirty(settings);
@@ -154,13 +166,13 @@ namespace UniLab.AssetVault.Editor
         /// </summary>
         public static AssetVaultStatus GetStatus()
         {
-            var syncRules = AssetVaultSetupSettings.GetOrCreate().SyncRules;
-            var syncRuleCount = syncRules.Count;
-            var validFolderCount = syncRules.Count(rule => rule != null && rule.ResolveFolderPath() != null);
+            var setupSettings = AssetVaultSetupSettings.GetOrCreate();
+            var localFolderPath = setupSettings.LocalFolderPath ?? string.Empty;
+            var remoteFolderPath = setupSettings.RemoteFolderPath ?? string.Empty;
 
             if (!AddressableSettingsAccessor.TryGetSettingsSilently(out var settings))
             {
-                return new AssetVaultStatus(false, string.Empty, 0, 0, syncRuleCount, validFolderCount);
+                return new AssetVaultStatus(false, string.Empty, 0, 0, localFolderPath, remoteFolderPath);
             }
 
             var remoteLoadPath = settings.profileSettings.GetValueByName(settings.activeProfileId, RemoteLoadPathVariableName);
@@ -172,31 +184,11 @@ namespace UniLab.AssetVault.Editor
                 remoteLoadPath ?? string.Empty,
                 localGroupCount,
                 remoteGroupCount,
-                syncRuleCount,
-                validFolderCount);
+                localFolderPath,
+                remoteFolderPath);
         }
 
         // --- Internal helpers ---
-
-        private static void SyncRule(
-            AddressableAssetSettings settings,
-            AssetVaultSyncRule rule,
-            DuplicateAddressCollector duplicateAddressCollector)
-        {
-            if (rule == null)
-            {
-                return;
-            }
-
-            var folderPath = rule.ResolveFolderPath();
-            if (folderPath == null)
-            {
-                Debug.Log(RuleSkippedMessage);
-                return;
-            }
-
-            SyncCategory(settings, folderPath, rule.IsLocal, duplicateAddressCollector);
-        }
 
         private static void SyncCategory(
             AddressableAssetSettings settings,

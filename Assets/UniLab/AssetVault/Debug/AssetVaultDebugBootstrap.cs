@@ -14,21 +14,22 @@ namespace UniLab.AssetVault.Debugging
 
         // アプリ初期化（IAssetVaultService.InitializeAsync）より前に値を入れる狙いで BeforeSceneLoad を使う。
         // ただしアプリ初期化との厳密な前後は保証されないため、アプリ側が config から設定する場合はそちらが優先される（順序はアプリ責務）。
-        // ドメインリロード無効時は static の AssetVaultRuntime に前回値が残るため、無効・未解決時は null クリアしてリークを防ぐ。
+        // 上書きするのは BaseUrl のみ。ContentPath（版）は version.json 解決に任せるため一切触らない。
+        // ドメインリロード無効時は static の AssetVaultRuntime.BaseUrl に前回値が残るため、無効・未解決時は null クリアしてリークを防ぐ。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Apply()
         {
             var settings = AssetVaultDebugEnvironmentSettings.Load();
             if (settings == null || !settings.OverrideEnabled)
             {
-                ClearOverride();
+                AssetVaultRuntime.BaseUrl = null;
                 return;
             }
 
             var preset = settings.ResolveSelectedPreset();
             if (preset == null)
             {
-                ClearOverride();
+                AssetVaultRuntime.BaseUrl = null;
                 var selectedName = settings.SelectedPresetName;
                 Debug.LogWarning(string.IsNullOrEmpty(selectedName)
                     ? PresetEmptyMessage
@@ -37,13 +38,6 @@ namespace UniLab.AssetVault.Debugging
             }
 
             AssetVaultRuntime.BaseUrl = preset.BaseUrl;
-            AssetVaultRuntime.ContentPath = preset.ContentPath;
-        }
-
-        private static void ClearOverride()
-        {
-            AssetVaultRuntime.BaseUrl = null;
-            AssetVaultRuntime.ContentPath = null;
         }
     }
 }

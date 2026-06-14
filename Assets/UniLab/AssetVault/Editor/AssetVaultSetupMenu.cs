@@ -9,20 +9,10 @@ namespace UniLab.AssetVault.Editor
     public static class AssetVaultSetupMenu
     {
         private const string BaseMenuPath = "UniLab/AssetVault/Setup/";
-        private const string SyncAssetResourceMenuPath = BaseMenuPath + "Sync AssetResource";
         private const string OpenSetupSettingsMenuPath = BaseMenuPath + "Open Setup Settings";
 
         /// <summary>
-        /// 設定アセットの同期ルール（フォルダ＋Local/Remote）を Addressables に同期します。
-        /// </summary>
-        [MenuItem(SyncAssetResourceMenuPath)]
-        public static void SyncAssetResource()
-        {
-            AssetVaultEditorOperations.SyncAssetResource();
-        }
-
-        /// <summary>
-        /// AssetVaultSetupSettings を選択して Inspector で開きます。
+        /// AssetVaultSetupSettings を選択して Inspector で開きます。Sync AssetResource はその Inspector で実行します。
         /// </summary>
         [MenuItem(OpenSetupSettingsMenuPath)]
         public static void OpenSetupSettings()
