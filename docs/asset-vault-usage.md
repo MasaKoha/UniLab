@@ -9,29 +9,34 @@ API 仕様の俯瞰は [asset-vault-guide.md](asset-vault-guide.md)、配信設�
 
 | 方式 | 書き方 | 解放タイミング | 使うとき |
 |---|---|---|---|
-| **標準: Component 拡張** | `this.LoadAssetAsync<T>(key)` | **その GameObject の破棄で自動** | 単一コンポーネントが自分用の asset を読む大半のケース |
+| **標準: service 拡張** | `service.LoadAssetAsync<T>(owner, key)` | **owner の GameObject 破棄で自動** | 単一コンポーネントが自分用の asset を読む大半のケース |
 | **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()`（画面/シーン単位で一括） | 複数 View をまたいでまとめたい・共有寿命を制御したい |
 
-迷ったら**標準（拡張）**。Scope も Dispose も書かずに済む。
+迷ったら**標準（service 拡張）**。Scope も Dispose も書かずに済む。
 
-### 標準: `this.LoadAssetAsync`（推奨・最小）
+### 標準: `service.LoadAssetAsync`（推奨・最小）
+
+owner は **GameObject / Component どちらも可**（`gameObject` でも `this` でも OK）。
 
 ```csharp
 public sealed class IconView : MonoBehaviour
 {
+    [Inject] private readonly IAssetVaultService _assetVault; // DI で注入
+
     [SerializeField] private Image _image;
 
     private async UniTask ShowAsync()
     {
-        // Scope/Dispose/CancellationToken を書かない。GameObject 破棄で自動 Release。
+        // Scope/Dispose/CancellationToken を書かない。owner(this) の GameObject 破棄で自動 Release。
         // ct 省略時は destroyCancellationToken が使われ、ロード中キャンセルも自動。
-        _image.sprite = await this.LoadAssetAsync<Sprite>("Icons/coin");
+        _image.sprite = await _assetVault.LoadAssetAsync<Sprite>(this, "Icons/coin");
+        // GameObject を渡してもよい: _assetVault.LoadAssetAsync<Sprite>(gameObject, "Icons/coin")
     }
 }
 ```
 
-- 裏で GameObject に隠しスコープ（`AssetScopeHolder`）が付き、`OnDestroy` で解放される。アプリは触らない。
-- `this.InstantiateAsync(key, parent)` も同様（生成物も GameObject 破棄で解放）。
+- owner（GameObject/Component）に隠しスコープ（`AssetScopeHolder`）が付き、`OnDestroy` で解放される。スコープは `service.CreateScope()` 由来。アプリは触らない。
+- `_assetVault.InstantiateAsync(this, key, parent)` も同様（生成物も GameObject 破棄で解放）。
 - 前提: 別途 `IAssetVaultService.InitializeAsync` 済みであること（起動シーケンス）。
 
 > 以降は **上位: 明示 Scope** 方式の説明。共有寿命や画面単位の一括解放が要るときに使う。
