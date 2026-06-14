@@ -5,6 +5,18 @@ API 仕様の俯瞰は [asset-vault-guide.md](asset-vault-guide.md)、配信設�
 
 ---
 
+## 重要: ロードは source-agnostic（Local/Remote を区別しない）
+
+**「どこから読むか（Local 同梱 / Remote CDN）は“アドレス”で確定しており、呼び出し側は指定しない・できない。」**
+
+- どこから読むかは、ビルド時に各アセットの**所属グループの LoadPath** としてカタログに焼かれる（Local グループ→StreamingAssets、Remote グループ→`{BaseUrl}/{ContentPath}/...`）。
+- だから `LoadAssetAsync<T>(owner, key)` は **Local/Remote 共通の1本**。アドレスを渡すだけで、Addressables がカタログを見て適切な場所から読む。
+- `InitializeAsync(baseUrl, ...)` の `baseUrl` は **Remote グループのアセットにのみ**効く（Remote の LoadPath トークンを埋める）。**Local グループのアセットは baseUrl に関係なく常にローカルから読む**。
+- ゆえに **`LoadLocalAssetAsync` / `LoadRemoteAssetAsync` のような API 分割はしない**（行き先はアドレスで決まり、メソッド名では変えられないため、分けると誤解を生む）。
+- 「この key は通信に行くか？（事前 DL が要るか）」を知りたい場合は **`GetDownloadSizeAsync(keys)`**（>0 なら未取得の Remote）で判断し、必要なら **`DownloadAsync(labels)`** で先に取得する。
+
+---
+
 ## 使い方の選択肢
 
 | 方式 | 書き方 | 解放タイミング | 使うとき |
@@ -12,10 +24,9 @@ API 仕様の俯瞰は [asset-vault-guide.md](asset-vault-guide.md)、配信設�
 | **標準: service 拡張** | `service.LoadAssetAsync<T>(owner, key)` | owner の GameObject 破棄で自動 | 単一コンポーネントが自分用の asset を読む大半のケース |
 | **共有/プール: キャッシュ** | `cache.AcquireAsync<T>(key)` → `reference.Dispose()` | 参照0＋TTL/LRU で遅延解放 | 複数所有・再利用で差し替え・churn を避けたい |
 | **スロット** | `slot.SetAsync(key)` | 差し替え時に旧解放／Dispose で解放 | 「1スロットに常に1枚、差し替わる」要素（プール要素の表示物） |
-| **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()` で一括 | 画面/シーン単位でまとめたい |
+| **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()` で一括 | 画面/シーン単位でまとめたい・共有寿命を制御したい |
 
 > プール連携・共有・動的差し替えは下の「キャッシュ / スロット」を参照。単発の View ロードは「標準」で十分。
-| **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()`（画面/シーン単位で一括） | 複数 View をまたいでまとめたい・共有寿命を制御したい |
 
 迷ったら**標準（service 拡張）**。Scope も Dispose も書かずに済む。
 
