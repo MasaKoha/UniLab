@@ -72,12 +72,21 @@ namespace UniLab.AssetVault.Editor
                 RefreshStatus();
             }
 
-            if (DrawActionButton(
-                "Content Update (Diff)",
-                "前回の content state からの差分だけをビルドします。配信済みアプリ向けにアセットを追加・更新するときに使います（先に New Build が必要）。"))
+            var canBuildContentUpdate = AssetVaultEditorOperations.CanBuildContentUpdate();
+            using (new EditorGUI.DisabledScope(!canBuildContentUpdate))
             {
-                AssetVaultEditorOperations.BuildContentUpdate();
-                RefreshStatus();
+                if (DrawActionButton(
+                    "Content Update (Diff)",
+                    "前回の content state からの差分だけをビルドします。配信済みアプリ向けにアセットを追加・更新するときに使います（先に New Build が必要）。"))
+                {
+                    AssetVaultEditorOperations.BuildContentUpdate();
+                    RefreshStatus();
+                }
+            }
+
+            if (!canBuildContentUpdate)
+            {
+                EditorGUILayout.HelpBox("content state file が見つかりません。先に New Build を実行してください。", MessageType.None);
             }
         }
 
