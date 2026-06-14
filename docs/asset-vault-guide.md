@@ -26,9 +26,8 @@ Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.As
 | アセンブリ | 役割 |
 |---|---|
 | `UniLab.AssetVault` | ランタイム本体（IF・Model・実装） |
-| `UniLab.AssetVault.Editor` | ビルドメニュー・Profile 切り替え |
-| `UniLab.AssetVault.Sample` | 動作確認サンプル（MVP・uGUI コード生成） |
-| `UniLab.AssetVault.Sample.Editor` | サンプル用プレースホルダ生成メニュー |
+| `UniLab.AssetVault.Editor` | Dashboard・ビルド/セットアップ操作・状態取得 |
+| `UniLab.AssetVault.Debug` | デバッグ環境上書き（dev ビルドのみ。`UNITY_EDITOR \|\| DEVELOPMENT_BUILD`） |
 
 参照: `Logger` / `R3.Unity` / `UniTask` / `UniTask.Addressables` / `Unity.Addressables` / `Unity.ResourceManager`。
 
@@ -133,30 +132,6 @@ var character = await _assetScope.InstantiateAsync("title_character", parent, ca
 - ネットワーク断・カタログ取得失敗・キー不在は `AssetVaultException`（`InnerException` に Addressables の元例外）
 - 「更新なし」「サイズ0」などビジネス正常系は例外でなく戻り値で表現する
 
----
-
-## サンプル
-
-`Assets/UniLab/AssetVault/Sample/` に DI なし単体・uGUI コード生成の動作確認サンプルがある。
-
-1. 空 GameObject に `AssetVaultSampleBootstrap` を付ける（`_downloadLabel` / `_assetKey` を Inspector で変更可）
-2. Play → State 初期表示は `NotInitialized`
-3. **Initialize → Check And Download → Load Asset → Clear Cache** の順に操作
-
-### プレースホルダ生成（初回のみ）
-
-リポジトリには Addressables 設定とプレースホルダ Sprite を同梱済みで、クローン後そのまま Play で動く。設定をやり直したい場合はメニューから再生成できる:
-
-- **`UniLab/AssetVault/Sample/Generate Placeholder Asset`**
-  - Addressables 設定を生成/取得
-  - 市松模様 256×256 PNG を `Sample/Generated/sample_sprite.png` に生成し Sprite としてインポート
-  - address `sample_sprite` / label `sample` で Default Group に登録
-  - Play Mode Script を「Use Asset Database (fastest)」に切り替え
-
-> サンプル既定の Play Mode（Use Asset Database）ではバンドル/カタログが存在しないため、**Initialize と Load Asset のみ**が意味を持つ。Download・Clear Cache の実体を試すには下記「実ビルド配信モード」に切り替える。
-
----
-
 ## 差分配信の運用
 
 Addressables 標準の Content Update Workflow に乗せている。差分は**カタログ層**と**バンドル層**の2段で効く。
@@ -195,18 +170,22 @@ Profile の RemoteLoadPath が指す配信先に、新カタログ + 変更バ�
 
 環境（dev / staging / prod）は Addressables Profile ではなく、実行時に `AssetVaultRuntime.BaseUrl`（env → URL のマッピングはアプリ config が持つ）で切り替える。Profile は1つで足りるため、旧 `UniLab/AssetVault/Profile` メニューは廃止した。
 
-QA で「prod アプリで dev のアセットを見る」「特定の版フォルダを読む」を試す場合は、`UniLab > AssetVault > Dashboard` ダッシュボードの **Debug Override** セクションで環境プリセットをドロップダウンから選び、Enable Override を有効化する。Play 突入時に選択プリセットの `BaseUrl` / `ContentPath` が `AssetVaultRuntime` へ反映される。
+QA で「prod アプリで dev のアセットを見る」を試す場合は、Debug Override で環境の `BaseUrl` だけを上書きする。**ContentPath（版）は上書きせず version.json 解決に任せる**（＝その環境の最新公開版を読む）。
 
-プリセット・有効/無効・選択プリセット名は `AssetVaultDebugEnvironmentSettings`（ScriptableObject、`Assets/UniLab/AssetVault/Debug/` 配下、gitignore 対象）にまとめて保持する。初回は Development / Staging / Production の雛形がシードされるので、`Edit Presets` ボタンで開いて実際の CDN ホストに書き換える。
+有効化・プリセット選択は UI では行えず、**コードからのみ**設定する。QA/開発コードで `AssetVaultDebugEnvironmentSettings.Activate("Staging")` を呼べば有効化＋選択、`Deactivate()` で無効化となる。Dashboard の **Debug Override** セクションは `Edit Presets`（設定アセットを開く）のみを提供する。
 
-この機能は専用アセンブリ `UniLab.AssetVault.Debug`（`defineConstraints: UNITY_EDITOR || DEVELOPMENT_BUILD`）に属し、**Editor Play と development ビルドでのみ有効**、release ビルドではコードごとストリップされる。適用は `AssetVaultDebugBootstrap`（`RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`）が行い、アプリ初期化前に `AssetVaultRuntime` へ反映する（厳密な前後はアプリ責務）。
+プリセット（表示名・BaseUrl）・有効/無効・選択名は `AssetVaultDebugEnvironmentSettings`（ScriptableObject、`Assets/UniLab/AssetVault/Debug/` 配下、gitignore 対象）に保持する。Inspector ではプリセット一覧のみ編集でき、有効/選択は読み取り専用表示。初回は Development / Staging / Production の雛形がシードされるので、`Edit Presets` で開いて実際の CDN ホストに書き換える。
+
+この機能は専用アセンブリ `UniLab.AssetVault.Debug`（`defineConstraints: UNITY_EDITOR || DEVELOPMENT_BUILD`）に属し、**Editor Play と development ビルドでのみ有効**、release ビルドではコードごとストリップされる。適用は `AssetVaultDebugBootstrap`（`RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`）が行い、アプリ初期化前に `AssetVaultRuntime.BaseUrl` のみへ反映する（ContentPath は触らない。厳密な前後はアプリ責務）。
 
 設定アセットの正本は Resources の外に置くため、何もしなければプレイヤービルドに同梱されない。`AssetVaultDebugBuildProcessor` が **development ビルド時のみ** Resources へ一時複製し、ビルド後に除去する。これにより release ビルドにはコードもアセットも含まれない。
 
 ### ダッシュボード
 
-`UniLab > AssetVault > Dashboard` で、Setup（同期ルール走査・設定アセットを開く）/ Build（New Build・Content Update）/ Sample（プレースホルダ生成）/ Debug Override / Status（RemoteLoadPath 現値・Local/Remote グループ数・同期ルール数/有効フォルダ数）を一望・操作できる。各ボタンには説明文を併記。各操作は MenuItem からも実行可能。
+`UniLab > AssetVault > Dashboard` で、Setup（設定アセットを開く）/ Build（New Build・Content Update）/ Debug Override / Status（RemoteLoadPath 現値・Local/Remote グループ数・Local/Remote フォルダパス）を一望・操作できる。各ボタンには説明文を併記。各操作は MenuItem からも実行可能。
 
-#### 同期ルール（Sync AssetResource）
+#### 同期対象フォルダ（Sync AssetResource）
 
-同期対象は固定のフォルダ規約ではなく、設定アセット `AssetVaultSetupSettings` の**同期ルール一覧**で定義する。各ルールは「対象フォルダ（DefaultAsset 参照）＋配信先（Local=同梱 / Remote=CDN）」を持ち、プロジェクトごとのフォルダ構成へ対応できる。`Sync AssetResource` は各ルールのフォルダ配下を走査し、サブフォルダ単位で Addressables グループ（`Local_<名>` / `Remote_<名>`）を生成する。新規作成時に既定の `Assets/AssetResource/Local`(Local)・`Remote`(Remote) が在れば初期ルールをシードする。
+同期対象は設定アセット `AssetVaultSetupSettings` の **Local フォルダ（必須）** と **Remote フォルダ（任意）** の2スロットで指定する（いずれも `DefaultAsset` 参照、フォルダ名は分類に影響しない）。`Sync AssetResource` は各フォルダ配下を走査し、サブフォルダ単位で Addressables グループ（`Local_<名>` / `Remote_<名>`）を生成する。Local が未設定の場合は中断し、Remote が未設定の場合は Remote 同期だけスキップする。
+
+操作は `Open Setup Settings`（Dashboard または `UniLab/AssetVault/Setup/Open Setup Settings`）で設定アセットを開き、**その Inspector でフォルダ指定と Sync ボタンを完結**させる。入口の重複を避けるため、Sync は設定 Inspector の1か所のみに置く（Dashboard・MenuItem には Sync を置かない）。

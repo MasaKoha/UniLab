@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,7 +5,7 @@ namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// AssetVault の Addressables 自動構成に使う設定を保持します。
-    /// 同期対象は固定規約ではなく <see cref="AssetVaultSyncRule"/> のリストで定義し、プロジェクトごとのフォルダ構成へ対応します。
+    /// 同梱(Local)ルートフォルダ（必須）と CDN(Remote)ルートフォルダ（任意）の2つを指定します。
     /// </summary>
     public sealed class AssetVaultSetupSettings : ScriptableObject
     {
@@ -15,19 +14,24 @@ namespace UniLab.AssetVault.Editor
         /// </summary>
         public const string AssetPath = GeneratedAssetFolder.Path + "/AssetVaultSetupSettings.asset";
 
-        // 既定フォルダ規約。新規作成時に存在すれば利便性のためルールへシードする（Addressables の Local/Remote に合わせた命名）。
-        private const string DefaultLocalFolderPath = "Assets/AssetResource/Local";
-        private const string DefaultRemoteFolderPath = "Assets/AssetResource/Remote";
+        [Tooltip("同梱(Local)アセットのルートフォルダ。【必須】直下サブフォルダがグループ Local_<名> になります。")]
+        [SerializeField] private DefaultAsset _localFolder;
 
-        [SerializeField] private List<AssetVaultSyncRule> _syncRules = new List<AssetVaultSyncRule>();
+        [Tooltip("CDN(Remote)アセットのルートフォルダ。【任意】未設定可。直下サブフォルダがグループ Remote_<名> になります。")]
+        [SerializeField] private DefaultAsset _remoteFolder;
 
         /// <summary>
-        /// 同期ルール一覧です。各ルールが対象フォルダと配信先(Local/Remote)を持ちます。
+        /// 同梱(Local)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null。必須項目です。
         /// </summary>
-        public IReadOnlyList<AssetVaultSyncRule> SyncRules => _syncRules;
+        public string LocalFolderPath => ResolveFolderPath(_localFolder);
 
         /// <summary>
-        /// 設定アセットを取得し、存在しない場合は作成します。新規時は既定フォルダがあれば初期ルールをシードします。
+        /// CDN(Remote)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null（任意項目）。
+        /// </summary>
+        public string RemoteFolderPath => ResolveFolderPath(_remoteFolder);
+
+        /// <summary>
+        /// 設定アセットを取得し、存在しない場合は作成します。フォルダはユーザーが Inspector で指定します。
         /// </summary>
         public static AssetVaultSetupSettings GetOrCreate()
         {
@@ -40,26 +44,21 @@ namespace UniLab.AssetVault.Editor
             GeneratedAssetFolder.Ensure();
 
             settings = CreateInstance<AssetVaultSetupSettings>();
-            settings.SeedDefaultRules();
             AssetDatabase.CreateAsset(settings, AssetPath);
             AssetDatabase.SaveAssets();
             return settings;
         }
 
-        // 既定の Assets/AssetResource/Local(=Local) / Remote(=Remote) が在る場合のみルール化する。
-        private void SeedDefaultRules()
+        // DefaultAsset はフォルダ以外（未知拡張子のファイル等）も代入可能なため、フォルダであることを検証する。
+        private static string ResolveFolderPath(DefaultAsset folder)
         {
-            var localFolder = AssetDatabase.LoadAssetAtPath<DefaultAsset>(DefaultLocalFolderPath);
-            if (localFolder != null)
+            if (folder == null)
             {
-                _syncRules.Add(new AssetVaultSyncRule(localFolder, AssetVaultDeliveryMode.Local));
+                return null;
             }
 
-            var remoteFolder = AssetDatabase.LoadAssetAtPath<DefaultAsset>(DefaultRemoteFolderPath);
-            if (remoteFolder != null)
-            {
-                _syncRules.Add(new AssetVaultSyncRule(remoteFolder, AssetVaultDeliveryMode.Remote));
-            }
+            var folderPath = AssetDatabase.GetAssetPath(folder);
+            return AssetDatabase.IsValidFolder(folderPath) ? folderPath : null;
         }
     }
 }

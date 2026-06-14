@@ -6,21 +6,17 @@ namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// AssetVault の Addressables 構成を一望・操作する統合ダッシュボードです。
-    /// Setup / Build / Sample / Debug Override / Status の各セクションを提供し、
+    /// Setup / Build / Debug Override / Status の各セクションを提供し、
     /// 操作はすべて <see cref="AssetVaultEditorOperations"/> に委譲します。
     /// </summary>
     public sealed class AssetVaultWindow : EditorWindow
     {
-        // 他の AssetVault メニュー（Build / Setup / Sample）と揃えて UniLab 配下に集約する。
+        // 他の AssetVault メニュー（Build / Setup）と揃えて UniLab 配下に集約する。
         private const string WindowMenuPath = "UniLab/AssetVault/Dashboard";
         private const int WindowMenuPriority = 0;
         private const string WindowTitle = "Asset Vault";
         private const float SectionSpacing = 8f;
         private const float LabelWidth = 120f;
-
-        // Sample は削除可能な別 asmdef のため、core Editor からは直接参照せず MenuItem 経由で疎結合に呼ぶ。
-        private const string GeneratePlaceholderMenuPath = "UniLab/AssetVault/Sample/Generate Placeholder Asset";
-        private const string SampleMenuMissingMessage = "Sample メニューが見つかりません（Sample を削除した可能性があります）。";
 
         private AssetVaultStatus _status;
         private bool _statusLoaded;
@@ -47,8 +43,6 @@ namespace UniLab.AssetVault.Editor
             EditorGUILayout.Space(SectionSpacing);
             DrawBuildSection();
             EditorGUILayout.Space(SectionSpacing);
-            DrawSampleSection();
-            EditorGUILayout.Space(SectionSpacing);
             DrawDebugOverrideSection();
             EditorGUILayout.Space(SectionSpacing);
             DrawStatusSection();
@@ -60,16 +54,8 @@ namespace UniLab.AssetVault.Editor
         {
             DrawHeader("Setup");
             if (DrawActionButton(
-                "Sync AssetResource",
-                "設定アセットの同期ルール（フォルダ＋Local/Remote）を走査し、Addressables のグループ・アドレス・プロファイルパスを自動構成します。ルールやフォルダ内容を変えた後に実行します。"))
-            {
-                AssetVaultEditorOperations.SyncAssetResource();
-                RefreshStatus();
-            }
-
-            if (DrawActionButton(
                 "Open Setup Settings",
-                "ルートフォルダ参照などを持つ設定アセット (AssetVaultSetupSettings) を選択して Inspector に表示します。"))
+                "設定アセット (AssetVaultSetupSettings) を開きます。Local/Remote フォルダの指定と Sync AssetResource はこの Inspector で行います。"))
             {
                 AssetVaultEditorOperations.OpenSetupSettings();
             }
@@ -95,86 +81,21 @@ namespace UniLab.AssetVault.Editor
             }
         }
 
-        private void DrawSampleSection()
-        {
-            DrawHeader("Sample");
-            if (DrawActionButton(
-                "Generate Placeholder Asset",
-                "動作確認用のプレースホルダーアセットを生成します（Sample asmdef のメニュー経由。Sample 未導入時は警告のみ）。"))
-            {
-                if (!EditorApplication.ExecuteMenuItem(GeneratePlaceholderMenuPath))
-                {
-                    Debug.LogWarning(SampleMenuMissingMessage);
-                    return;
-                }
-
-                RefreshStatus();
-            }
-        }
-
         private void DrawDebugOverrideSection()
         {
             DrawHeader("Debug Override");
             EditorGUILayout.HelpBox(
-                "選択した環境プリセットで AssetVaultRuntime の BaseUrl / ContentPath を上書きします（別環境・別版の検証用）。"
-                + "設定はアセットに保存され、Editor Play と development ビルドで適用されます（release では無効）。",
+                "選択した環境プリセットの BaseUrl で AssetVaultRuntime.BaseUrl を上書きします（ContentPath=版は version.json 解決に任せる）。"
+                + "Editor Play と development ビルドで適用され、release では無効です。"
+                + "有効化・プリセット選択は UI からは行えません（AssetVaultDebugEnvironmentSettings.Activate / Deactivate をコードから呼ぶ）。",
                 MessageType.Info);
-
-            var settings = AssetVaultDebugEnvironmentSettings.GetOrCreate();
-            using (var changeCheck = new EditorGUI.ChangeCheckScope())
-            {
-                settings.OverrideEnabled = EditorGUILayout.ToggleLeft("Enable Override", settings.OverrideEnabled);
-
-                var presets = settings.Presets;
-                if (presets.Count <= 0)
-                {
-                    EditorGUILayout.HelpBox("プリセットが未登録です。設定アセットで環境を追加してください。", MessageType.Warning);
-                }
-                else
-                {
-                    using (new EditorGUI.DisabledScope(!settings.OverrideEnabled))
-                    {
-                        using (new LabelWidthScope(LabelWidth))
-                        {
-                            DrawPresetPopup(settings);
-                            var preset = settings.ResolveSelectedPreset();
-                            EditorGUILayout.LabelField("BaseUrl", preset != null ? preset.BaseUrl : string.Empty);
-                            EditorGUILayout.LabelField("ContentPath", preset != null ? preset.ContentPath : string.Empty);
-                        }
-                    }
-                }
-
-                if (changeCheck.changed)
-                {
-                    EditorUtility.SetDirty(settings);
-                }
-            }
 
             if (DrawActionButton(
                 "Edit Presets",
-                "環境プリセット (表示名・BaseUrl・ContentPath) を編集する設定アセットを選択して Inspector に表示します。"))
+                "環境プリセット (表示名・BaseUrl) を編集する設定アセットを選択して Inspector に表示します。"))
             {
-                Selection.activeObject = settings;
+                Selection.activeObject = AssetVaultDebugEnvironmentSettings.GetOrCreate();
             }
-        }
-
-        private static void DrawPresetPopup(AssetVaultDebugEnvironmentSettings settings)
-        {
-            var presets = settings.Presets;
-            var presetNames = new string[presets.Count];
-            for (var index = 0; index < presets.Count; index++)
-            {
-                presetNames[index] = presets[index].DisplayName;
-            }
-
-            var selectedIndex = System.Array.IndexOf(presetNames, settings.SelectedPresetName);
-            if (selectedIndex < 0)
-            {
-                selectedIndex = 0;
-            }
-
-            var newIndex = EditorGUILayout.Popup("Environment", selectedIndex, presetNames);
-            settings.SelectedPresetName = presetNames[newIndex];
         }
 
         private void DrawStatusSection()
@@ -203,8 +124,8 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.LabelField("RemoteLoadPath", _status.RemoteLoadPath);
                 EditorGUILayout.LabelField("Local Groups", _status.LocalGroupCount.ToString());
                 EditorGUILayout.LabelField("Remote Groups", _status.RemoteGroupCount.ToString());
-                EditorGUILayout.LabelField("Sync Rules", _status.SyncRuleCount.ToString());
-                EditorGUILayout.LabelField("Valid Folders", _status.ValidFolderCount.ToString());
+                EditorGUILayout.LabelField("Local Folder", string.IsNullOrEmpty(_status.LocalFolderPath) ? "未設定" : _status.LocalFolderPath);
+                EditorGUILayout.LabelField("Remote Folder", string.IsNullOrEmpty(_status.RemoteFolderPath) ? "未設定（任意）" : _status.RemoteFolderPath);
             }
         }
 
