@@ -36,10 +36,16 @@ namespace UniLab.AssetVault.Debugging
 
         /// <summary>
         /// 指定したプリセットを選択して上書きを有効化します。UI からは選べず、QA/開発のコード経由で呼びます。
-        /// 存在しない名前を渡した場合も値は保持し、適用時に解決失敗として警告されます。
+        /// 空名・未登録名は設定時点で弾く（適用時まで失敗を遅延させない）。
         /// </summary>
         public void Activate(string presetName)
         {
+            if (string.IsNullOrEmpty(presetName) || _presets.All(preset => preset.DisplayName != presetName))
+            {
+                Debug.LogError($"AssetVault Debug Override: preset '{presetName}' is empty or not registered. Activation skipped.");
+                return;
+            }
+
             _selectedPresetName = presetName;
             _overrideEnabled = true;
             MarkDirty();
@@ -53,18 +59,13 @@ namespace UniLab.AssetVault.Debugging
         }
 
         /// <summary>
-        /// 現在選択中のプリセットを解決します。未登録・名称不一致は null、未選択時は先頭プリセットを返します。
+        /// 現在選択中のプリセットを解決します。未登録・未選択・名称不一致はいずれも null を返します（先頭への暗黙フォールバックはしない）。
         /// </summary>
         public AssetVaultDebugEnvironmentPreset ResolveSelectedPreset()
         {
-            if (_presets.Count <= 0)
+            if (_presets.Count <= 0 || string.IsNullOrEmpty(_selectedPresetName))
             {
                 return null;
-            }
-
-            if (string.IsNullOrEmpty(_selectedPresetName))
-            {
-                return _presets[0];
             }
 
             return _presets.FirstOrDefault(preset => preset.DisplayName == _selectedPresetName);
@@ -118,6 +119,12 @@ namespace UniLab.AssetVault.Debugging
 
         private void MarkDirty()
         {
+            // Play 中の変更は永続化しない（停止時に破棄）。QA の一時操作がアセット／dev ビルドへ焼き込まれるのを防ぐ。
+            if (EditorApplication.isPlaying)
+            {
+                return;
+            }
+
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssets();
         }

@@ -23,12 +23,13 @@ namespace UniLab.AssetVault.Editor
         {
             var relativePath = assetPath.Substring(categoryRoot.Length + "/".Length);
             var extension = Path.GetExtension(relativePath);
-            if (string.IsNullOrEmpty(extension))
+            if (!string.IsNullOrEmpty(extension))
             {
-                return relativePath;
+                relativePath = relativePath.Substring(0, relativePath.Length - extension.Length);
             }
 
-            return relativePath.Substring(0, relativePath.Length - extension.Length);
+            // アドレスは大文字小文字を保持する（アプリ側ロードキーと一致させる）。区切りのみ "/" に統一し前後空白を除去する。
+            return relativePath.Replace("\\", "/").Trim();
         }
 
         /// <summary>
