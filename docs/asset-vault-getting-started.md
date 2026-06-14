@@ -95,17 +95,20 @@ _assetVault.OnDownloadProgress
 
 ## [5] 画面でロード・利用・解放
 
-### 標準: Component 拡張（Scope を書かない・推奨）
+### 標準: service 拡張（Scope を書かない・推奨）
+
+owner は GameObject / Component どちらも可。
 
 ```csharp
 public sealed class IconView : MonoBehaviour
 {
+    [Inject] private readonly IAssetVaultService _assetVault;
     [SerializeField] private Image _image;
 
     private async UniTask ShowAsync()
     {
-        // Scope/Dispose/CancellationToken 不要。この GameObject の破棄で自動 Release。
-        _image.sprite = await this.LoadAssetAsync<Sprite>("Icons/coin");
+        // Scope/Dispose/CancellationToken 不要。owner(this) の GameObject 破棄で自動 Release。
+        _image.sprite = await _assetVault.LoadAssetAsync<Sprite>(this, "Icons/coin");
     }
 }
 ```
