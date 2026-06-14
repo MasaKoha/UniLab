@@ -57,6 +57,9 @@ builder.Register<IAssetVaultService, AddressablesAssetVaultService>(Lifetime.Sin
 builder.Register(resolver =>
         resolver.Resolve<IAssetVaultService>().CreateScope(),
     Lifetime.Scoped);
+
+// 共有・オブジェクトプール向けキャッシュ（任意。使う場合のみ）
+builder.Register<IAssetVaultCache>(_ => new AssetVaultCache(), Lifetime.Singleton);
 ```
 
 ### 設計方針: DI（VContainer）前提
