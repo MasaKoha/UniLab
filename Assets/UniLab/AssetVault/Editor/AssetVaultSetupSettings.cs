@@ -31,6 +31,15 @@ namespace UniLab.AssetVault.Editor
         public string RemoteFolderPath => ResolveFolderPath(_remoteFolder);
 
         /// <summary>
+        /// 設定アセットを副作用なく読み込みます（存在しなければ false）。読み取り専用 UI から使い、アセットの自動生成を避けます。
+        /// </summary>
+        public static bool TryLoad(out AssetVaultSetupSettings settings)
+        {
+            settings = AssetDatabase.LoadAssetAtPath<AssetVaultSetupSettings>(AssetPath);
+            return settings != null;
+        }
+
+        /// <summary>
         /// 設定アセットを取得し、存在しない場合は作成します。フォルダはユーザーが Inspector で指定します。
         /// </summary>
         public static AssetVaultSetupSettings GetOrCreate()

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UniLab.AssetVault.Debugging;
 using UnityEditor;
 
@@ -31,6 +33,8 @@ namespace UniLab.AssetVault.Editor
             EditorGUILayout.PropertyField(_presetsProperty, true);
             serializedObject.ApplyModifiedProperties();
 
+            DrawValidationWarnings((AssetVaultDebugEnvironmentSettings)target);
+
             EditorGUILayout.Space();
 
             // 現在の選択・有効状態はコードでのみ変更できるため、読み取り専用で状態を示す。
@@ -40,6 +44,36 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.Toggle("Override Enabled", settings.OverrideEnabled);
                 EditorGUILayout.TextField("Selected Preset", settings.SelectedPresetName);
             }
+        }
+
+        // プリセットの空名・重複名・空 URL を警告する（実行時の解決失敗・誤環境ロードを未然に防ぐ）。
+        private static void DrawValidationWarnings(AssetVaultDebugEnvironmentSettings settings)
+        {
+            var issues = new List<string>();
+            var seenNames = new HashSet<string>();
+            foreach (var preset in settings.Presets)
+            {
+                if (string.IsNullOrEmpty(preset.DisplayName))
+                {
+                    issues.Add("表示名が空のプリセットがあります。");
+                }
+                else if (!seenNames.Add(preset.DisplayName))
+                {
+                    issues.Add($"表示名が重複しています: {preset.DisplayName}");
+                }
+
+                if (string.IsNullOrEmpty(preset.BaseUrl))
+                {
+                    issues.Add($"BaseUrl が空です: {(string.IsNullOrEmpty(preset.DisplayName) ? "(無名)" : preset.DisplayName)}");
+                }
+            }
+
+            if (issues.Count <= 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(string.Join("\n", issues.Distinct()), MessageType.Warning);
         }
     }
 }
