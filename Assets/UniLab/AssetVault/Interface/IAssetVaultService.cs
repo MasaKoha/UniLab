@@ -21,9 +21,11 @@ namespace UniLab.AssetVault
         Observable<DownloadProgress> OnDownloadProgress { get; }
 
         /// <summary>
-        /// 起動時に配信システムを一度だけ初期化し、catalog と runtime vault service を利用可能にします。
+        /// 起動時に配信システムを一度だけ初期化します。env に対応する <paramref name="baseUrl"/>（env→URL のマッピングはアプリ config が持つ）を受け取り、
+        /// 初期化前に BaseUrl を確定させます。版（ContentPath）は baseUrl の version.json から解決します。
+        /// Debug Override が有効な場合はそちらの BaseUrl を優先します。baseUrl が空なら Local 専用として version 解決をスキップします。
         /// </summary>
-        UniTask InitializeAsync(CancellationToken cancellationToken);
+        UniTask InitializeAsync(string baseUrl, CancellationToken cancellationToken);
 
         /// <summary>
         /// 起動時にリモート catalog の更新を確認し、検出した catalog 変更を適用してから結果を返します。

@@ -23,7 +23,7 @@ namespace UniLab.AssetVault.Debugging
         // 有効化と選択は UI からは変更させず、コード（Activate/Deactivate）からのみ設定する。
         [SerializeField] private bool _overrideEnabled;
         [SerializeField] private string _selectedPresetName = string.Empty;
-        [SerializeField] private List<AssetVaultDebugEnvironmentPreset> _presets = new List<AssetVaultDebugEnvironmentPreset>();
+        [SerializeField] private List<AssetVaultDebugEnvironmentPreset> _presets = new();
 
         /// <summary>上書きを適用するかどうかです（実機 dev ビルドにも焼き込まれます）。設定は <see cref="Activate"/> / <see cref="Deactivate"/> から行います。</summary>
         public bool OverrideEnabled => _overrideEnabled;

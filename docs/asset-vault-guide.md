@@ -43,7 +43,7 @@ Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.As
 |---|---|
 | `State` | `ReadOnlyReactiveProperty<AssetVaultState>`。ローディング UI の出し分けに購読する |
 | `OnDownloadProgress` | `Observable<DownloadProgress>`。`DownloadAsync` 実行中のみ発火。OnError は流さない |
-| `InitializeAsync` | 起動時に1回。Addressables 初期化 + カタログロード |
+| `InitializeAsync(baseUrl, ct)` | 起動時に1回。baseUrl を確定→version.json で版解決→Addressables 初期化 + カタログロード（Debug Override 優先、baseUrl 空は Local 専用） |
 | `CheckForUpdatesAsync` | カタログ更新確認 → 更新があれば適用し `CatalogUpdateInfo` を返す |
 | `GetDownloadSizeAsync` | ラベル群の未取得分サイズ。0 ならダウンロード不要 |
 | `DownloadAsync` | ラベル群の事前ダウンロード。進捗は `OnDownloadProgress` で通知 |
@@ -92,7 +92,9 @@ builder.Register(resolver =>
 確認ダイアログ・進捗 UI はアプリ層の責務。基盤は判断材料（サイズ・進捗）を返すだけ。
 
 ```csharp
-await _assetVault.InitializeAsync(cancellationToken);
+// baseUrl は env→URL（アプリ config が解決）。初期化前に BaseUrl を確定し、版は version.json で解決される。
+// Debug Override 有効時はそちらの BaseUrl が優先。Local 専用なら baseUrl は空でよい。
+await _assetVault.InitializeAsync(config.AssetBaseUrl, cancellationToken);
 
 var update = await _assetVault.CheckForUpdatesAsync(cancellationToken);
 if (update.HasUpdate)
