@@ -6,6 +6,11 @@ namespace UniLab.AssetVault
     public enum AssetVaultState
     {
         /// <summary>
+        /// 既定値（未設定）。default(AssetVaultState) がこの値になります。
+        /// </summary>
+        None = 0,
+
+        /// <summary>
         /// サービスは起動シーケンスによってまだ初期化されていません。
         /// </summary>
         NotInitialized,

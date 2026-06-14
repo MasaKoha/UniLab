@@ -10,8 +10,8 @@ namespace UniLab.AssetVault.Editor
     {
         private const string DuplicateAddressLineFormat = "重複アドレス: {0}（{1} と {2}）";
 
-        private readonly Dictionary<string, string> _registeredAssetPathsByAddress = new Dictionary<string, string>();
-        private readonly List<DuplicateAddress> _duplicateAddresses = new List<DuplicateAddress>();
+        private readonly Dictionary<string, string> _registeredAssetPathsByAddress = new();
+        private readonly List<DuplicateAddress> _duplicateAddresses = new();
 
         /// <summary>重複アドレスが1件以上あるかどうかです。</summary>
         public bool HasDuplicates => _duplicateAddresses.Count > 0;

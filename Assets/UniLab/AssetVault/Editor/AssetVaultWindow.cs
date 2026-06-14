@@ -26,7 +26,7 @@ namespace UniLab.AssetVault.Editor
         private static void Open()
         {
             var window = GetWindow<AssetVaultWindow>();
-            window.titleContent = new GUIContent(WindowTitle);
+            window.titleContent = new(WindowTitle);
             window.Show();
         }
 
