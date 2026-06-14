@@ -25,11 +25,9 @@ namespace UniLab.AssetVault.Editor
         private const string BuildTargetToken = "[BuildTarget]";
         private const string BaseUrlPropertyName = "BaseUrl";
         private const string ContentPathPropertyName = "ContentPath";
-        private const string LocalGroupPrefix = "Local_";
-        private const string RemoteGroupPrefix = "Remote_";
         private const string CategorySkippedMessageFormat = "AssetVault setup skipped because folder was not found: {0}";
         private const string LocalFolderMissingMessage = "AssetVault setup aborted: the Local folder is required but not set. Assign it in AssetVaultSetupSettings.";
-        private const string DuplicateAddressWarningLineFormat = "重複アドレス: {0}（{1} と {2}）";
+        private const string DuplicateAddressFailureMessage = "AssetVault setup failed due to duplicate addresses. Resolve the following collisions and run sync again:\n{0}";
         private const string SyncCompletedMessage = "AssetVault Addressables setup completed.";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";
         private const string NewBuildFailedMessage = "Addressables new build failed.";
@@ -105,9 +103,10 @@ namespace UniLab.AssetVault.Editor
         // --- Setup ---
 
         /// <summary>
-        /// 設定アセットの同期ルール（フォルダ＋Local/Remote）に従って Addressables を構成します。
+        /// 設定アセットの Local（必須）/ Remote（任意）フォルダに従って Addressables を構成します。
+        /// 今回の同期で登録されなかった管理グループ（Local_/Remote_）の古いエントリ・空グループは掃除します。
         /// </summary>
-        /// <returns>同期に成功した場合は true。</returns>
+        /// <returns>同期に成功した場合は true。重複アドレス検出時は false。</returns>
         public static bool SyncAssetResource()
         {
             if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
@@ -134,19 +133,29 @@ namespace UniLab.AssetVault.Editor
             settings.profileSettings.SetValue(settings.activeProfileId, RemoteLoadPathVariableName, CreateRemoteLoadPath());
             settings.profileSettings.SetValue(settings.activeProfileId, RemoteBuildPathVariableName, RemoteBuildPathValue);
 
-            var duplicateAddressCollector = new DuplicateAddressCollector();
-            SyncCategory(settings, localFolderPath, true, duplicateAddressCollector);
+            var duplicateAddressCollector = new AssetVaultDuplicateAddressCollector();
+            var registeredGuids = new HashSet<string>();
+            SyncCategory(settings, localFolderPath, true, duplicateAddressCollector, registeredGuids);
 
             // Remote は任意。設定されている場合のみ同期する。
             var remoteFolderPath = assetVaultSetupSettings.RemoteFolderPath;
             if (remoteFolderPath != null)
             {
-                SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector);
+                SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector, registeredGuids);
             }
+
+            PruneStaleEntries(settings, registeredGuids);
 
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
-            duplicateAddressCollector.LogWarning();
+
+            // アドレス衝突は実行時ロードを壊すため、適用はしても結果は失敗扱いにして再修正を促す。
+            if (duplicateAddressCollector.HasDuplicates)
+            {
+                Debug.LogError(string.Format(DuplicateAddressFailureMessage, duplicateAddressCollector.BuildReport()));
+                return false;
+            }
+
             Debug.Log(SyncCompletedMessage);
             return true;
         }
@@ -176,8 +185,8 @@ namespace UniLab.AssetVault.Editor
             }
 
             var remoteLoadPath = settings.profileSettings.GetValueByName(settings.activeProfileId, RemoteLoadPathVariableName);
-            var localGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(LocalGroupPrefix, System.StringComparison.Ordinal));
-            var remoteGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(RemoteGroupPrefix, System.StringComparison.Ordinal));
+            var localGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(AssetVaultAddressing.LocalGroupPrefix, System.StringComparison.Ordinal));
+            var remoteGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(AssetVaultAddressing.RemoteGroupPrefix, System.StringComparison.Ordinal));
 
             return new AssetVaultStatus(
                 true,
@@ -194,7 +203,8 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetSettings settings,
             string categoryRoot,
             bool isLocal,
-            DuplicateAddressCollector duplicateAddressCollector)
+            AssetVaultDuplicateAddressCollector duplicateAddressCollector,
+            HashSet<string> registeredGuids)
         {
             if (!AssetDatabase.IsValidFolder(categoryRoot))
             {
@@ -205,12 +215,12 @@ namespace UniLab.AssetVault.Editor
             var subFolders = AssetDatabase.GetSubFolders(categoryRoot);
             foreach (var subFolder in subFolders)
             {
-                var groupName = GetGroupName(subFolder, isLocal);
+                var groupName = AssetVaultAddressing.GetGroupName(subFolder, isLocal);
                 var group = EnsureGroup(settings, groupName, isLocal);
-                RegisterFolder(settings, group, subFolder, categoryRoot, duplicateAddressCollector);
+                RegisterFolder(settings, group, subFolder, categoryRoot, duplicateAddressCollector, registeredGuids);
             }
 
-            RegisterDirectAssets(settings, categoryRoot, isLocal, duplicateAddressCollector);
+            RegisterDirectAssets(settings, categoryRoot, isLocal, duplicateAddressCollector, registeredGuids);
         }
 
         private static AddressableAssetGroup EnsureGroup(AddressableAssetSettings settings, string groupName, bool isLocal)
@@ -238,12 +248,13 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetGroup group,
             string folder,
             string categoryRoot,
-            DuplicateAddressCollector duplicateAddressCollector)
+            AssetVaultDuplicateAddressCollector duplicateAddressCollector,
+            HashSet<string> registeredGuids)
         {
             var guids = AssetDatabase.FindAssets(string.Empty, new[] { folder });
             foreach (var guid in guids)
             {
-                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector);
+                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector, registeredGuids);
             }
         }
 
@@ -251,7 +262,8 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetSettings settings,
             string categoryRoot,
             bool isLocal,
-            DuplicateAddressCollector duplicateAddressCollector)
+            AssetVaultDuplicateAddressCollector duplicateAddressCollector,
+            HashSet<string> registeredGuids)
         {
             var group = default(AddressableAssetGroup);
             var guids = AssetDatabase.FindAssets(string.Empty, new[] { categoryRoot });
@@ -263,7 +275,7 @@ namespace UniLab.AssetVault.Editor
                     continue;
                 }
 
-                var directoryPath = NormalizeAssetPath(Path.GetDirectoryName(assetPath));
+                var directoryPath = AssetVaultAddressing.NormalizeAssetPath(Path.GetDirectoryName(assetPath));
                 if (directoryPath != categoryRoot)
                 {
                     continue;
@@ -272,10 +284,10 @@ namespace UniLab.AssetVault.Editor
                 if (group == null)
                 {
                     // ルートフォルダ直下のアセットは、そのフォルダ名から作る既定グループにまとめる。
-                    group = EnsureGroup(settings, GetGroupName(categoryRoot, isLocal), isLocal);
+                    group = EnsureGroup(settings, AssetVaultAddressing.GetGroupName(categoryRoot, isLocal), isLocal);
                 }
 
-                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector);
+                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector, registeredGuids);
             }
         }
 
@@ -284,7 +296,8 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetGroup group,
             string guid,
             string categoryRoot,
-            DuplicateAddressCollector duplicateAddressCollector)
+            AssetVaultDuplicateAddressCollector duplicateAddressCollector,
+            HashSet<string> registeredGuids)
         {
             var assetPath = AssetDatabase.GUIDToAssetPath(guid);
             if (AssetDatabase.IsValidFolder(assetPath))
@@ -298,8 +311,33 @@ namespace UniLab.AssetVault.Editor
                 return;
             }
 
-            entry.address = CreateAddress(assetPath, categoryRoot);
+            entry.address = AssetVaultAddressing.CreateAddress(assetPath, categoryRoot);
+            registeredGuids.Add(guid);
             duplicateAddressCollector.Record(entry.address, assetPath);
+        }
+
+        // 管理グループ（Local_/Remote_）から、今回の同期で登録されなかった古いエントリを除去し、空になったグループを削除する。
+        private static void PruneStaleEntries(AddressableAssetSettings settings, HashSet<string> registeredGuids)
+        {
+            var managedGroups = settings.groups
+                .Where(group => group != null && AssetVaultAddressing.IsManagedGroupName(group.Name))
+                .ToList();
+
+            foreach (var group in managedGroups)
+            {
+                var staleEntries = group.entries
+                    .Where(entry => entry != null && !registeredGuids.Contains(entry.guid))
+                    .ToList();
+                foreach (var staleEntry in staleEntries)
+                {
+                    settings.RemoveAssetEntry(staleEntry.guid, false);
+                }
+
+                if (group.entries.Count == 0)
+                {
+                    settings.RemoveGroup(group);
+                }
+            }
         }
 
         private static void ConfigureBundledAssetGroupSchema(AddressableAssetSettings settings, AddressableAssetGroup group, bool isLocal)
@@ -343,93 +381,6 @@ namespace UniLab.AssetVault.Editor
         {
             var runtimeTypeName = typeof(AssetVaultRuntime).FullName;
             return $"{{{runtimeTypeName}.{BaseUrlPropertyName}}}/{{{runtimeTypeName}.{ContentPathPropertyName}}}/{BuildTargetToken}";
-        }
-
-        private static string CreateAddress(string assetPath, string categoryRoot)
-        {
-            var relativePath = assetPath.Substring(categoryRoot.Length + "/".Length);
-            var extension = Path.GetExtension(relativePath);
-            if (string.IsNullOrEmpty(extension))
-            {
-                return relativePath;
-            }
-
-            return relativePath.Substring(0, relativePath.Length - extension.Length);
-        }
-
-        private static string GetGroupName(string folderPath, bool isLocal)
-        {
-            var groupPrefix = isLocal ? LocalGroupPrefix : RemoteGroupPrefix;
-            return groupPrefix + Path.GetFileName(folderPath);
-        }
-
-        private static string NormalizeAssetPath(string assetPath)
-        {
-            if (string.IsNullOrEmpty(assetPath))
-            {
-                return string.Empty;
-            }
-
-            return assetPath.Replace("\\", "/").TrimEnd('/');
-        }
-
-        /// <summary>
-        /// 同一アドレスへ別アセットが二重登録された場合を収集し、まとめて警告ログに出します。
-        /// </summary>
-        private sealed class DuplicateAddressCollector
-        {
-            private readonly Dictionary<string, string> _registeredAssetPathsByAddress = new Dictionary<string, string>();
-            private readonly List<DuplicateAddress> _duplicateAddresses = new List<DuplicateAddress>();
-
-            public void Record(string address, string assetPath)
-            {
-                if (!_registeredAssetPathsByAddress.TryGetValue(address, out var registeredAssetPath))
-                {
-                    _registeredAssetPathsByAddress.Add(address, assetPath);
-                    return;
-                }
-
-                if (registeredAssetPath == assetPath)
-                {
-                    return;
-                }
-
-                _duplicateAddresses.Add(new DuplicateAddress(address, registeredAssetPath, assetPath));
-            }
-
-            public void LogWarning()
-            {
-                if (_duplicateAddresses.Count <= 0)
-                {
-                    return;
-                }
-
-                var warningLines = new List<string>();
-                foreach (var duplicateAddress in _duplicateAddresses)
-                {
-                    warningLines.Add(string.Format(
-                        DuplicateAddressWarningLineFormat,
-                        duplicateAddress.Address,
-                        duplicateAddress.FirstAssetPath,
-                        duplicateAddress.DuplicateAssetPath));
-                }
-
-                Debug.LogWarning(string.Join("\n", warningLines));
-            }
-        }
-
-        private readonly struct DuplicateAddress
-        {
-            public DuplicateAddress(string address, string firstAssetPath, string duplicateAssetPath)
-            {
-                Address = address;
-                FirstAssetPath = firstAssetPath;
-                DuplicateAssetPath = duplicateAssetPath;
-            }
-
-            public string Address { get; }
-            public string FirstAssetPath { get; }
-            public string DuplicateAssetPath { get; }
         }
     }
 }
