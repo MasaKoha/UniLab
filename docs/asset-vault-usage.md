@@ -5,11 +5,16 @@ API 仕様の俯瞰は [asset-vault-guide.md](asset-vault-guide.md)、配信設�
 
 ---
 
-## 2 つの使い方（標準 / 上位）
+## 使い方の選択肢
 
 | 方式 | 書き方 | 解放タイミング | 使うとき |
 |---|---|---|---|
-| **標準: service 拡張** | `service.LoadAssetAsync<T>(owner, key)` | **owner の GameObject 破棄で自動** | 単一コンポーネントが自分用の asset を読む大半のケース |
+| **標準: service 拡張** | `service.LoadAssetAsync<T>(owner, key)` | owner の GameObject 破棄で自動 | 単一コンポーネントが自分用の asset を読む大半のケース |
+| **共有/プール: キャッシュ** | `cache.AcquireAsync<T>(key)` → `reference.Dispose()` | 参照0＋TTL/LRU で遅延解放 | 複数所有・再利用で差し替え・churn を避けたい |
+| **スロット** | `slot.SetAsync(key)` | 差し替え時に旧解放／Dispose で解放 | 「1スロットに常に1枚、差し替わる」要素（プール要素の表示物） |
+| **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()` で一括 | 画面/シーン単位でまとめたい |
+
+> プール連携・共有・動的差し替えは下の「キャッシュ / スロット」を参照。単発の View ロードは「標準」で十分。
 | **上位: 明示 Scope** | `scope.LoadAssetAsync<T>(key, ct)` | `scope.Dispose()`（画面/シーン単位で一括） | 複数 View をまたいでまとめたい・共有寿命を制御したい |
 
 迷ったら**標準（service 拡張）**。Scope も Dispose も書かずに済む。
@@ -240,6 +245,69 @@ if (size > 0)
 }
 // 以降のロードはキャッシュから即時
 ```
+
+---
+
+## 7. 共有・オブジェクトプール（キャッシュ / スロット）
+
+プールや「再利用ごとに表示が変わる要素」では、スコープの手動 Dispose 管理が辛くなる。`IAssetVaultCache`（参照カウント＋TTL/LRU）と `AssetSlot<T>`（1スロット差し替え）を使う。
+
+### DI 登録
+
+```csharp
+// RootLifetimeScope
+builder.Register<IAssetVaultCache>(_ => new AssetVaultCache(), Lifetime.Singleton);
+// 設定を変えるなら: new AssetVaultCache(new AssetVaultCacheSettings(ttlSeconds: 15f, capacity: 128))
+```
+
+### キャッシュ: Acquire / Release（共有・refcount）
+
+```csharp
+var reference = await _cache.AcquireAsync<Sprite>("Icons/coin", ct); // 参照+1（無ければロード）
+_image.sprite = reference.Value;
+...
+reference.Dispose(); // 参照-1。0 でも TTL 猶予中はキャッシュ保持→再取得は即時、未使用は後で解放
+```
+
+- 同じ key は共有（複数所有しても実体1つ）。
+- 参照0でも **TTL（既定10秒）** の間は保持＝出入りの激しいプールで再ロード（churn）しない。
+- **LRU（既定64件）** で溜め込みすぎを防止。設定は `AssetVaultCacheSettings`。
+
+### スロット: 1枚を差し替える要素（プール要素向け）
+
+```csharp
+public sealed class PooledEnemy : MonoBehaviour
+{
+    [Inject] private readonly IAssetVaultCache _cache;
+    [SerializeField] private Image _image;
+    private AssetSlot<Sprite> _icon;
+
+    private void Awake() => _icon = new AssetSlot<Sprite>(_cache);
+
+    // 再利用のたびに呼ぶだけ。旧解放→新取得を内部で行い、溜まらない。
+    public async UniTask SetupAsync(string spriteKey, CancellationToken ct)
+    {
+        _image.sprite = await _icon.SetAsync(spriteKey, ct);
+    }
+
+    private void OnDestroy() => _icon.Dispose(); // プール破棄時に解放
+}
+```
+
+### プール本体（プレハブ資産はプール寿命で保持）
+
+```csharp
+// プレハブ“資産”は LoadAssetAsync<GameObject>(owner=プール) で1回ロード（InstantiateAsync は使わない）
+_prefab = await _assetVault.LoadAssetAsync<GameObject>(this, key, ct);
+// インスタンスは自前 Instantiate でプール管理。Get/Return はアクティブ切替のみ（再ロードしない）
+// プール GameObject 破棄で _prefab は自動 Release
+```
+
+### 落とし穴
+
+- **動的差し替えの要素に `service.LoadAssetAsync(this, key)`（auto-holder）を使わない**。holder のスコープは GameObject 寿命まで解放されず、差し替えるたびに溜まる（実質リーク）。動的は **スロット or キャッシュ**を使う。
+- プールのインスタンス生成は `InstantiateAsync` ではなく `LoadAssetAsync<GameObject>` ＋ 自前 `Instantiate`。
+- アセットの所有者を1つに決める（プールでプリロード or 要素でスロット、の二重所有を避ける）。
 
 ---
 
