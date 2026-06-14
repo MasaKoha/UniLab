@@ -27,6 +27,7 @@ namespace UniLab.AssetVault.Editor
         private const string ContentPathPropertyName = "ContentPath";
         private const string CategorySkippedMessageFormat = "AssetVault setup skipped because folder was not found: {0}";
         private const string LocalFolderMissingMessage = "AssetVault setup aborted: the Local folder is required but not set. Assign it in AssetVaultSetupSettings.";
+        private const string ProfileVariableMissingMessageFormat = "Addressables profile variable '{0}' was not found; group build/load path may be misconfigured.";
         private const string DuplicateAddressFailureMessage = "AssetVault setup failed due to duplicate addresses. Resolve the following collisions and run sync again:\n{0}";
         private const string SyncCompletedMessage = "AssetVault Addressables setup completed.";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";
@@ -48,7 +49,17 @@ namespace UniLab.AssetVault.Editor
                 return false;
             }
 
-            AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
+            AddressablesPlayerBuildResult result;
+            try
+            {
+                AddressableAssetSettings.BuildPlayerContent(out result);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError($"{NewBuildFailedMessage} {exception.Message}");
+                return false;
+            }
+
             if (result == null)
             {
                 Debug.LogError(NewBuildFailedMessage);
@@ -83,7 +94,17 @@ namespace UniLab.AssetVault.Editor
                 return false;
             }
 
-            var result = ContentUpdateScript.BuildContentUpdate(settings, contentStatePath);
+            AddressablesPlayerBuildResult result;
+            try
+            {
+                result = ContentUpdateScript.BuildContentUpdate(settings, contentStatePath);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogError($"{ContentUpdateFailedMessage} {exception.Message}");
+                return false;
+            }
+
             if (result == null)
             {
                 Debug.LogError(ContentUpdateFailedMessage);
@@ -98,6 +119,14 @@ namespace UniLab.AssetVault.Editor
 
             Debug.Log(ContentUpdateCompletedMessage);
             return true;
+        }
+
+        /// <summary>
+        /// Content Update ビルドが可能か（前回の content state file が存在するか）を返します。UI のボタン制御に使います。
+        /// </summary>
+        public static bool CanBuildContentUpdate()
+        {
+            return File.Exists(ContentUpdateScript.GetContentStateDataPath(false));
         }
 
         // --- Setup ---
@@ -135,16 +164,26 @@ namespace UniLab.AssetVault.Editor
 
             var duplicateAddressCollector = new AssetVaultDuplicateAddressCollector();
             var registeredGuids = new HashSet<string>();
-            SyncCategory(settings, localFolderPath, true, duplicateAddressCollector, registeredGuids);
 
-            // Remote は任意。設定されている場合のみ同期する。
-            var remoteFolderPath = assetVaultSetupSettings.RemoteFolderPath;
-            if (remoteFolderPath != null)
+            // 大量アセットでのインポート再評価を抑えるためバッチ化する。
+            AssetDatabase.StartAssetEditing();
+            try
             {
-                SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector, registeredGuids);
-            }
+                SyncCategory(settings, localFolderPath, true, duplicateAddressCollector, registeredGuids);
 
-            PruneStaleEntries(settings, registeredGuids);
+                // Remote は任意。設定されている場合のみ同期する。
+                var remoteFolderPath = assetVaultSetupSettings.RemoteFolderPath;
+                if (remoteFolderPath != null)
+                {
+                    SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector, registeredGuids);
+                }
+
+                PruneStaleEntries(settings, registeredGuids);
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+            }
 
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
@@ -175,9 +214,13 @@ namespace UniLab.AssetVault.Editor
         /// </summary>
         public static AssetVaultStatus GetStatus()
         {
-            var setupSettings = AssetVaultSetupSettings.GetOrCreate();
-            var localFolderPath = setupSettings.LocalFolderPath ?? string.Empty;
-            var remoteFolderPath = setupSettings.RemoteFolderPath ?? string.Empty;
+            var localFolderPath = string.Empty;
+            var remoteFolderPath = string.Empty;
+            if (AssetVaultSetupSettings.TryLoad(out var setupSettings))
+            {
+                localFolderPath = setupSettings.LocalFolderPath ?? string.Empty;
+                remoteFolderPath = setupSettings.RemoteFolderPath ?? string.Empty;
+            }
 
             if (!AddressableSettingsAccessor.TryGetSettingsSilently(out var settings))
             {
@@ -226,6 +269,7 @@ namespace UniLab.AssetVault.Editor
         private static AddressableAssetGroup EnsureGroup(AddressableAssetSettings settings, string groupName, bool isLocal)
         {
             var group = settings.FindGroup(groupName);
+            var created = false;
             if (group == null)
             {
                 group = settings.CreateGroup(
@@ -236,9 +280,10 @@ namespace UniLab.AssetVault.Editor
                     null,
                     typeof(BundledAssetGroupSchema),
                     typeof(ContentUpdateGroupSchema));
+                created = true;
             }
 
-            ConfigureBundledAssetGroupSchema(settings, group, isLocal);
+            ConfigureBundledAssetGroupSchema(settings, group, isLocal, created);
             ConfigureContentUpdateGroupSchema(group, isLocal);
             return group;
         }
@@ -340,19 +385,33 @@ namespace UniLab.AssetVault.Editor
             }
         }
 
-        private static void ConfigureBundledAssetGroupSchema(AddressableAssetSettings settings, AddressableAssetGroup group, bool isLocal)
+        private static void ConfigureBundledAssetGroupSchema(AddressableAssetSettings settings, AddressableAssetGroup group, bool isLocal, bool created)
         {
             var bundledAssetGroupSchema = group.GetSchema<BundledAssetGroupSchema>();
             if (bundledAssetGroupSchema == null)
             {
                 bundledAssetGroupSchema = group.AddSchema<BundledAssetGroupSchema>();
+                created = true;
             }
 
+            // Build/Load パスは Local/Remote の振り分けに直結するため毎回強制する。
             var buildPathVariableName = isLocal ? LocalBuildPathVariableName : RemoteBuildPathVariableName;
             var loadPathVariableName = isLocal ? LocalLoadPathVariableName : RemoteLoadPathVariableName;
-            bundledAssetGroupSchema.BuildPath.SetVariableByName(settings, buildPathVariableName);
-            bundledAssetGroupSchema.LoadPath.SetVariableByName(settings, loadPathVariableName);
-            bundledAssetGroupSchema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.AppendHash;
+            if (!bundledAssetGroupSchema.BuildPath.SetVariableByName(settings, buildPathVariableName))
+            {
+                Debug.LogWarning(string.Format(ProfileVariableMissingMessageFormat, buildPathVariableName));
+            }
+
+            if (!bundledAssetGroupSchema.LoadPath.SetVariableByName(settings, loadPathVariableName))
+            {
+                Debug.LogWarning(string.Format(ProfileVariableMissingMessageFormat, loadPathVariableName));
+            }
+
+            // BundleNaming は新規グループのみ既定値を設定し、既存グループの手動調整は尊重する。
+            if (created)
+            {
+                bundledAssetGroupSchema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.AppendHash;
+            }
         }
 
         private static void ConfigureContentUpdateGroupSchema(AddressableAssetGroup group, bool isLocal)
