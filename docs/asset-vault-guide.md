@@ -195,7 +195,9 @@ Profile の RemoteLoadPath が指す配信先に、新カタログ + 変更バ�
 
 環境（dev / staging / prod）は Addressables Profile ではなく、実行時に `AssetVaultRuntime.BaseUrl`（env → URL のマッピングはアプリ config が持つ）で切り替える。Profile は1つで足りるため、旧 `UniLab/AssetVault/Profile` メニューは廃止した。
 
-QA で「prod アプリで dev1 のアセットを見る」「特定の版フォルダを読む」を試す場合は、`UniLab > AssetVault > Dashboard` ダッシュボードの **Debug Override** セクションで `BaseUrl` / `ContentPath` を入力し Enable Override を有効化する。Play 突入時に `AssetVaultRuntime` へ反映される。
+QA で「prod アプリで dev のアセットを見る」「特定の版フォルダを読む」を試す場合は、`UniLab > AssetVault > Dashboard` ダッシュボードの **Debug Override** セクションで環境プリセットをドロップダウンから選び、Enable Override を有効化する。Play 突入時に選択プリセットの `BaseUrl` / `ContentPath` が `AssetVaultRuntime` へ反映される。
+
+プリセットは `AssetVaultDebugEnvironmentSettings`（`Assets/Generated/UniLab/` 配下、未追跡）の ScriptableObject が持つ。初回は Development / Staging / Production の雛形がシードされるので、`Edit Presets` ボタンで開いて実際の CDN ホストに書き換える。有効/無効と選択プリセット名は EditorPrefs に保持され、開発者ごとに独立する。
 
 ### ダッシュボード
 

@@ -105,19 +105,58 @@ namespace UniLab.AssetVault.Editor
         {
             DrawHeader("Debug Override");
             EditorGUILayout.HelpBox(
-                "Play 突入時に AssetVaultRuntime の BaseUrl / ContentPath を上書きします（別環境・別版の検証用）。",
+                "Play 突入時に、選択した環境プリセットで AssetVaultRuntime の BaseUrl / ContentPath を上書きします（別環境・別版の検証用）。",
                 MessageType.Info);
 
             AssetVaultDebugOverride.Enabled = EditorGUILayout.ToggleLeft("Enable Override", AssetVaultDebugOverride.Enabled);
+
+            var settings = AssetVaultDebugEnvironmentSettings.GetOrCreate();
+            var presets = settings.Presets;
+            if (presets.Count <= 0)
+            {
+                EditorGUILayout.HelpBox("プリセットが未登録です。設定アセットで環境を追加してください。", MessageType.Warning);
+                if (GUILayout.Button("Edit Presets"))
+                {
+                    Selection.activeObject = settings;
+                }
+
+                return;
+            }
 
             using (new EditorGUI.DisabledScope(!AssetVaultDebugOverride.Enabled))
             {
                 using (new LabelWidthScope(LabelWidth))
                 {
-                    AssetVaultDebugOverride.BaseUrl = EditorGUILayout.TextField("BaseUrl", AssetVaultDebugOverride.BaseUrl);
-                    AssetVaultDebugOverride.ContentPath = EditorGUILayout.TextField("ContentPath", AssetVaultDebugOverride.ContentPath);
+                    DrawPresetPopup(presets);
+                    var preset = AssetVaultDebugOverride.ResolveSelectedPreset();
+                    EditorGUILayout.LabelField("BaseUrl", preset != null ? preset.BaseUrl : string.Empty);
+                    EditorGUILayout.LabelField("ContentPath", preset != null ? preset.ContentPath : string.Empty);
                 }
             }
+
+            if (GUILayout.Button("Edit Presets"))
+            {
+                Selection.activeObject = settings;
+            }
+        }
+
+        private static void DrawPresetPopup(System.Collections.Generic.IReadOnlyList<AssetVaultDebugEnvironmentPreset> presets)
+        {
+            var presetNames = new string[presets.Count];
+            for (var index = 0; index < presets.Count; index++)
+            {
+                presetNames[index] = presets[index].DisplayName;
+            }
+
+            var selectedName = AssetVaultDebugOverride.SelectedPresetName;
+            var selectedIndex = System.Array.IndexOf(presetNames, selectedName);
+            if (selectedIndex < 0)
+            {
+                selectedIndex = 0;
+            }
+
+            var newIndex = EditorGUILayout.Popup("Environment", selectedIndex, presetNames);
+            AssetVaultDebugOverride.SelectedPresetName = presetNames[newIndex];
         }
 
         private void DrawStatusSection()
