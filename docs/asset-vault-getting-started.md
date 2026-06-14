@@ -59,6 +59,14 @@ builder.Register(resolver =>
     Lifetime.Scoped);
 ```
 
+### 設計方針: DI（VContainer）前提
+
+- **本基盤は DI 注入前提**。`IAssetVaultService` を VContainer で **Singleton ライフタイム**登録し、各 Presenter/View へ `[Inject]` で渡す。これが「単一インスタンス」の正しい実現方法。
+- **`AddressablesAssetVaultService` はプレーンな class（非 MonoBehaviour）**。Unity ライフサイクルに依存しない。
+- **`SingletonMonoBehaviour` / static Instance は採用しない**（グローバル可変状態でテスト困難・GameObject 寿命に結合・DI と二重管理になるため）。
+- **どうしてもグローバル静的アクセス（注入なし呼び出し）が欲しいプロジェクトは、各プロジェクト側で実装する**。基盤は提供しない。実装する場合も MonoBehaviour 化はせず、起動時に1回だけ解決済みインスタンスを保持するプレーンな static ロケータに留めること（例: `MyAppAssetVault.Instance` を bootstrap でセット）。
+- フィールド名は `IAssetVaultService` を保ちつつ、慣用的に `_assetVault` と短縮してよい（型名で意味は明確）。
+
 ## [4] 起動フロー
 
 起動時に一度だけ初期化し、必要なら更新確認・事前ダウンロード。確認ダイアログや進捗 UI はアプリ層の責務（基盤は判断材料を返すだけ）。
@@ -95,17 +103,20 @@ _assetVault.OnDownloadProgress
 
 ## [5] 画面でロード・利用・解放
 
-### 標準: Component 拡張（Scope を書かない・推奨）
+### 標準: service 拡張（Scope を書かない・推奨）
+
+owner は GameObject / Component どちらも可。
 
 ```csharp
 public sealed class IconView : MonoBehaviour
 {
+    [Inject] private readonly IAssetVaultService _assetVault;
     [SerializeField] private Image _image;
 
     private async UniTask ShowAsync()
     {
-        // Scope/Dispose/CancellationToken 不要。この GameObject の破棄で自動 Release。
-        _image.sprite = await this.LoadAssetAsync<Sprite>("Icons/coin");
+        // Scope/Dispose/CancellationToken 不要。owner(this) の GameObject 破棄で自動 Release。
+        _image.sprite = await _assetVault.LoadAssetAsync<Sprite>(this, "Icons/coin");
     }
 }
 ```
