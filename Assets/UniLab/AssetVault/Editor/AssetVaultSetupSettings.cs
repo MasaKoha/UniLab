@@ -5,34 +5,33 @@ namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// AssetVault の Addressables 自動構成に使う設定を保持します。
+    /// 同梱(Local)ルートフォルダ（必須）と CDN(Remote)ルートフォルダ（任意）の2つを指定します。
     /// </summary>
     public sealed class AssetVaultSetupSettings : ScriptableObject
     {
         /// <summary>
-        /// AssetResource の既定ルートパスです。
-        /// </summary>
-        public const string DefaultRootPath = "Assets/AssetResource";
-
-        /// <summary>
         /// 設定アセットの保存先パスです。
         /// </summary>
-        public const string AssetPath = "Assets/Generated/UniLab/AssetVaultSetupSettings.asset";
+        public const string AssetPath = GeneratedAssetFolder.Path + "/AssetVaultSetupSettings.asset";
 
-        private const string GeneratedFolderPath = "Assets/Generated";
-        private const string UniLabGeneratedFolderPath = "Assets/Generated/UniLab";
-        private const string AssetsFolderPath = "Assets";
-        private const string GeneratedFolderName = "Generated";
-        private const string UniLabFolderName = "UniLab";
+        [Tooltip("同梱(Local)アセットのルートフォルダ。【必須】直下サブフォルダがグループ Local_<名> になります。")]
+        [SerializeField] private DefaultAsset _localFolder;
 
-        [SerializeField] private string _rootPath = DefaultRootPath;
+        [Tooltip("CDN(Remote)アセットのルートフォルダ。【任意】未設定可。直下サブフォルダがグループ Remote_<名> になります。")]
+        [SerializeField] private DefaultAsset _remoteFolder;
 
         /// <summary>
-        /// AssetResource のルートパスを取得します。
+        /// 同梱(Local)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null。必須項目です。
         /// </summary>
-        public string RootPath => _rootPath;
+        public string LocalFolderPath => ResolveFolderPath(_localFolder);
 
         /// <summary>
-        /// 設定アセットを取得し、存在しない場合は作成します。
+        /// CDN(Remote)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null（任意項目）。
+        /// </summary>
+        public string RemoteFolderPath => ResolveFolderPath(_remoteFolder);
+
+        /// <summary>
+        /// 設定アセットを取得し、存在しない場合は作成します。フォルダはユーザーが Inspector で指定します。
         /// </summary>
         public static AssetVaultSetupSettings GetOrCreate()
         {
@@ -42,7 +41,7 @@ namespace UniLab.AssetVault.Editor
                 return settings;
             }
 
-            EnsureFolder();
+            GeneratedAssetFolder.Ensure();
 
             settings = CreateInstance<AssetVaultSetupSettings>();
             AssetDatabase.CreateAsset(settings, AssetPath);
@@ -50,19 +49,16 @@ namespace UniLab.AssetVault.Editor
             return settings;
         }
 
-        private static void EnsureFolder()
+        // DefaultAsset はフォルダ以外（未知拡張子のファイル等）も代入可能なため、フォルダであることを検証する。
+        private static string ResolveFolderPath(DefaultAsset folder)
         {
-            if (!AssetDatabase.IsValidFolder(GeneratedFolderPath))
+            if (folder == null)
             {
-                AssetDatabase.CreateFolder(AssetsFolderPath, GeneratedFolderName);
+                return null;
             }
 
-            if (AssetDatabase.IsValidFolder(UniLabGeneratedFolderPath))
-            {
-                return;
-            }
-
-            AssetDatabase.CreateFolder(GeneratedFolderPath, UniLabFolderName);
+            var folderPath = AssetDatabase.GetAssetPath(folder);
+            return AssetDatabase.IsValidFolder(folderPath) ? folderPath : null;
         }
     }
 }

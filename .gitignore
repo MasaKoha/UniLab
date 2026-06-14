@@ -82,3 +82,11 @@ crashlytics-build.properties
 *.secret.*
 .env
 .env.local
+
+# AssetVault: development ビルド時のみ生成される一時 Resources 複製（ビルド後に自動削除）
+/Assets/UniLab/AssetVault/Debug/Resources/
+/Assets/UniLab/AssetVault/Debug/Resources.meta
+
+# AssetVault: デバッグ環境設定の正本（環境 URL を含むローカル設定。共有したい場合はこの2行を削除）
+/Assets/UniLab/AssetVault/Debug/AssetVaultDebugEnvironmentSettings.asset
+/Assets/UniLab/AssetVault/Debug/AssetVaultDebugEnvironmentSettings.asset.meta
