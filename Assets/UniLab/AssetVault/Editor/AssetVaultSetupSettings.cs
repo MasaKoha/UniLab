@@ -16,20 +16,33 @@ namespace UniLab.AssetVault.Editor
         /// <summary>
         /// 設定アセットの保存先パスです。
         /// </summary>
-        public const string AssetPath = "Assets/Generated/UniLab/AssetVaultSetupSettings.asset";
+        public const string AssetPath = GeneratedAssetFolder.Path + "/AssetVaultSetupSettings.asset";
 
-        private const string GeneratedFolderPath = "Assets/Generated";
-        private const string UniLabGeneratedFolderPath = "Assets/Generated/UniLab";
-        private const string AssetsFolderPath = "Assets";
-        private const string GeneratedFolderName = "Generated";
-        private const string UniLabFolderName = "UniLab";
-
-        [SerializeField] private string _rootPath = DefaultRootPath;
+        [SerializeField] private DefaultAsset _rootFolder;
 
         /// <summary>
         /// AssetResource のルートパスを取得します。
+        /// インスペクタで指定したフォルダ参照から解決し、未設定・非フォルダの場合は <see cref="DefaultRootPath"/> にフォールバックします。
         /// </summary>
-        public string RootPath => _rootPath;
+        public string RootPath
+        {
+            get
+            {
+                if (_rootFolder == null)
+                {
+                    return DefaultRootPath;
+                }
+
+                // DefaultAsset はフォルダ以外（未知拡張子のファイル等）も代入可能なため、フォルダであることを検証する。
+                var folderPath = AssetDatabase.GetAssetPath(_rootFolder);
+                if (!AssetDatabase.IsValidFolder(folderPath))
+                {
+                    return DefaultRootPath;
+                }
+
+                return folderPath;
+            }
+        }
 
         /// <summary>
         /// 設定アセットを取得し、存在しない場合は作成します。
@@ -42,27 +55,12 @@ namespace UniLab.AssetVault.Editor
                 return settings;
             }
 
-            EnsureFolder();
+            GeneratedAssetFolder.Ensure();
 
             settings = CreateInstance<AssetVaultSetupSettings>();
             AssetDatabase.CreateAsset(settings, AssetPath);
             AssetDatabase.SaveAssets();
             return settings;
-        }
-
-        private static void EnsureFolder()
-        {
-            if (!AssetDatabase.IsValidFolder(GeneratedFolderPath))
-            {
-                AssetDatabase.CreateFolder(AssetsFolderPath, GeneratedFolderName);
-            }
-
-            if (AssetDatabase.IsValidFolder(UniLabGeneratedFolderPath))
-            {
-                return;
-            }
-
-            AssetDatabase.CreateFolder(GeneratedFolderPath, UniLabFolderName);
         }
     }
 }

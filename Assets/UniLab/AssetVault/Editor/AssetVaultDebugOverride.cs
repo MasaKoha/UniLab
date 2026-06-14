@@ -1,18 +1,22 @@
+using System.Linq;
 using UnityEditor;
+using UnityEngine;
 
 namespace UniLab.AssetVault.Editor
 {
     /// <summary>
-    /// QA 用のデバッグ上書き機能です。Play 突入時に <see cref="AssetVaultRuntime"/> の
-    /// BaseUrl / ContentPath を上書きし、「prod アプリで dev1 のアセットを見る」「特定の版フォルダを読む」を実現します。
-    /// 値は EditorPrefs に保持し、ランタイムへはエディタ側からのみ反映します（ランタイムにデバッグ専用 API は足しません）。
+    /// QA 用のデバッグ上書き機能です。Play 突入時に、選択した環境プリセットの値で <see cref="AssetVaultRuntime"/> の
+    /// BaseUrl / ContentPath を上書きし、「prod アプリで dev のアセットを見る」「特定の版フォルダを読む」を実現します。
+    /// プリセット定義は <see cref="AssetVaultDebugEnvironmentSettings"/>（ScriptableObject）が持ち、
+    /// 有効/無効と選択プリセット名のみエディタ状態として EditorPrefs に保持します（ランタイムにデバッグ専用 API は足しません）。
     /// </summary>
     [InitializeOnLoad]
     public static class AssetVaultDebugOverride
     {
         private const string EnabledPrefKey = "UniLab.AssetVault.DebugOverride.Enabled";
-        private const string BaseUrlPrefKey = "UniLab.AssetVault.DebugOverride.BaseUrl";
-        private const string ContentPathPrefKey = "UniLab.AssetVault.DebugOverride.ContentPath";
+        private const string SelectedPresetNamePrefKey = "UniLab.AssetVault.DebugOverride.SelectedPresetName";
+        private const string PresetMissingMessageFormat = "AssetVault Debug Override is enabled but preset '{0}' was not found. Overrides were skipped.";
+        private const string PresetEmptyMessage = "AssetVault Debug Override is enabled but no presets are registered. Overrides were skipped.";
 
         static AssetVaultDebugOverride()
         {
@@ -26,18 +30,34 @@ namespace UniLab.AssetVault.Editor
             set => EditorPrefs.SetBool(EnabledPrefKey, value);
         }
 
-        /// <summary>上書きする BaseUrl です（例 https://dev1.xxx.xxx/app）。</summary>
-        public static string BaseUrl
+        /// <summary>
+        /// 上書きに使うプリセットの表示名です。実体は <see cref="AssetVaultDebugEnvironmentSettings"/> から名前で引きます。
+        /// </summary>
+        public static string SelectedPresetName
         {
-            get => EditorPrefs.GetString(BaseUrlPrefKey, string.Empty);
-            set => EditorPrefs.SetString(BaseUrlPrefKey, value);
+            get => EditorPrefs.GetString(SelectedPresetNamePrefKey, string.Empty);
+            set => EditorPrefs.SetString(SelectedPresetNamePrefKey, value);
         }
 
-        /// <summary>上書きする ContentPath です（version.json の path に相当する版セグメント）。</summary>
-        public static string ContentPath
+        /// <summary>
+        /// 現在選択中のプリセットを解決します。未登録・未選択・名称不一致の場合は null を返します。
+        /// </summary>
+        public static AssetVaultDebugEnvironmentPreset ResolveSelectedPreset()
         {
-            get => EditorPrefs.GetString(ContentPathPrefKey, string.Empty);
-            set => EditorPrefs.SetString(ContentPathPrefKey, value);
+            var presets = AssetVaultDebugEnvironmentSettings.GetOrCreate().Presets;
+            if (presets.Count <= 0)
+            {
+                return null;
+            }
+
+            var selectedName = SelectedPresetName;
+            // 未選択時は先頭プリセットを既定とする（初回利用でも何かしら反映できるように）。
+            if (string.IsNullOrEmpty(selectedName))
+            {
+                return presets[0];
+            }
+
+            return presets.FirstOrDefault(preset => preset.DisplayName == selectedName);
         }
 
         // EnteredPlayMode（ドメインリロード後）で反映する。アプリ初期化との前後は保証されないため、
@@ -58,8 +78,18 @@ namespace UniLab.AssetVault.Editor
                 return;
             }
 
-            AssetVaultRuntime.BaseUrl = BaseUrl;
-            AssetVaultRuntime.ContentPath = ContentPath;
+            var preset = ResolveSelectedPreset();
+            if (preset == null)
+            {
+                var selectedName = SelectedPresetName;
+                Debug.LogWarning(string.IsNullOrEmpty(selectedName)
+                    ? PresetEmptyMessage
+                    : string.Format(PresetMissingMessageFormat, selectedName));
+                return;
+            }
+
+            AssetVaultRuntime.BaseUrl = preset.BaseUrl;
+            AssetVaultRuntime.ContentPath = preset.ContentPath;
         }
     }
 }
