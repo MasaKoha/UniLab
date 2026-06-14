@@ -193,4 +193,10 @@ Profile の RemoteLoadPath が指す配信先に、新カタログ + 変更バ�
 
 ### 環境切り替え
 
-`UniLab/AssetVault/Profile` メニューで dev / staging / prod の Addressables Profile を切り替える。
+環境（dev / staging / prod）は Addressables Profile ではなく、実行時に `AssetVaultRuntime.BaseUrl`（env → URL のマッピングはアプリ config が持つ）で切り替える。Profile は1つで足りるため、旧 `UniLab/AssetVault/Profile` メニューは廃止した。
+
+QA で「prod アプリで dev1 のアセットを見る」「特定の版フォルダを読む」を試す場合は、`UniLab > AssetVault > Dashboard` ダッシュボードの **Debug Override** セクションで `BaseUrl` / `ContentPath` を入力し Enable Override を有効化する。Play 突入時に `AssetVaultRuntime` へ反映される。
+
+### ダッシュボード
+
+`UniLab > AssetVault > Dashboard` で、Setup（AssetResource 同期・設定アセットを開く）/ Build（New Build・Content Update）/ Sample（プレースホルダ生成）/ Debug Override / Status（RemoteLoadPath 現値・Local/Remote グループ数・AssetResource フォルダ有無）を一望・操作できる。各操作は MenuItem からも実行可能。

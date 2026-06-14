@@ -1,8 +1,19 @@
 # タスク: AssetVault Editor 拡張のリオーガナイズ
 
-ステータス: **計画（未実装・次 PR 予定）**
+ステータス: **実装完了（2026-06-14）**
 作成日: 2026-06-13
 関連: [design-unilab-asset-cdn.md](design-unilab-asset-cdn.md) / [design-unilab-asset-vault.md](design-unilab-asset-vault.md)
+
+## 実装結果（2026-06-14）
+
+- 新規 `AssetVaultEditorOperations`（操作レイヤ）: Build / Sync / OpenSetupSettings / GetStatus を集約。Build/Setup メニューのロジックを全移管
+- 新規 `AssetVaultStatus`（読み取り専用 struct）: RemoteLoadPath 現値・Local/Remote グループ数・AssetResource フォルダ有無
+- 新規 `AssetVaultWindow`（`UniLab > AssetVault > Dashboard`、IMGUI）: Setup / Build / Sample / Debug Override / Status の5セクション
+- 新規 `AssetVaultDebugOverride`（`[InitializeOnLoad]`）: EditorPrefs 保持。Play 突入時（EnteredPlayMode）に `AssetVaultRuntime.BaseUrl` / `ContentPath` を反映。ランタイムにデバッグ専用 API は追加せず
+- `AssetVaultBuildMenu` / `AssetVaultSetupMenu` を操作レイヤへ委譲する薄いラッパに改修
+- `AssetVaultProfileSwitcher`（+ .meta）を削除
+- Sample は削除可能な別 asmdef のため、Window からは直接参照せず `EditorApplication.ExecuteMenuItem` で疎結合に呼ぶ（core → Sample の逆依存を回避）
+- `docs/asset-vault-guide.md` の環境切り替え節を更新（Profile メニュー廃止・Debug Override・ダッシュボードを追記）
 
 `UniLab.AssetVault.Editor` の拡張を「わかりやすく＋整理」する。散在したメニューと、操作とUIを兼務した構成を、**ダッシュボード＋操作レイヤ分離**に再編する。
 
@@ -30,7 +41,7 @@
 ## 提案構成
 
 ### 1. EditorWindow ダッシュボード
-`Window > UniLab > Asset Vault`。セクション分けでボタン＋状態表示:
+`UniLab > AssetVault > Dashboard`。セクション分けでボタン＋状態表示:
 
 | セクション | 内容 |
 |---|---|
