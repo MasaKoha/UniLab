@@ -9,11 +9,11 @@ namespace UniLab.AssetVault.Sample
 {
     /// <summary>
     /// AssetVault の「初期化 → （任意で更新確認・事前DL）→ ロード → 利用」を 1 クラスで示すサンプルです。
-    /// ロードは this.LoadAssetAsync 拡張を使い、Scope も Dispose も書きません（この GameObject の破棄で asset は自動 Release）。
+    /// ロードは service.LoadAssetAsync(this, ...) を使い、Scope も Dispose も書きません（この GameObject の破棄で asset は自動 Release）。
     ///
     /// 実プロジェクトでの推奨形:
     ///   - Service（IAssetVaultService）は DI（VContainer）で Singleton 登録し、起動シーケンスで InitializeAsync する。
-    ///   - 個々の画面/コンポーネントのロードは this.LoadAssetAsync（破棄連動）で済ませる。
+    ///   - 個々の画面/コンポーネントのロードは service.LoadAssetAsync(this, key)（破棄連動）で済ませる。
     /// 本サンプルは自己完結のため Service を直接 new し、初期化フローも内包しています。
     /// </summary>
     public sealed class AssetVaultSample : MonoBehaviour
@@ -72,17 +72,17 @@ namespace UniLab.AssetVault.Sample
                 await PreloadRemoteIfNeededAsync(cancellationToken);
 
                 // --- 3. ロードして利用（Scope を書かない） ---
-                // this.LoadAssetAsync は この GameObject に紐づくスコープを裏で使い、破棄時に自動 Release する。
+                // service.LoadAssetAsync(this, ...) は owner(this) の GameObject に紐づくスコープを裏で使い、破棄時に自動 Release する。
                 // ＝ CreateScope / Dispose を書かなくてよい。
                 if (_iconImage != null && !string.IsNullOrEmpty(_spriteAddress))
                 {
-                    _iconImage.sprite = await this.LoadAssetAsync<Sprite>(_spriteAddress, cancellationToken);
+                    _iconImage.sprite = await _assetVaultService.LoadAssetAsync<Sprite>(this, _spriteAddress, cancellationToken);
                 }
 
                 // 生成も同様。生成物の破棄もこの GameObject の破棄に連動する（手動 Destroy しない）。
                 if (!string.IsNullOrEmpty(_prefabAddress))
                 {
-                    await this.InstantiateAsync(_prefabAddress, _spawnParent, cancellationToken);
+                    await _assetVaultService.InstantiateAsync(this, _prefabAddress, _spawnParent, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -133,7 +133,7 @@ namespace UniLab.AssetVault.Sample
 
         private void OnDestroy()
         {
-            // ロードした asset / 生成物は this.LoadAssetAsync 拡張により GameObject 破棄で自動解放されるため、ここでは扱わない。
+            // ロードした asset / 生成物は service.LoadAssetAsync(this, ...)（GameObject 破棄連動）により自動解放されるため、ここでは扱わない。
             // 自己完結のため new した Service（State/進捗ストリーム）と、購読だけを破棄する。
             _assetVaultService.Dispose();
             _compositeDisposable.Dispose();
