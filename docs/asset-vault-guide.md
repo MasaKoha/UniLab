@@ -75,6 +75,8 @@ Failed → Initializing（リトライ）
 
 ### 1. DI 登録（VContainer）
 
+**本基盤は DI（VContainer）前提**。`SingletonMonoBehaviour` / static Instance は採用しない（テスト困難・GameObject 寿命結合・DI と二重管理のため）。グローバル静的アクセスが必要なプロジェクトは各自で実装する（MonoBehaviour 化せずプレーン static ロケータに留める）。詳細は [asset-vault-getting-started.md](asset-vault-getting-started.md) の「設計方針」。
+
 サービスは Singleton、スコープは画面の LifetimeScope で `Scoped` 登録する。Scoped Dispose で画面破棄＝アセット解放が保証される。
 
 ```csharp
