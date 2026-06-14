@@ -16,6 +16,16 @@ namespace UniLab.AssetVault
     {
         private readonly ReactiveProperty<AssetVaultState> _state = new(AssetVaultState.NotInitialized);
         private readonly Subject<DownloadProgress> _downloadProgress = new();
+        private readonly Func<string, IContentVersionResolver> _contentVersionResolverFactory;
+
+        /// <summary>
+        /// 既定では version.json を HTTP 取得する <see cref="RemoteContentVersionResolver"/> を使います。
+        /// BFF 解決やテストでは <paramref name="contentVersionResolverFactory"/> を差し替えます。
+        /// </summary>
+        public AddressablesAssetVaultService(Func<string, IContentVersionResolver> contentVersionResolverFactory = null)
+        {
+            _contentVersionResolverFactory = contentVersionResolverFactory ?? (baseUrl => new RemoteContentVersionResolver(baseUrl));
+        }
 
         /// <summary>
         /// 起動処理とロード UI が状態遷移を監視する現在の配信状態を取得します。
@@ -28,14 +38,26 @@ namespace UniLab.AssetVault
         public Observable<DownloadProgress> OnDownloadProgress => _downloadProgress;
 
         /// <summary>
-        /// Addressables を初期化し、成功時にサービスを準備完了状態へ移行します。
+        /// BaseUrl を確定し、版を version.json から解決してから Addressables を初期化します。成功時に準備完了へ移行します。
         /// </summary>
-        public async UniTask InitializeAsync(CancellationToken cancellationToken)
+        public async UniTask InitializeAsync(string baseUrl, CancellationToken cancellationToken)
         {
             _state.Value = AssetVaultState.Initializing;
 
             try
             {
+                // Debug Override が BeforeSceneLoad で BaseUrl を入れていればそれを優先（QA）。無ければ引数を採用する。
+                // RemoteLoadPath トークンは AssetVaultRuntime を型名参照するため、初期化“前”に確定させる必要がある。
+                var effectiveBaseUrl = string.IsNullOrEmpty(AssetVaultRuntime.BaseUrl) ? baseUrl : AssetVaultRuntime.BaseUrl;
+                AssetVaultRuntime.BaseUrl = effectiveBaseUrl;
+
+                // 版（ContentPath）は version.json 解決に任せる。Local 専用（baseUrl 空）の場合は解決をスキップする。
+                if (!string.IsNullOrEmpty(effectiveBaseUrl))
+                {
+                    var contentVersion = await _contentVersionResolverFactory(effectiveBaseUrl).ResolveAsync(cancellationToken);
+                    AssetVaultRuntime.ContentPath = contentVersion.Path;
+                }
+
                 await Addressables.InitializeAsync().ToUniTask(cancellationToken: cancellationToken);
                 _state.Value = AssetVaultState.Ready;
             }
