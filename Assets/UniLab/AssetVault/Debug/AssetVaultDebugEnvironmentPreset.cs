@@ -1,10 +1,10 @@
 using System;
 using UnityEngine;
 
-namespace UniLab.AssetVault.Editor
+namespace UniLab.AssetVault.Debugging
 {
     /// <summary>
-    /// QA 用デバッグ環境プリセット 1 件分です。表示名と、Play 時に <see cref="AssetVaultRuntime"/> へ
+    /// QA 用デバッグ環境プリセット 1 件分です。表示名と、適用時に <see cref="AssetVaultRuntime"/> へ
     /// 反映する上書き値（BaseUrl / ContentPath）を保持します。
     /// </summary>
     [Serializable]

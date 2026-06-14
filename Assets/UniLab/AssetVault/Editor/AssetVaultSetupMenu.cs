@@ -13,7 +13,7 @@ namespace UniLab.AssetVault.Editor
         private const string OpenSetupSettingsMenuPath = BaseMenuPath + "Open Setup Settings";
 
         /// <summary>
-        /// AssetResource の Internal / External フォルダ規約を Addressables に同期します。
+        /// 設定アセットの同期ルール（フォルダ＋Local/Remote）を Addressables に同期します。
         /// </summary>
         [MenuItem(SyncAssetResourceMenuPath)]
         public static void SyncAssetResource()
