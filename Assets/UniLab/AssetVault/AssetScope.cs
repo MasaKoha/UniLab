@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -29,6 +30,29 @@ namespace UniLab.AssetVault
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 throw AssetVaultOperationGuard.ToAssetVaultException(exception, $"Failed to load asset by key '{key}'.");
+            }
+        }
+
+        /// <summary>
+        /// label を付与した asset 群を一括ロードし、その Addressables handle をこの scope の所有にします。
+        /// 型 T が結果のフィルタとして働くため、同一ラベル内に他の型が混在していても問題ありません。
+        /// </summary>
+        public async UniTask<IReadOnlyList<T>> LoadAssetsAsync<T>(string label, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var handle = Addressables.LoadAssetsAsync<T>(label, null);
+                _handles.Add(handle);
+
+                var assets = await handle.ToUniTask(cancellationToken: cancellationToken);
+                AssetVaultOperationGuard.ThrowIfFailed(handle, $"Failed to load assets by label '{label}'.");
+
+                // List<T> は IReadOnlyList<T> を実装するため通常は無アロケーションでキャストできる。
+                return assets as IReadOnlyList<T> ?? assets.ToList();
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw AssetVaultOperationGuard.ToAssetVaultException(exception, $"Failed to load assets by label '{label}'.");
             }
         }
 
