@@ -42,6 +42,16 @@ namespace UniLab.AssetVault.Editor
         }
 
         /// <summary>
+        /// フォルダ名から一括ロード用ラベル（= フォルダ名そのもの）を作ります。
+        /// ラベルは「まとめてロードする単位」を表し、LoadAssetsAsync&lt;T&gt;(label) で横断取得します。
+        /// Local/Remote のプレフィックスは付けません（ロードは配信先を区別しない source-agnostic 方針のため）。
+        /// </summary>
+        public static string CreateLabel(string folderPath)
+        {
+            return Path.GetFileName(folderPath);
+        }
+
+        /// <summary>
         /// アセットパスの区切りを "/" に統一し、末尾スラッシュを除去します。null/空は空文字を返します。
         /// </summary>
         public static string NormalizeAssetPath(string assetPath)
