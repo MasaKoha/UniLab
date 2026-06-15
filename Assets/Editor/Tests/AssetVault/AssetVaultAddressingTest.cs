@@ -74,6 +74,18 @@ namespace UniLab.AssetVault.Editor.Tests
         }
 
         [Test]
+        public void IsInSkipFolder_アンダースコア始まりフォルダ配下だけをtrueにする()
+        {
+            // 直下・サブフォルダ直下の「_」フォルダ、ネストした「_」フォルダはスキップ対象。
+            Assert.IsTrue(AssetVaultAddressing.IsInSkipFolder("Assets/Local/_Src/atlas_src.png", "Assets/Local"));
+            Assert.IsTrue(AssetVaultAddressing.IsInSkipFolder("Assets/Local/Icons/_Src/clip.anim", "Assets/Local"));
+            // 通常フォルダ配下・ルート直下・ファイル名先頭の「_」はスキップ対象外。
+            Assert.IsFalse(AssetVaultAddressing.IsInSkipFolder("Assets/Local/Icons/coin.png", "Assets/Local"));
+            Assert.IsFalse(AssetVaultAddressing.IsInSkipFolder("Assets/Local/coin.png", "Assets/Local"));
+            Assert.IsFalse(AssetVaultAddressing.IsInSkipFolder("Assets/Local/_coin.png", "Assets/Local"));
+        }
+
+        [Test]
         public void IsManagedGroupName_LocalRemoteプレフィックスのみ管理対象と判定する()
         {
             Assert.IsTrue(AssetVaultAddressing.IsManagedGroupName("Local_Foo"));

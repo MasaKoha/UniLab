@@ -15,6 +15,9 @@ namespace UniLab.AssetVault.Editor
         /// <summary>Remote 配信グループ名のプレフィックスです。</summary>
         public const string RemoteGroupPrefix = "Remote_";
 
+        /// <summary>依存アセット置き場フォルダの名前プレフィックスです。配下は Addressables 登録対象外（依存として同梱）になります。</summary>
+        public const string SkipFolderPrefix = "_";
+
         /// <summary>
         /// アセットパスから、カテゴリルート相対・拡張子なしのアドレスを作ります。
         /// 例: ("Assets/Remote/Characters/hero.prefab", "Assets/Remote") → "Characters/hero"。
@@ -96,6 +99,34 @@ namespace UniLab.AssetVault.Editor
 
             var firstFolderName = relativePath.Substring(0, separatorIndex);
             return normalizedCategoryRoot + "/" + firstFolderName;
+        }
+
+        /// <summary>
+        /// assetPath が categoryRoot 配下の「_」始まりフォルダ（依存アセット置き場）の中にあるかを判定します。
+        /// 単一利用の依存（prefab 専用 AnimationClip、SpriteAtlas の元 Sprite 等）をエントリ登録から除外するために使います。
+        /// 判定対象はフォルダ要素のみで、ファイル名先頭の「_」は対象外です。
+        /// </summary>
+        public static bool IsInSkipFolder(string assetPath, string categoryRoot)
+        {
+            var normalizedAssetPath = NormalizeAssetPath(assetPath);
+            var normalizedCategoryRoot = NormalizeAssetPath(categoryRoot);
+            if (!IsUnderRoot(normalizedAssetPath, normalizedCategoryRoot))
+            {
+                return false;
+            }
+
+            var relativePath = normalizedAssetPath.Substring(normalizedCategoryRoot.Length).TrimStart('/');
+            var segments = relativePath.Split('/');
+            // 末尾要素はファイル名なので除外し、フォルダ要素だけを見る。
+            for (var index = 0; index < segments.Length - 1; index++)
+            {
+                if (segments[index].StartsWith(SkipFolderPrefix, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
