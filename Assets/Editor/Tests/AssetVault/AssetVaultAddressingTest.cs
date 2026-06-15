@@ -30,6 +30,13 @@ namespace UniLab.AssetVault.Editor.Tests
         }
 
         [Test]
+        public void CreateLabel_フォルダ名をプレフィックスなしで返す()
+        {
+            Assert.AreEqual("Icons", AssetVaultAddressing.CreateLabel("Assets/Local/Icons"));
+            Assert.AreEqual("Characters", AssetVaultAddressing.CreateLabel("Assets/Remote/Characters"));
+        }
+
+        [Test]
         public void NormalizeAssetPath_区切り統一と末尾スラッシュ除去をする()
         {
             Assert.AreEqual("Assets/Foo/Bar", AssetVaultAddressing.NormalizeAssetPath("Assets\\Foo\\Bar/"));

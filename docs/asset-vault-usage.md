@@ -55,6 +55,20 @@ public sealed class IconView : MonoBehaviour
 - `_assetVault.InstantiateAsync(this, key, parent)` も同様（生成物も GameObject 破棄で解放）。
 - 前提: 別途 `IAssetVaultService.InitializeAsync` 済みであること（起動シーケンス）。
 
+### ラベル一括ロード: `LoadAssetsAsync<T>(label)`
+
+「まとめてロードしたい単位」を **ラベル**で一括取得する。ラベルは **Sync 時にサブフォルダ名から自動付与**される（規約：1サブフォルダ ＝ 1ラベル）。手動でラベルを振る必要はない。
+
+```csharp
+// Local/Icons/ 配下を一括ロード。owner(this) の GameObject 破棄で自動 Release。
+IReadOnlyList<Sprite> icons = await _assetVault.LoadAssetsAsync<Sprite>(this, "Icons");
+```
+
+- **型 `T` がフィルタ**として働く。`Icons/` に Sprite と Prefab が混在していても `LoadAssetsAsync<Sprite>("Icons")` は Sprite だけ返す（混在はエラーにならない）。全部欲しければ `LoadAssetsAsync<UnityEngine.Object>("Icons")`。
+- ラベルは **Local/Remote を区別しない**（source-agnostic）。同名フォルダが両方にあれば両方から読む。Remote の事前 DL が要るかは `GetDownloadSizeAsync` / `DownloadAsync` で判断する（label をそのまま渡せる）。
+- 明示 Scope 版は `scope.LoadAssetsAsync<T>(label, ct)`。
+- **規約の指針**: ラベルは「型」ではなく「**ロード単位（用途）**」で切る（例 `HomeIcon` / `BattleIcon`）。型分割（`Icons/Sprite`, `Icons/Prefab`）は `T` が捌くので不要。
+
 > 以降は **上位: 明示 Scope** 方式の説明。共有寿命や画面単位の一括解放が要るときに使う。
 
 ## 明示 Scope の原則（最初に押さえる3点）
@@ -80,6 +94,9 @@ public interface IAssetScope : IDisposable
 {
     // key で asset をロード（Sprite / ScriptableObject / GameObject(プレハブ資産) 等）
     UniTask<T> LoadAssetAsync<T>(string key, CancellationToken cancellationToken);
+
+    // label を付与した asset 群を一括ロード（T が型フィルタとして働く）
+    UniTask<IReadOnlyList<T>> LoadAssetsAsync<T>(string label, CancellationToken cancellationToken);
 
     // key の GameObject を parent 配下に生成（インスタンス化まで行う）
     UniTask<GameObject> InstantiateAsync(string key, Transform parent, CancellationToken cancellationToken);

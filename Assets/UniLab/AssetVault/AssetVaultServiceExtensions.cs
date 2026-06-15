@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -27,6 +28,25 @@ namespace UniLab.AssetVault
         public static UniTask<T> LoadAssetAsync<T>(this IAssetVaultService service, Component owner, string key, CancellationToken cancellationToken = default)
         {
             return service.LoadAssetAsync<T>(owner.gameObject, key, cancellationToken);
+        }
+
+        /// <summary>
+        /// label を付与した asset 群を一括ロードします。ハンドルは owner の GameObject に紐づき、破棄時に自動 Release されます。
+        /// 型 <typeparamref name="T"/> が結果のフィルタとして働くため、同一ラベル内に他の型が混在していても問題ありません。
+        /// cancellationToken 未指定時は owner の GameObject 破棄トークンを使い、ロード中のキャンセルも自動化します。
+        /// </summary>
+        public static UniTask<IReadOnlyList<T>> LoadAssetsAsync<T>(this IAssetVaultService service, GameObject owner, string label, CancellationToken cancellationToken = default)
+        {
+            var holder = AssetScopeHolder.GetOrAttach(owner, service);
+            return holder.Scope.LoadAssetsAsync<T>(label, ResolveToken(holder, cancellationToken));
+        }
+
+        /// <summary>
+        /// <see cref="LoadAssetsAsync{T}(IAssetVaultService,GameObject,string,CancellationToken)"/> の Component 版です。
+        /// </summary>
+        public static UniTask<IReadOnlyList<T>> LoadAssetsAsync<T>(this IAssetVaultService service, Component owner, string label, CancellationToken cancellationToken = default)
+        {
+            return service.LoadAssetsAsync<T>(owner.gameObject, label, cancellationToken);
         }
 
         /// <summary>
