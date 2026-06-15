@@ -260,7 +260,8 @@ namespace UniLab.AssetVault.Editor
             {
                 var groupName = AssetVaultAddressing.GetGroupName(subFolder, isLocal);
                 var group = EnsureGroup(settings, groupName, isLocal);
-                RegisterFolder(settings, group, subFolder, categoryRoot, duplicateAddressCollector, registeredGuids);
+                var label = AssetVaultAddressing.CreateLabel(subFolder);
+                RegisterFolder(settings, group, subFolder, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
 
             RegisterDirectAssets(settings, categoryRoot, isLocal, duplicateAddressCollector, registeredGuids);
@@ -293,13 +294,14 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetGroup group,
             string folder,
             string categoryRoot,
+            string label,
             AssetVaultDuplicateAddressCollector duplicateAddressCollector,
             HashSet<string> registeredGuids)
         {
             var guids = AssetDatabase.FindAssets(string.Empty, new[] { folder });
             foreach (var guid in guids)
             {
-                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector, registeredGuids);
+                RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
         }
 
@@ -311,6 +313,8 @@ namespace UniLab.AssetVault.Editor
             HashSet<string> registeredGuids)
         {
             var group = default(AddressableAssetGroup);
+            // ルートフォルダ直下アセットの一括ロード用ラベルは、ルートフォルダ名から作る。
+            var label = AssetVaultAddressing.CreateLabel(categoryRoot);
             var guids = AssetDatabase.FindAssets(string.Empty, new[] { categoryRoot });
             foreach (var guid in guids)
             {
@@ -332,7 +336,7 @@ namespace UniLab.AssetVault.Editor
                     group = EnsureGroup(settings, AssetVaultAddressing.GetGroupName(categoryRoot, isLocal), isLocal);
                 }
 
-                RegisterAsset(settings, group, guid, categoryRoot, duplicateAddressCollector, registeredGuids);
+                RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
         }
 
@@ -341,6 +345,7 @@ namespace UniLab.AssetVault.Editor
             AddressableAssetGroup group,
             string guid,
             string categoryRoot,
+            string label,
             AssetVaultDuplicateAddressCollector duplicateAddressCollector,
             HashSet<string> registeredGuids)
         {
@@ -357,6 +362,9 @@ namespace UniLab.AssetVault.Editor
             }
 
             entry.address = AssetVaultAddressing.CreateAddress(assetPath, categoryRoot);
+            // フォルダ単位の一括ロード（LoadAssetsAsync<T>(label)）用にラベルを付与する。
+            // force:true で settings 未登録のラベルは自動登録し、postEvent:false でバッチ中の再評価を抑える。
+            entry.SetLabel(label, true, true, false);
             registeredGuids.Add(guid);
             duplicateAddressCollector.Record(entry.address, assetPath);
         }
