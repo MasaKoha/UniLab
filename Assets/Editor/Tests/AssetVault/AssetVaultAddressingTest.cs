@@ -44,6 +44,36 @@ namespace UniLab.AssetVault.Editor.Tests
         }
 
         [Test]
+        public void IsUnderRoot_一致と配下だけをtrueにする()
+        {
+            Assert.IsTrue(AssetVaultAddressing.IsUnderRoot("Assets/Local", "Assets/Local"));
+            Assert.IsTrue(AssetVaultAddressing.IsUnderRoot("Assets/Local/Icon.png", "Assets/Local"));
+            Assert.IsFalse(AssetVaultAddressing.IsUnderRoot("Assets/Remote/Icon.png", "Assets/Local"));
+            Assert.IsFalse(AssetVaultAddressing.IsUnderRoot("Assets/LocalStuff/Icon.png", "Assets/Local"));
+        }
+
+        [Test]
+        public void ResolveCategoryFolder_ルート直下はルート自身を返す()
+        {
+            var categoryFolder = AssetVaultAddressing.ResolveCategoryFolder("Assets/Local/Icon.png", "Assets/Local");
+            Assert.AreEqual("Assets/Local", categoryFolder);
+        }
+
+        [Test]
+        public void ResolveCategoryFolder_サブフォルダ直下は第一階層を返す()
+        {
+            var categoryFolder = AssetVaultAddressing.ResolveCategoryFolder("Assets/Local/Icons/Icon.png", "Assets/Local");
+            Assert.AreEqual("Assets/Local/Icons", categoryFolder);
+        }
+
+        [Test]
+        public void ResolveCategoryFolder_深いネストも第一階層を返す()
+        {
+            var categoryFolder = AssetVaultAddressing.ResolveCategoryFolder("Assets/Local/Icons/Sub/Icon.png", "Assets/Local");
+            Assert.AreEqual("Assets/Local/Icons", categoryFolder);
+        }
+
+        [Test]
         public void IsManagedGroupName_LocalRemoteプレフィックスのみ管理対象と判定する()
         {
             Assert.IsTrue(AssetVaultAddressing.IsManagedGroupName("Local_Foo"));

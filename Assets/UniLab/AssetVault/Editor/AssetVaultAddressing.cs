@@ -65,6 +65,40 @@ namespace UniLab.AssetVault.Editor
         }
 
         /// <summary>
+        /// assetPath が root 直下または配下にあるかを、フォルダ境界を守って判定します。
+        /// </summary>
+        public static bool IsUnderRoot(string assetPath, string root)
+        {
+            var normalizedAssetPath = NormalizeAssetPath(assetPath);
+            var normalizedRoot = NormalizeAssetPath(root);
+            if (string.IsNullOrEmpty(normalizedAssetPath) || string.IsNullOrEmpty(normalizedRoot))
+            {
+                return false;
+            }
+
+            return normalizedAssetPath == normalizedRoot
+                || normalizedAssetPath.StartsWith(normalizedRoot + "/", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// assetPath が属するカテゴリフォルダを返します。グループ名とラベルを手動 Sync と同じ規則で決めるために使います。
+        /// </summary>
+        public static string ResolveCategoryFolder(string assetPath, string categoryRoot)
+        {
+            var normalizedAssetPath = NormalizeAssetPath(assetPath);
+            var normalizedCategoryRoot = NormalizeAssetPath(categoryRoot);
+            var relativePath = normalizedAssetPath.Substring(normalizedCategoryRoot.Length).TrimStart('/');
+            var separatorIndex = relativePath.IndexOf("/", StringComparison.Ordinal);
+            if (separatorIndex < 0)
+            {
+                return normalizedCategoryRoot;
+            }
+
+            var firstFolderName = relativePath.Substring(0, separatorIndex);
+            return normalizedCategoryRoot + "/" + firstFolderName;
+        }
+
+        /// <summary>
         /// AssetVault が同期で生成・管理するグループ名（Local_/Remote_ プレフィックス）かどうかを序数比較で判定します。
         /// </summary>
         public static bool IsManagedGroupName(string groupName)

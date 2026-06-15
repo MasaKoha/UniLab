@@ -20,6 +20,9 @@ namespace UniLab.AssetVault.Editor
         [Tooltip("CDN(Remote)アセットのルートフォルダ。【任意】未設定可。直下サブフォルダがグループ Remote_<名> になります。")]
         [SerializeField] private DefaultAsset _remoteFolder;
 
+        [Tooltip("オンにすると Local/Remote 配下のアセット追加・移動・削除を検知して Addressables を自動登録/更新します。既定オフ。")]
+        [SerializeField] private bool _autoRegisterOnAssetChange;
+
         /// <summary>
         /// 同梱(Local)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null。必須項目です。
         /// </summary>
@@ -29,6 +32,11 @@ namespace UniLab.AssetVault.Editor
         /// CDN(Remote)ルートフォルダのアセットパスです。未設定・非フォルダの場合は null（任意項目）。
         /// </summary>
         public string RemoteFolderPath => ResolveFolderPath(_remoteFolder);
+
+        /// <summary>
+        /// アセット変更時に自動登録を行うか。既定 false（オプトイン）です。
+        /// </summary>
+        public bool AutoRegisterOnAssetChange => _autoRegisterOnAssetChange;
 
         /// <summary>
         /// 設定アセットを副作用なく読み込みます（存在しなければ false）。読み取り専用 UI から使い、アセットの自動生成を避けます。

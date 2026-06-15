@@ -23,6 +23,8 @@ namespace UniLab.AssetVault.Editor
         private const string LocalNotFolderMessage = "Local Folder にフォルダ以外が割り当てられています。フォルダを指定してください。";
         private const string RemoteNotFolderMessage = "Remote Folder にフォルダ以外が割り当てられています。フォルダを指定してください。";
         private const string OverlapMessage = "Local と Remote は別フォルダにしてください（同一・入れ子は二重登録やアドレス衝突を招きます）。";
+        private const string AutoRegisterEnabledMessage = "自動登録が有効です。Local/Remote 配下の追加・移動・削除は Addressables へ差分反映されます。厳密な重複検出や全体掃除が必要な場合は Sync AssetResource を実行してください。";
+        private const string AutoRegisterDisabledMessage = "自動登録はオフです。Local/Remote 配下の変更は、下の Sync AssetResource を実行して反映してください。";
 
         public override void OnInspectorGUI()
         {
@@ -56,6 +58,15 @@ namespace UniLab.AssetVault.Editor
             if (hasOverlap)
             {
                 EditorGUILayout.HelpBox(OverlapMessage, MessageType.Warning);
+            }
+
+            if (settings.AutoRegisterOnAssetChange)
+            {
+                EditorGUILayout.HelpBox(AutoRegisterEnabledMessage, MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(AutoRegisterDisabledMessage, MessageType.Info);
             }
 
             EditorGUILayout.Space();
