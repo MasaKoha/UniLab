@@ -4,7 +4,6 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Settings;
-using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEngine;
 
 namespace UniLab.AssetVault.Editor
@@ -15,19 +14,8 @@ namespace UniLab.AssetVault.Editor
     /// </summary>
     public static class AssetVaultEditorOperations
     {
-        private const string LocalBuildPathVariableName = "LocalBuildPath";
-        private const string LocalLoadPathVariableName = "LocalLoadPath";
-        private const string RemoteBuildPathVariableName = "RemoteBuildPath";
-        private const string RemoteLoadPathVariableName = "RemoteLoadPath";
-        private const string LocalBuildPathValue = "[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]";
-        private const string LocalLoadPathValue = "{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]";
-        private const string RemoteBuildPathValue = "ServerData/[BuildTarget]";
-        private const string BuildTargetToken = "[BuildTarget]";
-        private const string BaseUrlPropertyName = "BaseUrl";
-        private const string ContentPathPropertyName = "ContentPath";
         private const string CategorySkippedMessageFormat = "AssetVault setup skipped because folder was not found: {0}";
         private const string LocalFolderMissingMessage = "AssetVault setup aborted: the Local folder is required but not set. Assign it in AssetVaultSetupSettings.";
-        private const string ProfileVariableMissingMessageFormat = "Addressables profile variable '{0}' was not found; group build/load path may be misconfigured.";
         private const string DuplicateAddressFailureMessage = "AssetVault setup failed due to duplicate addresses. Resolve the following collisions and run sync again:\n{0}";
         private const string SyncCompletedMessage = "AssetVault Addressables setup completed.";
         private const string ContentStateMissingMessage = "Addressables content state file was not found. Run a new build before a content update build.";
@@ -152,15 +140,7 @@ namespace UniLab.AssetVault.Editor
                 return false;
             }
 
-            EnsureProfileValue(settings, LocalBuildPathVariableName, LocalBuildPathValue);
-            EnsureProfileValue(settings, LocalLoadPathVariableName, LocalLoadPathValue);
-            EnsureProfileValue(settings, RemoteBuildPathVariableName, RemoteBuildPathValue);
-            EnsureProfileValue(settings, RemoteLoadPathVariableName, CreateRemoteLoadPath());
-
-            // RemoteLoadPath / RemoteBuildPath は AssetVaultRuntime のトークン規約・ServerData 規約に毎回追従させるため、
-            // 既存値があっても上書きする（Local 側は EnsureProfileValue で初回のみ。Remote だけ非対称に上書きするのは意図的）。
-            settings.profileSettings.SetValue(settings.activeProfileId, RemoteLoadPathVariableName, CreateRemoteLoadPath());
-            settings.profileSettings.SetValue(settings.activeProfileId, RemoteBuildPathVariableName, RemoteBuildPathValue);
+            AssetVaultGroupRegistrar.EnsureProfileValues(settings);
 
             var duplicateAddressCollector = new AssetVaultDuplicateAddressCollector();
             var registeredGuids = new HashSet<string>();
@@ -178,7 +158,7 @@ namespace UniLab.AssetVault.Editor
                     SyncCategory(settings, remoteFolderPath, false, duplicateAddressCollector, registeredGuids);
                 }
 
-                PruneStaleEntries(settings, registeredGuids);
+                AssetVaultGroupRegistrar.PruneStaleEntries(settings, registeredGuids);
             }
             finally
             {
@@ -227,7 +207,7 @@ namespace UniLab.AssetVault.Editor
                 return new AssetVaultStatus(false, string.Empty, 0, 0, localFolderPath, remoteFolderPath);
             }
 
-            var remoteLoadPath = settings.profileSettings.GetValueByName(settings.activeProfileId, RemoteLoadPathVariableName);
+            var remoteLoadPath = settings.profileSettings.GetValueByName(settings.activeProfileId, AssetVaultGroupRegistrar.RemoteLoadPathVariableName);
             var localGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(AssetVaultAddressing.LocalGroupPrefix, System.StringComparison.Ordinal));
             var remoteGroupCount = settings.groups.Count(group => group != null && group.Name.StartsWith(AssetVaultAddressing.RemoteGroupPrefix, System.StringComparison.Ordinal));
 
@@ -259,34 +239,12 @@ namespace UniLab.AssetVault.Editor
             foreach (var subFolder in subFolders)
             {
                 var groupName = AssetVaultAddressing.GetGroupName(subFolder, isLocal);
-                var group = EnsureGroup(settings, groupName, isLocal);
+                var group = AssetVaultGroupRegistrar.EnsureGroup(settings, groupName, isLocal);
                 var label = AssetVaultAddressing.CreateLabel(subFolder);
                 RegisterFolder(settings, group, subFolder, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
 
             RegisterDirectAssets(settings, categoryRoot, isLocal, duplicateAddressCollector, registeredGuids);
-        }
-
-        private static AddressableAssetGroup EnsureGroup(AddressableAssetSettings settings, string groupName, bool isLocal)
-        {
-            var group = settings.FindGroup(groupName);
-            var created = false;
-            if (group == null)
-            {
-                group = settings.CreateGroup(
-                    groupName,
-                    false,
-                    false,
-                    false,
-                    null,
-                    typeof(BundledAssetGroupSchema),
-                    typeof(ContentUpdateGroupSchema));
-                created = true;
-            }
-
-            ConfigureBundledAssetGroupSchema(settings, group, isLocal, created);
-            ConfigureContentUpdateGroupSchema(group, isLocal);
-            return group;
         }
 
         private static void RegisterFolder(
@@ -301,7 +259,7 @@ namespace UniLab.AssetVault.Editor
             var guids = AssetDatabase.FindAssets(string.Empty, new[] { folder });
             foreach (var guid in guids)
             {
-                RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
+                AssetVaultGroupRegistrar.RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
         }
 
@@ -333,121 +291,11 @@ namespace UniLab.AssetVault.Editor
                 if (group == null)
                 {
                     // ルートフォルダ直下のアセットは、そのフォルダ名から作る既定グループにまとめる。
-                    group = EnsureGroup(settings, AssetVaultAddressing.GetGroupName(categoryRoot, isLocal), isLocal);
+                    group = AssetVaultGroupRegistrar.EnsureGroup(settings, AssetVaultAddressing.GetGroupName(categoryRoot, isLocal), isLocal);
                 }
 
-                RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
+                AssetVaultGroupRegistrar.RegisterAsset(settings, group, guid, categoryRoot, label, duplicateAddressCollector, registeredGuids);
             }
-        }
-
-        private static void RegisterAsset(
-            AddressableAssetSettings settings,
-            AddressableAssetGroup group,
-            string guid,
-            string categoryRoot,
-            string label,
-            AssetVaultDuplicateAddressCollector duplicateAddressCollector,
-            HashSet<string> registeredGuids)
-        {
-            var assetPath = AssetDatabase.GUIDToAssetPath(guid);
-            if (AssetDatabase.IsValidFolder(assetPath))
-            {
-                return;
-            }
-
-            var entry = settings.CreateOrMoveEntry(guid, group);
-            if (entry == null)
-            {
-                return;
-            }
-
-            entry.address = AssetVaultAddressing.CreateAddress(assetPath, categoryRoot);
-            // フォルダ単位の一括ロード（LoadAssetsAsync<T>(label)）用にラベルを付与する。
-            // force:true で settings 未登録のラベルは自動登録し、postEvent:false でバッチ中の再評価を抑える。
-            entry.SetLabel(label, true, true, false);
-            registeredGuids.Add(guid);
-            duplicateAddressCollector.Record(entry.address, assetPath);
-        }
-
-        // 管理グループ（Local_/Remote_）から、今回の同期で登録されなかった古いエントリを除去し、空になったグループを削除する。
-        private static void PruneStaleEntries(AddressableAssetSettings settings, HashSet<string> registeredGuids)
-        {
-            var managedGroups = settings.groups
-                .Where(group => group != null && AssetVaultAddressing.IsManagedGroupName(group.Name))
-                .ToList();
-
-            foreach (var group in managedGroups)
-            {
-                var staleEntries = group.entries
-                    .Where(entry => entry != null && !registeredGuids.Contains(entry.guid))
-                    .ToList();
-                foreach (var staleEntry in staleEntries)
-                {
-                    settings.RemoveAssetEntry(staleEntry.guid, false);
-                }
-
-                if (group.entries.Count == 0)
-                {
-                    settings.RemoveGroup(group);
-                }
-            }
-        }
-
-        private static void ConfigureBundledAssetGroupSchema(AddressableAssetSettings settings, AddressableAssetGroup group, bool isLocal, bool created)
-        {
-            var bundledAssetGroupSchema = group.GetSchema<BundledAssetGroupSchema>();
-            if (bundledAssetGroupSchema == null)
-            {
-                bundledAssetGroupSchema = group.AddSchema<BundledAssetGroupSchema>();
-                created = true;
-            }
-
-            // Build/Load パスは Local/Remote の振り分けに直結するため毎回強制する。
-            var buildPathVariableName = isLocal ? LocalBuildPathVariableName : RemoteBuildPathVariableName;
-            var loadPathVariableName = isLocal ? LocalLoadPathVariableName : RemoteLoadPathVariableName;
-            if (!bundledAssetGroupSchema.BuildPath.SetVariableByName(settings, buildPathVariableName))
-            {
-                Debug.LogWarning(string.Format(ProfileVariableMissingMessageFormat, buildPathVariableName));
-            }
-
-            if (!bundledAssetGroupSchema.LoadPath.SetVariableByName(settings, loadPathVariableName))
-            {
-                Debug.LogWarning(string.Format(ProfileVariableMissingMessageFormat, loadPathVariableName));
-            }
-
-            // BundleNaming は新規グループのみ既定値を設定し、既存グループの手動調整は尊重する。
-            if (created)
-            {
-                bundledAssetGroupSchema.BundleNaming = BundledAssetGroupSchema.BundleNamingStyle.AppendHash;
-            }
-        }
-
-        private static void ConfigureContentUpdateGroupSchema(AddressableAssetGroup group, bool isLocal)
-        {
-            var contentUpdateGroupSchema = group.GetSchema<ContentUpdateGroupSchema>();
-            if (contentUpdateGroupSchema == null)
-            {
-                contentUpdateGroupSchema = group.AddSchema<ContentUpdateGroupSchema>();
-            }
-
-            contentUpdateGroupSchema.StaticContent = isLocal;
-        }
-
-        private static void EnsureProfileValue(AddressableAssetSettings settings, string variableName, string defaultValue)
-        {
-            var variableNames = settings.profileSettings.GetVariableNames();
-            if (variableNames.Contains(variableName))
-            {
-                return;
-            }
-
-            settings.profileSettings.CreateValue(variableName, defaultValue);
-        }
-
-        private static string CreateRemoteLoadPath()
-        {
-            var runtimeTypeName = typeof(AssetVaultRuntime).FullName;
-            return $"{{{runtimeTypeName}.{BaseUrlPropertyName}}}/{{{runtimeTypeName}.{ContentPathPropertyName}}}/{BuildTargetToken}";
         }
     }
 }
