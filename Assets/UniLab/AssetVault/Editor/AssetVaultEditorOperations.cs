@@ -238,6 +238,12 @@ namespace UniLab.AssetVault.Editor
             var subFolders = AssetDatabase.GetSubFolders(categoryRoot);
             foreach (var subFolder in subFolders)
             {
+                // 依存アセット置き場（"_" 始まりフォルダ）はグループ化・登録しない。
+                if (Path.GetFileName(subFolder).StartsWith(AssetVaultAddressing.SkipFolderPrefix, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 var groupName = AssetVaultAddressing.GetGroupName(subFolder, isLocal);
                 var group = AssetVaultGroupRegistrar.EnsureGroup(settings, groupName, isLocal);
                 var label = AssetVaultAddressing.CreateLabel(subFolder);

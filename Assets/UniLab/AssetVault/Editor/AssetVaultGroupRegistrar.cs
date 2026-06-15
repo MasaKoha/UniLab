@@ -90,6 +90,12 @@ namespace UniLab.AssetVault.Editor
                 return;
             }
 
+            // 依存アセット置き場（"_" 始まりフォルダ）は登録対象外。手動 Sync ではこの未登録分を PruneStaleEntries が掃除する。
+            if (AssetVaultAddressing.IsInSkipFolder(assetPath, categoryRoot))
+            {
+                return;
+            }
+
             var entry = settings.CreateOrMoveEntry(guid, group);
             if (entry == null)
             {
@@ -125,6 +131,13 @@ namespace UniLab.AssetVault.Editor
             var guid = AssetDatabase.AssetPathToGUID(assetPath);
             if (string.IsNullOrEmpty(guid))
             {
+                return;
+            }
+
+            // 依存アセット置き場（"_" 始まりフォルダ）へ入った/移動した場合は、登録せず既存エントリを除去する。
+            if (AssetVaultAddressing.IsInSkipFolder(assetPath, categoryRoot))
+            {
+                RemoveEntry(settings, guid);
                 return;
             }
 

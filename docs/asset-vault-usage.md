@@ -69,6 +69,38 @@ IReadOnlyList<Sprite> icons = await _assetVault.LoadAssetsAsync<Sprite>(this, "I
 - 明示 Scope 版は `scope.LoadAssetsAsync<T>(label, ct)`。
 - **規約の指針**: ラベルは「型」ではなく「**ロード単位（用途）**」で切る（例 `HomeIcon` / `BattleIcon`）。型分割（`Icons/Sprite`, `Icons/Prefab`）は `T` が捌くので不要。
 
+### 依存アセットと skip フォルダ（`_` 始まり）
+
+`Local/Remote` 配下で **`_` 始まりのフォルダは登録対象外**（Sync・自動登録とも）。「コードから直接ロードしない依存アセット」の置き場に使う。
+
+判断基準は「**address/label でロードする起点か？**」:
+
+- **起点 → 通常フォルダ（登録される）**: prefab / ScriptableObject / 単体 Sprite / `.spriteatlas` 本体。
+- **依存のみ → `_` フォルダ（登録されない）**: その起点専用の AnimationClip / AnimatorController / Material / Shader / **SpriteAtlas の元 Sprite** 等。登録されなくても、起点をロードすれば**依存として自動同梱**される（1コピー）。
+
+```
+Local/
+  Characters/
+    hero.prefab          ← 登録（address: Characters/hero, label: Characters）
+    _src/                ← 登録されない（hero 専用の依存置き場）
+      hero.anim
+      hero_mat.mat
+  UI/
+    icons.spriteatlas    ← 登録（アトラス本体はロード可）
+    _atlas/              ← 登録されない（アトラスの元 Sprite。重複・実行時バインド事故を防ぐ）
+      coin.png
+```
+
+**「登録されない」≠「ビルドに入らない」**: `_` が制御するのは Addressable エントリ化（= 個別ロードの口）だけ。`_` 配下でも、登録済みアセットから参照されていれば依存として同梱される。逆に**どこからも参照されない `_` 配下アセットは、登録も参照もされず＝ビルドに含まれない（ロード手段がない）**点に注意。
+
+**重要な例外 — 共有依存は `_` に入れない**:
+
+- `_`（未登録）にすると、その依存は**参照する各バンドルに重複コピー**される。これは**単一利用の依存にだけ**正しい。
+- **複数の起点／複数グループから参照される共有依存**（共通 Material・共有アトラス等）は、`_` ではなく**通常フォルダに置いて登録**する（1バンドルに集約され重複しない）。
+- 重複の検出は手で追わず **Addressables Analyze → Check Duplicate Bundle Dependencies**。出たものを `_` から通常フォルダ（共有グループ）へ移す。
+
+> SpriteAtlas: 本体は登録、元 Sprite は `_` で除外、が基本。直接参照されないアトラス（名前解決で使う等）は `SpriteAtlasManager.atlasRequested` を Addressables で配線して動的供給する。
+
 > 以降は **上位: 明示 Scope** 方式の説明。共有寿命や画面単位の一括解放が要るときに使う。
 
 ## 明示 Scope の原則（最初に押さえる3点）
