@@ -31,7 +31,7 @@ Addressables の生 API をアプリ層から隠蔽する配信基盤 `UniLab.As
 
 参照: `Logger` / `R3.Unity` / `UniTask` / `UniTask.Addressables` / `Unity.Addressables` / `Unity.ResourceManager`。
 
-> **C# 9 制約**: 本プロジェクトは Unity 6000.4（C# 9 まで）。`record` / `record struct` は使用不可。値型は `readonly struct` で実装している。
+> **C# 9 制約**: 本プロジェクトは Unity 6000.5（C# 9 まで）。`record` / `record struct` は使用不可。値型は `readonly struct` で実装している。
 
 ---
 

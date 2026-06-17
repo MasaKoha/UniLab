@@ -123,7 +123,7 @@ classDiagram
     IPopupParameter ..> PopupPriority
 ```
 
-> **言語バージョン制約**: 本プロジェクトは Unity 6000.4（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`PopupResult` などの値型は `readonly struct` で実装する（等価比較が必要な場合のみ `IEquatable<T>` を手実装）。
+> **言語バージョン制約**: 本プロジェクトは Unity 6000.5（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`PopupResult` などの値型は `readonly struct` で実装する（等価比較が必要な場合のみ `IEquatable<T>` を手実装）。
 
 ---
 

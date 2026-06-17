@@ -104,7 +104,7 @@ classDiagram
     IAssetVaultService ..> AssetVaultState
 ```
 
-> **言語バージョン制約**: 本プロジェクトは Unity 6000.4（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`CatalogUpdateInfo` / `DownloadProgress` は `readonly struct` で実装する（値の等価比較は使用しないため `IEquatable` 実装も不要）。
+> **言語バージョン制約**: 本プロジェクトは Unity 6000.5（**C# 9** まで）。`record` / `record struct` は C# 10 機能のため使用不可。`CatalogUpdateInfo` / `DownloadProgress` は `readonly struct` で実装する（値の等価比較は使用しないため `IEquatable` 実装も不要）。
 
 ---
 
