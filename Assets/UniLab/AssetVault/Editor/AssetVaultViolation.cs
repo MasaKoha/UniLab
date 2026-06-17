@@ -19,5 +19,11 @@ namespace UniLab.AssetVault.Editor
 
         /// <summary>違反内容の説明（対象アドレス・アセットパス等を含む）です。</summary>
         public string Message { get; }
+
+        /// <summary>
+        /// ビルドを止めるべき致命的違反かどうかです（true なら Error 相当）。
+        /// 重複アドレスは実行時ロードを壊すため Error 扱いとし、Dashboard 表示・ビルド前ゲートの双方がこの判定を共有します。
+        /// </summary>
+        public bool IsError => ViolationType == AssetVaultViolationType.DuplicateAddress;
     }
 }

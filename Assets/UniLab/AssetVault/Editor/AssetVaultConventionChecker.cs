@@ -53,7 +53,7 @@ namespace UniLab.AssetVault.Editor
                 var paths = string.Join(", ", duplicateGroup.Select(entry => entry.AssetPath));
                 violations.Add(new AssetVaultViolation(
                     AssetVaultViolationType.DuplicateAddress,
-                    $"重複アドレス '{duplicateGroup.Key}': {paths}"));
+                    $"Duplicate address '{duplicateGroup.Key}': {paths}"));
             }
         }
 
@@ -70,7 +70,7 @@ namespace UniLab.AssetVault.Editor
 
                 violations.Add(new AssetVaultViolation(
                     AssetVaultViolationType.OrphanLabel,
-                    $"孤立ラベル '{label}'（どのエントリも使用していません）"));
+                    $"Orphan label '{label}' (not used by any entry)"));
             }
         }
 
@@ -107,7 +107,7 @@ namespace UniLab.AssetVault.Editor
             {
                 violations.Add(new AssetVaultViolation(
                     AssetVaultViolationType.DependencyRegisteredAsEntry,
-                    $"依存アセットがエントリ登録されています（'_' skip フォルダ か共有グループ化を検討）: {path}"));
+                    $"Dependency asset is registered as an entry (consider a '_' skip folder or a shared group): {path}"));
             }
         }
 
