@@ -24,11 +24,11 @@ MonoBehaviour:
   m_InternalBundleIdMode: 1
   m_AssetLoadMode: 0
   m_BundledAssetProviderType:
-    m_AssemblyName: 
-    m_ClassName: 
+    m_AssemblyName: Unity.ResourceManager, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
+    m_ClassName: UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider
   m_AssetBundleProviderType:
-    m_AssemblyName: 
-    m_ClassName: 
+    m_AssemblyName: Unity.ResourceManager, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
+    m_ClassName: UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider
   m_IgnoreUnsupportedFilesInBuild: 0
   m_UniqueBundleIds: 0
   m_EnableJsonCatalog: 0
@@ -71,8 +71,16 @@ MonoBehaviour:
       m_Values:
       - m_Id: 077fc26c820ab4f7db0edc9704f25599
         m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
+      - m_Id: 2cc6ca3afdfa24ea5bf4fead7a38d24d
+        m_Value: 'ServerData/[BuildTarget]'
+      - m_Id: 3026738fa0939464e943d4b16526b538
+        m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
+      - m_Id: 515f62981af234b798321aab7b28d1bb
+        m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
       - m_Id: 875bd0507b73a45b287b7e99ed8d700f
         m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
+      - m_Id: 919bd71c3207e4598bd8f4fc563e5e93
+        m_Value: '{UniLab.AssetVault.AssetVaultRuntime.BaseUrl}/{UniLab.AssetVault.AssetVaultRuntime.ContentPath}/[BuildTarget]'
       - m_Id: 9db704db3e0d047a79acb56749696b71
         m_Value: 'ServerData/[BuildTarget]'
       - m_Id: a67f2496d310e41499a3dc6049574dfd
@@ -83,8 +91,20 @@ MonoBehaviour:
     - m_Id: 077fc26c820ab4f7db0edc9704f25599
       m_Name: Local.BuildPath
       m_InlineUsage: 0
+    - m_Id: 2cc6ca3afdfa24ea5bf4fead7a38d24d
+      m_Name: RemoteBuildPath
+      m_InlineUsage: 0
+    - m_Id: 3026738fa0939464e943d4b16526b538
+      m_Name: LocalLoadPath
+      m_InlineUsage: 0
+    - m_Id: 515f62981af234b798321aab7b28d1bb
+      m_Name: LocalBuildPath
+      m_InlineUsage: 0
     - m_Id: 875bd0507b73a45b287b7e99ed8d700f
       m_Name: Local.LoadPath
+      m_InlineUsage: 0
+    - m_Id: 919bd71c3207e4598bd8f4fc563e5e93
+      m_Name: RemoteLoadPath
       m_InlineUsage: 0
     - m_Id: 9db704db3e0d047a79acb56749696b71
       m_Name: Remote.BuildPath
@@ -100,6 +120,8 @@ MonoBehaviour:
     m_LabelNames:
     - default
     - sample
+    - Test1
+    - TestRemote
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 801f4745c21584205a8076420cc01fb4, type: 2}
