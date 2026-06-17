@@ -306,6 +306,57 @@ if (size > 0)
 // 以降のロードはキャッシュから即時
 ```
 
+### 推奨: 再利用部品で「起動 〜 更新 〜 事前DL」を束ねる
+
+毎回 `GetDownloadSize → 確認 → Download` を手書きせず、用途別の再利用部品を使う。いずれも `IAssetVaultService` をコンストラクタ注入し、進捗は `OnProgress`（R3 `Observable<DownloadProgress>`）で流す。リトライは指数バックオフ（0.5→最大8秒、`AssetVaultRetryPolicy` に集約）で、`OperationCanceledException` は素通しする。
+
+| 部品 | 役割 | 入口メソッド |
+|---|---|---|
+| `AssetVaultDownloadController` | サイズ確認 → ユーザー確認 → リトライ付き DL → 進捗通知 | `EnsureDownloadedAsync` |
+| `AssetVaultUpdateController` | 上記に「カタログ更新確認＋適用」を前置（配信後の差し替え対応） | `RunUpdateAsync` |
+| `AssetVaultBootstrapper` | さらに「初期化（リトライ付き）」を前置。アプリ起動時の入口 | `StartAsync` |
+
+#### アプリ起動: `AssetVaultBootstrapper`（推奨の入口）
+
+初期化 → カタログ更新確認 → 初期必須アセットの事前DL を1呼び出しで行う。
+
+```csharp
+var bootstrapper = new AssetVaultBootstrapper(_assetVaultService); // 実機は DI 注入
+bootstrapper.OnProgress
+    .Subscribe(progress => _view.SetProgress(progress.Ratio))
+    .AddTo(_compositeDisposable);
+
+var result = await bootstrapper.StartAsync(
+    baseUrl: _config.BaseUrl,                         // Local 専用なら空文字
+    initialDownloadLabels: new[] { "boot" },          // 起動時に必須なラベル。無ければ空でよい
+    confirmAsync: size => ConfirmDownloadDialogAsync(size), // 「○○MB DL しますか？」。null なら確認なし
+    maxRetryCount: 2,
+    cancellationToken: cancellationToken);
+
+if (!result.IsReady)
+{
+    // 初期化失敗 or 初期DL失敗。result.Initialized / result.UpdateResult.DownloadResult を見てリトライ導線・エラー画面へ。
+    return;
+}
+// 起動準備完了 → ゲーム本編へ
+```
+
+- 戻り値 `AssetVaultBootstrapResult`: `Initialized`（初期化成否）/ `UpdateResult`（`CatalogUpdated` + `DownloadResult`）/ `IsReady`（本編へ進んでよいか）。
+- 全体ローディング UI は `bootstrapper.State`（= `service.State`: Initializing / Downloading / Ready / Failed）を購読して出す。
+
+#### 更新だけ / DL だけ
+
+```csharp
+// 初期化済みで、カタログ更新確認＋差分DLだけしたい
+var update = await new AssetVaultUpdateController(_assetVaultService)
+    .RunUpdateAsync(new[] { "stage2" }, ConfirmDownloadDialogAsync, maxRetryCount: 2, cancellationToken);
+
+// 確認＋リトライ付きで DL だけ
+var download = await new AssetVaultDownloadController(_assetVaultService)
+    .EnsureDownloadedAsync(new[] { "stage2" }, ConfirmDownloadDialogAsync, maxRetryCount: 2, cancellationToken);
+// download: NothingToDownload / Completed / CanceledByUser / Failed
+```
+
 ---
 
 ## 7. 共有・オブジェクトプール（キャッシュ / スロット）
@@ -359,9 +410,10 @@ cache の占有状況スナップショットを取得する（デバッグ表�
 ```csharp
 var stats = _cache.GetStats();
 // EntryCount / ReferencedEntryCount / PinnedEntryCount / TotalReferenceCount / UnreferencedEntryCount
+var memoryBytes = _cache.EstimateMemoryBytes(); // ロード済みアセットの概算メモリ（Profiler、診断の目安）
 ```
 
-> Editor 側では Dashboard の **Conventions**（Check Conventions）で、重複アドレス・孤立ラベル・依存アセットのエントリ化（skip 漏れ候補）を検査できる。Addressables 標準の Analyze を補う AssetVault 規約の健全性チェック。
+> Play 中はこれらを **`UniLab/AssetVault/Cache Stats` ウィンドウ**で可視化できる（件数＋概算メモリ＋`Trim` ボタン）。`AssetVaultCache` を生成すると自動でレジストリ登録され、ウィンドウに出る（`UNITY_EDITOR || DEVELOPMENT_BUILD` 限定、リリース非搭載）。規約検査は Dashboard の **Conventions** で別途行う。
 
 ### スロット: 1枚を差し替える要素（プール要素向け）
 
@@ -428,10 +480,23 @@ _prefab = await _assetVault.LoadAssetAsync<GameObject>(this, key, ct);
 
 `New Build` / `Content Update` は実行前に必ずこのチェックを通す。**Error が1件でもあれば中断**し Console に違反一覧を出力、**Warning は記録のみでビルドは続行**する。
 
+### Cache Stats ウィンドウ（Play 中のキャッシュ診断）
+
+`UniLab/AssetVault/Cache Stats` を開くと、Play 中の `AssetVaultCache` の占有を可視化できる（Dashboard とは別ウィンドウ）。
+
+- 表示: Entry / Referenced / Pinned / Unreferenced / Total Reference Count ＋ Estimated Memory（Profiler 概算）。
+- **Trim** ボタンで TTL 期限切れ・LRU 超過の未参照エントリを即時解放（解放挙動の手元確認用）。
+- `AssetVaultCache` のコンストラクタが自動でレジストリ登録するため、アプリ側のコード追加は不要。`UNITY_EDITOR || DEVELOPMENT_BUILD` 限定でリリースビルドには含まれない。
+
+### CI / batchmode からのビルド
+
+`AssetVaultCiBuild.BuildNewForCi` / `BuildContentUpdateForCi`（`-executeMethod` で呼ぶ）が、規約ゲート付きビルドを実行し、Error 違反・ビルド失敗時に `EditorApplication.Exit(1)` で終了する。CI で規約違反を自動検出したいときに使う（例: `unity -batchmode -quit -executeMethod UniLab.AssetVault.Editor.AssetVaultCiBuild.BuildNewForCi`）。
+
 ---
 
 ## まとめ（チェックリスト）
 
+- [ ] 起動は `AssetVaultBootstrapper.StartAsync`（初期化→更新確認→初期DL）を通し、`result.IsReady` を確認した
 - [ ] 画面/シーンごとに `CreateScope()` で 1 スコープを作った
 - [ ] ロードは `LoadAssetAsync<T>` / `InstantiateAsync` のみ（`Addressables` 直叩きしない）
 - [ ] 生成物は `InstantiateAsync`（推奨）。`LoadAssetAsync<GameObject>` から自前 Instantiate した分は自分で Destroy
