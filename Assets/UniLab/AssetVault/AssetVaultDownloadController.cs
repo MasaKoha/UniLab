@@ -59,52 +59,21 @@ namespace UniLab.AssetVault
                 }
             }
 
-            // --- 3. リトライ付きダウンロード。 ---
-            return await DownloadWithRetryAsync(labels, maxRetryCount, cancellationToken);
-        }
-
-        /// <summary>
-        /// DownloadAsync を最大 maxRetryCount 回まで指数バックオフでリトライします。キャンセルは再 throw します。
-        /// </summary>
-        private async UniTask<AssetVaultDownloadResult> DownloadWithRetryAsync(
-            IReadOnlyList<string> labels,
-            int maxRetryCount,
-            CancellationToken cancellationToken)
-        {
-            AssetVaultException lastException = null;
-
-            for (var attempt = 0; attempt <= maxRetryCount; attempt++)
+            // --- 3. リトライ付きダウンロード。リトライ機構は AssetVaultRetry に集約し、ここでは結果を Result へ写すだけ。 ---
+            try
             {
-                try
-                {
-                    await _assetVaultService.DownloadAsync(labels, cancellationToken);
-                    return AssetVaultDownloadResult.Completed;
-                }
-                catch (AssetVaultException exception)
-                {
-                    // ロード/通信由来の再試行可能エラー。最後の試行なら抜けてログ＋Failed へ。
-                    lastException = exception;
-                    if (attempt >= maxRetryCount)
-                    {
-                        break;
-                    }
-
-                    await DelayBeforeRetryAsync(attempt, cancellationToken);
-                }
+                await AssetVaultRetry.RunAsync(
+                    token => _assetVaultService.DownloadAsync(labels, token),
+                    maxRetryCount,
+                    cancellationToken);
+                return AssetVaultDownloadResult.Completed;
             }
-
-            // 例外メッセージ・ログは英語、コメント/summary は日本語の方針に従う。
-            Debug.LogError($"[AssetVault] download failed after {maxRetryCount + 1} attempt(s). {lastException}");
-            return AssetVaultDownloadResult.Failed;
-        }
-
-        /// <summary>
-        /// リトライ前に指数バックオフで待機します。間隔計算は <see cref="AssetVaultRetryPolicy"/> に集約しています。
-        /// </summary>
-        private static UniTask DelayBeforeRetryAsync(int attempt, CancellationToken cancellationToken)
-        {
-            var delaySeconds = AssetVaultRetryPolicy.GetBackoffDelaySeconds(attempt);
-            return UniTask.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken: cancellationToken);
+            catch (AssetVaultException exception)
+            {
+                // リトライを尽くしても失敗。例外メッセージ・ログは英語、コメント/summary は日本語の方針に従う。
+                Debug.LogError($"[AssetVault] download failed after {maxRetryCount + 1} attempt(s). {exception}");
+                return AssetVaultDownloadResult.Failed;
+            }
         }
     }
 }

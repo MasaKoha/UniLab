@@ -47,11 +47,14 @@ namespace UniLab.AssetVault
             int maxRetryCount,
             CancellationToken cancellationToken)
         {
-            // --- 1. catalog 更新確認（リトライ付き）。確認＋適用まで service が内包する。 ---
+            // --- 1. catalog 更新確認（リトライ付き）。確認＋適用まで service が内包する。リトライ機構は AssetVaultRetry に集約。 ---
             CatalogUpdateInfo catalogUpdateInfo;
             try
             {
-                catalogUpdateInfo = await CheckForUpdatesWithRetryAsync(maxRetryCount, cancellationToken);
+                catalogUpdateInfo = await AssetVaultRetry.RunAsync(
+                    token => _assetVaultService.CheckForUpdatesAsync(token),
+                    maxRetryCount,
+                    cancellationToken);
             }
             catch (AssetVaultException exception)
             {
@@ -78,38 +81,6 @@ namespace UniLab.AssetVault
         }
 
         /// <summary>
-        /// CheckForUpdatesAsync を最大 maxRetryCount 回まで指数バックオフでリトライします。
-        /// 全て失敗した場合は最後の AssetVaultException を再 throw します。キャンセルはそのまま伝播します。
-        /// </summary>
-        private async UniTask<CatalogUpdateInfo> CheckForUpdatesWithRetryAsync(
-            int maxRetryCount,
-            CancellationToken cancellationToken)
-        {
-            AssetVaultException lastException = null;
-
-            for (var attempt = 0; attempt <= maxRetryCount; attempt++)
-            {
-                try
-                {
-                    return await _assetVaultService.CheckForUpdatesAsync(cancellationToken);
-                }
-                catch (AssetVaultException exception)
-                {
-                    // 通信由来の再試行可能エラー。最後の試行なら抜けて呼び出し側へ throw する。
-                    lastException = exception;
-                    if (attempt >= maxRetryCount)
-                    {
-                        break;
-                    }
-
-                    await DelayBeforeRetryAsync(attempt, cancellationToken);
-                }
-            }
-
-            throw lastException;
-        }
-
-        /// <summary>
         /// 事前ダウンロード対象ラベルがあればダウンロードフローを実行し、無ければ NothingToDownload を返します。
         /// </summary>
         private UniTask<AssetVaultDownloadResult> PredownloadIfNeededAsync(
@@ -128,15 +99,6 @@ namespace UniLab.AssetVault
                 confirmAsync,
                 maxRetryCount,
                 cancellationToken);
-        }
-
-        /// <summary>
-        /// リトライ前に指数バックオフで待機します。間隔計算は <see cref="AssetVaultRetryPolicy"/> に集約しています。
-        /// </summary>
-        private static UniTask DelayBeforeRetryAsync(int attempt, CancellationToken cancellationToken)
-        {
-            var delaySeconds = AssetVaultRetryPolicy.GetBackoffDelaySeconds(attempt);
-            return UniTask.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken: cancellationToken);
         }
     }
 }

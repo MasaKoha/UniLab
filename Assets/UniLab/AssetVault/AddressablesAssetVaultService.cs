@@ -63,6 +63,7 @@ namespace UniLab.AssetVault
             }
             catch (OperationCanceledException)
             {
+                // 初期化キャンセルは正常系。まだ準備できていないため NotInitialized へ戻し、アプリ側の再初期化に委ねる。
                 _state.Value = AssetVaultState.NotInitialized;
                 throw;
             }
@@ -130,6 +131,7 @@ namespace UniLab.AssetVault
             }
             catch (OperationCanceledException)
             {
+                // DL キャンセルは正常系。初期化は済んでおり配信基盤は使えるため、Failed ではなく Ready へ戻す。
                 _state.Value = AssetVaultState.Ready;
                 throw;
             }
