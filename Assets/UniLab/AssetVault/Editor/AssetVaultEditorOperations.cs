@@ -23,6 +23,8 @@ namespace UniLab.AssetVault.Editor
         private const string ContentUpdateFailedMessage = "Addressables content update build failed.";
         private const string NewBuildCompletedMessage = "Addressables new build completed.";
         private const string ContentUpdateCompletedMessage = "Addressables content update build completed.";
+        private const string ConventionGateFailedMessageFormat = "AssetVault build aborted due to convention violations. Resolve the following fatal violations (e.g. duplicate addresses that break runtime loading) and run again:\n{0}";
+        private const string ConventionWarningMessageFormat = "[AssetVault convention] {0}";
 
         // --- Build ---
 
@@ -33,6 +35,12 @@ namespace UniLab.AssetVault.Editor
         public static bool BuildNew()
         {
             if (!AddressableSettingsAccessor.TryGetSettings(out _))
+            {
+                return false;
+            }
+
+            // 重複アドレス等の致命的違反を抱えたままビルドすると実行時ロードが壊れるため、ビルド前に必ず規約ゲートを通す。
+            if (!PassesConventionGate())
             {
                 return false;
             }
@@ -71,6 +79,12 @@ namespace UniLab.AssetVault.Editor
         public static bool BuildContentUpdate()
         {
             if (!AddressableSettingsAccessor.TryGetSettings(out var settings))
+            {
+                return false;
+            }
+
+            // New Build と同様、差分ビルドでも致命的な規約違反があれば中断する。
+            if (!PassesConventionGate())
             {
                 return false;
             }
@@ -233,6 +247,38 @@ namespace UniLab.AssetVault.Editor
             }
 
             return AssetVaultConventionChecker.Check(settings);
+        }
+
+        /// <summary>
+        /// ビルド前ゲート。規約違反を検査し、Error（実行時ロードを壊す致命的違反）が1件でもあればビルドを止めます。
+        /// Warning（孤立ラベル・依存アセットのエントリ化）は記録するだけでビルドは続行します。
+        /// </summary>
+        /// <returns>ビルドを続行してよい場合は true、致命的違反があり中断すべき場合は false。</returns>
+        private static bool PassesConventionGate()
+        {
+            var violations = CheckConventions();
+            if (violations.Count == 0)
+            {
+                return true;
+            }
+
+            // Warning は中断しないが、見落とさないようログには必ず残す。
+            foreach (var warning in violations.Where(violation => !violation.IsError))
+            {
+                Debug.LogWarning(string.Format(ConventionWarningMessageFormat, warning.Message));
+            }
+
+            var errorMessages = violations
+                .Where(violation => violation.IsError)
+                .Select(violation => $"  - {violation.Message}")
+                .ToList();
+            if (errorMessages.Count == 0)
+            {
+                return true;
+            }
+
+            Debug.LogError(string.Format(ConventionGateFailedMessageFormat, string.Join("\n", errorMessages)));
+            return false;
         }
 
         // --- Internal helpers ---

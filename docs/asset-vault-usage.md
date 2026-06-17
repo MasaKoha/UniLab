@@ -401,6 +401,35 @@ _prefab = await _assetVault.LoadAssetAsync<GameObject>(this, key, ct);
 
 ---
 
+## 8. Editor: Asset Vault Dashboard（操作一覧）
+
+`UniLab/AssetVault/Dashboard` を開くと、Addressables 構成の確認・ビルド・規約チェックをまとめて行える。
+
+> 注: Dashboard の **UI 表示テキストは英語**にしている。Unity 6.5 の Editor 動的フォントアトラスが大量の日本語グリフで溢れ、ウィンドウ下部の文字が欠ける不具合があるため、常時描画テキスト・ツールチップ・規約メッセージは ASCII に統一した。各操作の日本語説明はこの節で管理する。
+
+| セクション / ボタン | 日本語の説明 |
+|---|---|
+| **Setup → Open Setup Settings** | 設定アセット `AssetVaultSetupSettings` を開く。Local/Remote フォルダの指定と Sync AssetResource はその Inspector で行う。 |
+| **Build → New Build** | Addressables を新規フルビルド（content state を作り直す）。初回、またはグループ構成・規約を変更したときに実行する。**重複アドレス等の致命的な規約違反があるとビルドは中断**される（後述のビルド前ゲート）。 |
+| **Build → Content Update (Diff)** | 前回の content state からの差分だけをビルドする。配信済みアプリ向けにアセットを追加・更新するときに使う（先に New Build が必要）。 |
+| **Debug Override** | 環境プリセットの BaseUrl で `AssetVaultRuntime.BaseUrl` を上書きする（development ビルドのみ有効、release では無効）。有効化・プリセット選択は UI からは行えず、`AssetVaultDebugEnvironmentSettings.Activate` / `Deactivate` をコードから呼ぶ。`Edit Presets` でプリセット（表示名・BaseUrl）を編集する設定アセットを開く。 |
+| **Status → Refresh** | 現在の Addressables 構成（RemoteLoadPath・Local/Remote グループ数・AssetResource フォルダ有無）を再取得して表示する。 |
+| **Conventions → Check Conventions** | 管理グループの規約違反（重複アドレス・孤立ラベル・依存アセットのエントリ化）を検査する。Addressables 標準の Analyze を補う、AssetVault 規約の健全性チェック。 |
+
+### 規約チェックの3種別とビルド前ゲート
+
+`Check Conventions` で検出する違反は3種類。重大度は `AssetVaultViolation.IsError` に一元化され、Dashboard 表示（Error=赤 / Warning=黄）とビルド前ゲートが同じ判定を共有する。
+
+| 違反種別 | 重大度 | 内容と対処 |
+|---|---|---|
+| **DuplicateAddress** | Error | 同一アドレスが複数エントリに付いている。実行時ロードを壊すため**ビルドを中断**する。アドレスの衝突を解消する。 |
+| **OrphanLabel** | Warning | どのエントリも使っていない孤立ラベル（自動登録の入れ替えで残った等）。ビルドは止めないが警告ログを出す。 |
+| **DependencyRegisteredAsEntry** | Warning | 他エントリの依存でもあるアセットが自身もエントリ登録されている。`_` skip フォルダか共有グループ化を検討する（重複バンドル防止）。 |
+
+`New Build` / `Content Update` は実行前に必ずこのチェックを通す。**Error が1件でもあれば中断**し Console に違反一覧を出力、**Warning は記録のみでビルドは続行**する。
+
+---
+
 ## まとめ（チェックリスト）
 
 - [ ] 画面/シーンごとに `CreateScope()` で 1 スコープを作った

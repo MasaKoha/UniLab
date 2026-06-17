@@ -19,6 +19,9 @@ namespace UniLab.AssetVault.Editor
         private const float SectionSpacing = 8f;
         private const float LabelWidth = 120f;
 
+        // 日本語の利用ガイド。blob/HEAD はデフォルトブランチに自動解決されるため、ブランチ名のハードコードを避けられる。
+        private const string DocumentationUrl = "https://github.com/MasaKoha/UniLab/blob/HEAD/docs/asset-vault-usage.md";
+
         private AssetVaultStatus _status;
         private bool _statusLoaded;
         private IReadOnlyList<AssetVaultViolation> _violations;
@@ -42,6 +45,8 @@ namespace UniLab.AssetVault.Editor
         {
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
 
+            DrawDocumentationSection();
+            EditorGUILayout.Space(SectionSpacing);
             DrawSetupSection();
             EditorGUILayout.Space(SectionSpacing);
             DrawBuildSection();
@@ -55,12 +60,24 @@ namespace UniLab.AssetVault.Editor
             EditorGUILayout.EndScrollView();
         }
 
+        private void DrawDocumentationSection()
+        {
+            DrawHeader("Documentation");
+            // UI は英語だが詳細な日本語ガイドへ即アクセスできるようにする（フォントアトラス対策で日本語は docs に集約しているため）。
+            if (DrawActionButton(
+                "Open Usage Guide (JP)",
+                "Open the Japanese AssetVault usage guide (docs/asset-vault-usage.md) on GitHub."))
+            {
+                Application.OpenURL(DocumentationUrl);
+            }
+        }
+
         private void DrawSetupSection()
         {
             DrawHeader("Setup");
             if (DrawActionButton(
                 "Open Setup Settings",
-                "設定アセット (AssetVaultSetupSettings) を開きます。Local/Remote フォルダの指定と Sync AssetResource はこの Inspector で行います。"))
+                "Open AssetVaultSetupSettings. Configure Local/Remote folders and run Sync AssetResource from its Inspector."))
             {
                 AssetVaultEditorOperations.OpenSetupSettings();
             }
@@ -71,7 +88,7 @@ namespace UniLab.AssetVault.Editor
             DrawHeader("Build");
             if (DrawActionButton(
                 "New Build",
-                "Addressables を新規フルビルドします。初回、またはグループ構成・規約を変更したときに実行します（content state を作り直します）。"))
+                "Full Addressables build. Run on first setup or after group/convention changes (rebuilds content state). Aborts if fatal convention violations (e.g. duplicate addresses) exist."))
             {
                 AssetVaultEditorOperations.BuildNew();
                 RefreshStatus();
@@ -82,7 +99,7 @@ namespace UniLab.AssetVault.Editor
             {
                 if (DrawActionButton(
                     "Content Update (Diff)",
-                    "前回の content state からの差分だけをビルドします。配信済みアプリ向けにアセットを追加・更新するときに使います（先に New Build が必要）。"))
+                    "Builds only the diff from the previous content state. Use to add/update assets for a shipped app (requires a prior New Build)."))
                 {
                     AssetVaultEditorOperations.BuildContentUpdate();
                     RefreshStatus();
@@ -91,22 +108,22 @@ namespace UniLab.AssetVault.Editor
 
             if (!canBuildContentUpdate)
             {
-                EditorGUILayout.HelpBox("content state file が見つかりません。先に New Build を実行してください。", MessageType.None);
+                EditorGUILayout.HelpBox("content state file not found. Run New Build first.", MessageType.None);
             }
         }
 
         private void DrawDebugOverrideSection()
         {
             DrawHeader("Debug Override");
+            // 常時表示テキストは ASCII に限定する（Editor フォントアトラス溢れ回避）。日本語の詳細は docs/asset-vault-usage.md 参照。
             EditorGUILayout.HelpBox(
-                "選択した環境プリセットの BaseUrl で AssetVaultRuntime.BaseUrl を上書きします（ContentPath=版は version.json 解決に任せる）。"
-                + "Editor Play と development ビルドで適用され、release では無効です。"
-                + "有効化・プリセット選択は UI からは行えません（AssetVaultDebugEnvironmentSettings.Activate / Deactivate をコードから呼ぶ）。",
+                "Overrides AssetVaultRuntime.BaseUrl with the preset BaseUrl (development builds only). "
+                + "Enable via Activate / Deactivate from code.",
                 MessageType.Info);
 
             if (DrawActionButton(
                 "Edit Presets",
-                "環境プリセット (表示名・BaseUrl) を編集する設定アセットを選択して Inspector に表示します。"))
+                "Select the settings asset to edit environment presets (display name / BaseUrl) in the Inspector."))
             {
                 Selection.activeObject = AssetVaultDebugEnvironmentSettings.GetOrCreate();
             }
@@ -117,7 +134,7 @@ namespace UniLab.AssetVault.Editor
             DrawHeader("Status");
             if (DrawActionButton(
                 "Refresh",
-                "現在の Addressables 構成 (RemoteLoadPath・Local/Remote グループ数・AssetResource フォルダ有無) を再取得します。"))
+                "Re-fetch the current Addressables configuration (RemoteLoadPath, Local/Remote group counts, AssetResource folder)."))
             {
                 RefreshStatus();
             }
@@ -138,8 +155,8 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.LabelField("RemoteLoadPath", _status.RemoteLoadPath);
                 EditorGUILayout.LabelField("Local Groups", _status.LocalGroupCount.ToString());
                 EditorGUILayout.LabelField("Remote Groups", _status.RemoteGroupCount.ToString());
-                EditorGUILayout.LabelField("Local Folder", string.IsNullOrEmpty(_status.LocalFolderPath) ? "未設定" : _status.LocalFolderPath);
-                EditorGUILayout.LabelField("Remote Folder", string.IsNullOrEmpty(_status.RemoteFolderPath) ? "未設定（任意）" : _status.RemoteFolderPath);
+                EditorGUILayout.LabelField("Local Folder", string.IsNullOrEmpty(_status.LocalFolderPath) ? "Not set" : _status.LocalFolderPath);
+                EditorGUILayout.LabelField("Remote Folder", string.IsNullOrEmpty(_status.RemoteFolderPath) ? "Not set (optional)" : _status.RemoteFolderPath);
             }
         }
 
@@ -148,7 +165,7 @@ namespace UniLab.AssetVault.Editor
             DrawHeader("Conventions");
             if (DrawActionButton(
                 "Check Conventions",
-                "管理グループの規約違反（重複アドレス・孤立ラベル・依存アセットのエントリ化）を検査します。Addressables 標準の Analyze を補う、AssetVault 規約の健全性チェックです。"))
+                "Check management groups for convention violations (duplicate address / orphan label / dependency registered as entry). Complements Addressables Analyze with AssetVault-specific checks."))
             {
                 _violations = AssetVaultEditorOperations.CheckConventions();
                 _violationsChecked = true;
@@ -162,23 +179,17 @@ namespace UniLab.AssetVault.Editor
 
             if (_violations.Count == 0)
             {
-                EditorGUILayout.HelpBox("規約違反は見つかりませんでした。", MessageType.Info);
+                EditorGUILayout.HelpBox("No convention violations found.", MessageType.Info);
                 return;
             }
 
-            EditorGUILayout.LabelField($"{_violations.Count} 件の規約違反", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField($"{_violations.Count} convention violation(s)", EditorStyles.miniBoldLabel);
             foreach (var violation in _violations)
             {
-                EditorGUILayout.HelpBox($"[{violation.ViolationType}] {violation.Message}", ToMessageType(violation.ViolationType));
+                // 重大度は AssetVaultViolation.IsError に一元化されており、ビルド前ゲートと同じ判定を使う。
+                var messageType = violation.IsError ? MessageType.Error : MessageType.Warning;
+                EditorGUILayout.HelpBox($"[{violation.ViolationType}] {violation.Message}", messageType);
             }
-        }
-
-        // DuplicateAddress は実行時ロードを壊す致命傷のため Error、それ以外（孤立ラベル・依存エントリ化）は是正推奨の Warning として表示する。
-        private static MessageType ToMessageType(AssetVaultViolationType violationType)
-        {
-            return violationType == AssetVaultViolationType.DuplicateAddress
-                ? MessageType.Error
-                : MessageType.Warning;
         }
 
         private void RefreshStatus()
@@ -194,14 +205,14 @@ namespace UniLab.AssetVault.Editor
         }
 
         /// <summary>
-        /// 操作ボタンと、その下に折り返し表示する説明文を描画します。説明はホバー時のツールチップにも使います。
+        /// 操作ボタンを描画します。説明はホバー時のツールチップで示します。
+        /// 注意: 説明文を常時ラベル表示していたが、Unity の Editor 動的フォントアトラスが大量の日本語グリフで溢れ、
+        /// ウィンドウ下部の文字が欠ける問題が出たため、同時描画するグリフ数を抑える目的でツールチップのみに変更した。
         /// </summary>
         /// <returns>ボタンが押された場合は true。</returns>
         private static bool DrawActionButton(string label, string description)
         {
-            var clicked = GUILayout.Button(new GUIContent(label, description));
-            EditorGUILayout.LabelField(description, EditorStyles.wordWrappedMiniLabel);
-            return clicked;
+            return GUILayout.Button(new GUIContent(label, description));
         }
 
         /// <summary>
