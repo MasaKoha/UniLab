@@ -220,6 +220,21 @@ namespace UniLab.AssetVault.Editor
                 remoteFolderPath);
         }
 
+        // --- Conventions ---
+
+        /// <summary>
+        /// 管理グループの規約違反（重複アドレス・孤立ラベル・依存アセットのエントリ化）を検査し、一覧で返します。Dashboard 表示用。
+        /// </summary>
+        public static IReadOnlyList<AssetVaultViolation> CheckConventions()
+        {
+            if (!AddressableSettingsAccessor.TryGetSettingsSilently(out var settings))
+            {
+                return System.Array.Empty<AssetVaultViolation>();
+            }
+
+            return AssetVaultConventionChecker.Check(settings);
+        }
+
         // --- Internal helpers ---
 
         private static void SyncCategory(

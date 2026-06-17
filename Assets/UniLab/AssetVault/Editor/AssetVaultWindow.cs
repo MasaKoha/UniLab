@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UniLab.AssetVault.Debugging;
 using UnityEditor;
 using UnityEngine;
@@ -6,7 +7,7 @@ namespace UniLab.AssetVault.Editor
 {
     /// <summary>
     /// AssetVault の Addressables 構成を一望・操作する統合ダッシュボードです。
-    /// Setup / Build / Debug Override / Status の各セクションを提供し、
+    /// Setup / Build / Debug Override / Status / Conventions の各セクションを提供し、
     /// 操作はすべて <see cref="AssetVaultEditorOperations"/> に委譲します。
     /// </summary>
     public sealed class AssetVaultWindow : EditorWindow
@@ -20,6 +21,8 @@ namespace UniLab.AssetVault.Editor
 
         private AssetVaultStatus _status;
         private bool _statusLoaded;
+        private IReadOnlyList<AssetVaultViolation> _violations;
+        private bool _violationsChecked;
         private Vector2 _scrollPosition;
 
         [MenuItem(WindowMenuPath, false, WindowMenuPriority)]
@@ -46,6 +49,8 @@ namespace UniLab.AssetVault.Editor
             DrawDebugOverrideSection();
             EditorGUILayout.Space(SectionSpacing);
             DrawStatusSection();
+            EditorGUILayout.Space(SectionSpacing);
+            DrawConventionsSection();
 
             EditorGUILayout.EndScrollView();
         }
@@ -136,6 +141,44 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.LabelField("Local Folder", string.IsNullOrEmpty(_status.LocalFolderPath) ? "未設定" : _status.LocalFolderPath);
                 EditorGUILayout.LabelField("Remote Folder", string.IsNullOrEmpty(_status.RemoteFolderPath) ? "未設定（任意）" : _status.RemoteFolderPath);
             }
+        }
+
+        private void DrawConventionsSection()
+        {
+            DrawHeader("Conventions");
+            if (DrawActionButton(
+                "Check Conventions",
+                "管理グループの規約違反（重複アドレス・孤立ラベル・依存アセットのエントリ化）を検査します。Addressables 標準の Analyze を補う、AssetVault 規約の健全性チェックです。"))
+            {
+                _violations = AssetVaultEditorOperations.CheckConventions();
+                _violationsChecked = true;
+                Repaint();
+            }
+
+            if (!_violationsChecked)
+            {
+                return;
+            }
+
+            if (_violations.Count == 0)
+            {
+                EditorGUILayout.HelpBox("規約違反は見つかりませんでした。", MessageType.Info);
+                return;
+            }
+
+            EditorGUILayout.LabelField($"{_violations.Count} 件の規約違反", EditorStyles.miniBoldLabel);
+            foreach (var violation in _violations)
+            {
+                EditorGUILayout.HelpBox($"[{violation.ViolationType}] {violation.Message}", ToMessageType(violation.ViolationType));
+            }
+        }
+
+        // DuplicateAddress は実行時ロードを壊す致命傷のため Error、それ以外（孤立ラベル・依存エントリ化）は是正推奨の Warning として表示する。
+        private static MessageType ToMessageType(AssetVaultViolationType violationType)
+        {
+            return violationType == AssetVaultViolationType.DuplicateAddress
+                ? MessageType.Error
+                : MessageType.Warning;
         }
 
         private void RefreshStatus()

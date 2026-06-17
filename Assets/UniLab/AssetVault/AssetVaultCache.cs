@@ -18,6 +18,8 @@ namespace UniLab.AssetVault
         private readonly Func<float> _timeProvider;
         private readonly Dictionary<CacheKey, Entry> _entries = new();
         private readonly List<CacheKey> _reclaimBuffer = new();
+        // Prewarm で pin したエントリの保持参照。Dispose（参照-1）するまで TTL/LRU 解放から守る。
+        private readonly Dictionary<CacheKey, IDisposable> _prewarmed = new();
 
         /// <summary>
         /// 設定（既定は <see cref="AssetVaultCacheSettings.Default"/>）と時刻プロバイダ（既定は realtimeSinceStartup）でキャッシュを作成します。
@@ -83,11 +85,66 @@ namespace UniLab.AssetVault
             EnforceCapacity();
         }
 
+        /// <inheritdoc />
+        public async UniTask PrewarmAsync<T>(IReadOnlyList<string> keys, CancellationToken cancellationToken)
+        {
+            if (keys == null)
+            {
+                throw new AssetVaultException("AssetVaultCache.PrewarmAsync: keys is null.");
+            }
+
+            foreach (var key in keys)
+            {
+                var cacheKey = new CacheKey(key, typeof(T));
+                if (_prewarmed.ContainsKey(cacheKey))
+                {
+                    // 二重 prewarm は無駄な参照を増やさないようにスキップする。
+                    continue;
+                }
+
+                // Acquire で参照カウント+1 し、その参照を保持して TTL/LRU 解放から守る（= pin）。
+                var reference = await AcquireAsync<T>(key, cancellationToken);
+                _prewarmed[cacheKey] = reference;
+            }
+        }
+
+        /// <inheritdoc />
+        public void ReleasePrewarm()
+        {
+            foreach (var reference in _prewarmed.Values)
+            {
+                reference.Dispose();
+            }
+
+            _prewarmed.Clear();
+        }
+
+        /// <inheritdoc />
+        public AssetVaultCacheStats GetStats()
+        {
+            var referencedEntryCount = 0;
+            var totalReferenceCount = 0;
+            foreach (var pair in _entries)
+            {
+                if (pair.Value.RefCount > 0)
+                {
+                    referencedEntryCount++;
+                }
+
+                totalReferenceCount += pair.Value.RefCount;
+            }
+
+            return new AssetVaultCacheStats(_entries.Count, referencedEntryCount, _prewarmed.Count, totalReferenceCount);
+        }
+
         /// <summary>
         /// 全エントリを参照カウントに関わらず解放します。
         /// </summary>
         public void Dispose()
         {
+            // pin 参照は破棄するエントリと一緒に解放されるため、保持リストはクリアするだけでよい。
+            _prewarmed.Clear();
+
             foreach (var pair in _entries)
             {
                 if (pair.Value.Handle.IsValid())
