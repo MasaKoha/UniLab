@@ -4,6 +4,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.Profiling;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace UniLab.AssetVault
@@ -142,6 +143,22 @@ namespace UniLab.AssetVault
             return new AssetVaultCacheStats(_entries.Count, referencedEntryCount, _prewarmed.Count, totalReferenceCount);
         }
 
+        /// <inheritdoc />
+        public long EstimateMemoryBytes()
+        {
+            // ロード済みアセットの実行時メモリ量を Profiler で概算する（厳密値ではなく診断の目安）。GetStats と分けてオンデマンド計算に留める。
+            long totalBytes = 0;
+            foreach (var pair in _entries)
+            {
+                if (pair.Value.Handle.IsValid() && pair.Value.Handle.Result is UnityEngine.Object loadedObject && loadedObject != null)
+                {
+                    totalBytes += Profiler.GetRuntimeMemorySizeLong(loadedObject);
+                }
+            }
+
+            return totalBytes;
+        }
+
         /// <summary>
         /// 全エントリを参照カウントに関わらず解放します。
         /// </summary>
@@ -195,11 +212,12 @@ namespace UniLab.AssetVault
                 return;
             }
 
+            // perf: 期限判定は純ロジックに委譲しつつ、共通バッファを使い回して走査自体はアロケーションフリーに保つ。
             var now = _timeProvider();
             _reclaimBuffer.Clear();
             foreach (var pair in _entries)
             {
-                if (pair.Value.RefCount <= 0 && now - pair.Value.LastReleaseTime >= _settings.TtlSeconds)
+                if (AssetVaultCacheEvictionPolicy.IsExpired(pair.Value.RefCount, pair.Value.LastReleaseTime, now, _settings.TtlSeconds))
                 {
                     _reclaimBuffer.Add(pair.Key);
                 }
@@ -218,25 +236,16 @@ namespace UniLab.AssetVault
                 return;
             }
 
-            // 未参照エントリを「最後に手放した時刻が古い順」に解放して上限まで詰める。
-            _reclaimBuffer.Clear();
+            // 上限超過は稀なので、ここでだけスナップショットを作って LRU 選択を純ロジックに委譲する。
+            var snapshot = new List<(CacheKey key, int refCount, float lastReleaseTime)>(_entries.Count);
             foreach (var pair in _entries)
             {
-                if (pair.Value.RefCount <= 0)
-                {
-                    _reclaimBuffer.Add(pair.Key);
-                }
+                snapshot.Add((pair.Key, pair.Value.RefCount, pair.Value.LastReleaseTime));
             }
 
-            _reclaimBuffer.Sort((left, right) => _entries[left].LastReleaseTime.CompareTo(_entries[right].LastReleaseTime));
-
-            foreach (var cacheKey in _reclaimBuffer)
+            var keysToReclaim = AssetVaultCacheEvictionPolicy.SelectOverCapacityKeys(snapshot, _settings.Capacity);
+            foreach (var cacheKey in keysToReclaim)
             {
-                if (_entries.Count <= _settings.Capacity)
-                {
-                    break;
-                }
-
                 ReleaseEntry(cacheKey, _entries[cacheKey]);
             }
         }

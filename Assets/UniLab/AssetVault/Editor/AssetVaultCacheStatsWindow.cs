@@ -42,7 +42,39 @@ namespace UniLab.AssetVault.Editor
                 EditorGUILayout.LabelField("Pinned Entry Count", stats.PinnedEntryCount.ToString());
                 EditorGUILayout.LabelField("Unreferenced Entry Count", stats.UnreferencedEntryCount.ToString());
                 EditorGUILayout.LabelField("Total Reference Count", stats.TotalReferenceCount.ToString());
+
+                if (AssetVaultCacheStatsRegistry.TryGetEstimatedMemoryBytes(out var estimatedBytes))
+                {
+                    EditorGUILayout.LabelField("Estimated Memory", FormatBytes(estimatedBytes));
+                }
             }
+
+            EditorGUILayout.Space();
+            // 未参照（TTL 猶予中・LRU 超過）エントリを即時解放して、解放挙動を手元で確認できるようにする。
+            if (GUILayout.Button("Trim (release expired / over-capacity)"))
+            {
+                AssetVaultCacheStatsRegistry.TryTrim();
+            }
+        }
+
+        /// <summary>
+        /// バイト数を B/KB/MB の読みやすい表記へ変換します（ASCII 限定）。
+        /// </summary>
+        private static string FormatBytes(long bytes)
+        {
+            const long kiloByte = 1024L;
+            const long megaByte = kiloByte * 1024L;
+            if (bytes >= megaByte)
+            {
+                return $"{bytes / (float)megaByte:F2} MB";
+            }
+
+            if (bytes >= kiloByte)
+            {
+                return $"{bytes / (float)kiloByte:F2} KB";
+            }
+
+            return $"{bytes} B";
         }
 
         private void Update()

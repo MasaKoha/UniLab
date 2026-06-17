@@ -47,6 +47,35 @@ namespace UniLab.AssetVault
             stats = _cache.GetStats();
             return true;
         }
+
+        /// <summary>
+        /// 登録中の cache のロード済みアセットの概算メモリ量（バイト）を取得します。未登録の場合は false を返します。
+        /// </summary>
+        public static bool TryGetEstimatedMemoryBytes(out long estimatedBytes)
+        {
+            if (_cache == null)
+            {
+                estimatedBytes = 0;
+                return false;
+            }
+
+            estimatedBytes = _cache.EstimateMemoryBytes();
+            return true;
+        }
+
+        /// <summary>
+        /// 登録中の cache に対して Trim（TTL 期限切れ・LRU 超過の未参照エントリの即時解放）を実行します。未登録の場合は false を返します。
+        /// </summary>
+        public static bool TryTrim()
+        {
+            if (_cache == null)
+            {
+                return false;
+            }
+
+            _cache.Trim();
+            return true;
+        }
     }
 }
 #endif

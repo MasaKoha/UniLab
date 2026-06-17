@@ -13,12 +13,6 @@ namespace UniLab.AssetVault
     /// </summary>
     public sealed class AssetVaultDownloadController
     {
-        // 指数バックオフの初期遅延（秒）。一時的なネットワーク断からの自動復帰を狙い、即時リトライで相手を叩かないための間隔。
-        private const float InitialRetryDelaySeconds = 0.5f;
-
-        // 指数バックオフの上限遅延（秒）。リトライ間隔が無制限に伸びてユーザーを待たせ続けるのを防ぐためのキャップ。
-        private const float MaxRetryDelaySeconds = 8f;
-
         private readonly IAssetVaultService _assetVaultService;
 
         /// <summary>
@@ -105,12 +99,11 @@ namespace UniLab.AssetVault
         }
 
         /// <summary>
-        /// リトライ前に指数バックオフで待機します。連続失敗時に間隔を伸ばし、相手側の一時的な逼迫からの復帰余地を作ります。
+        /// リトライ前に指数バックオフで待機します。間隔計算は <see cref="AssetVaultRetryPolicy"/> に集約しています。
         /// </summary>
         private static UniTask DelayBeforeRetryAsync(int attempt, CancellationToken cancellationToken)
         {
-            // 0.5s, 1s, 2s, 4s... と倍々で伸ばし、MaxRetryDelaySeconds で頭打ちにする。
-            var delaySeconds = Mathf.Min(InitialRetryDelaySeconds * Mathf.Pow(2f, attempt), MaxRetryDelaySeconds);
+            var delaySeconds = AssetVaultRetryPolicy.GetBackoffDelaySeconds(attempt);
             return UniTask.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken: cancellationToken);
         }
     }

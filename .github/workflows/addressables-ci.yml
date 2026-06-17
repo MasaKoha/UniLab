@@ -1,0 +1,101 @@
+# Addressables CI
+#
+# 目的:
+#   - AssetVault の規約ゲートと EditMode テストを Pull Request 上で自動実行する。
+#   - editmode-tests ジョブで EditMode テストを回し、
+#     convention-gate-build ジョブで規約ゲート付きの Addressables 新規ビルドを実行する。
+#   - 規約ゲートのビルドは buildMethod として
+#     UniLab.AssetVault.Editor.AssetVaultCiBuild.BuildNewForCi を呼び出す。
+#     このメソッドは規約違反・ビルド失敗時に EditorApplication.Exit(1) を行うため、
+#     違反があるとビルドが失敗扱いになり CI が落ちる。
+#
+# 必要な secrets（リポジトリの Settings > Secrets and variables > Actions に設定すること）:
+#   - UNITY_LICENSE : Unity ライセンスファイル(.ulf)の中身。Personal/Professional いずれも必要。
+#   - UNITY_EMAIL   : Unity アカウントのメールアドレス。
+#   - UNITY_PASSWORD: Unity アカウントのパスワード。
+#
+# 使用アクション:
+#   game-ci/unity-test-runner@v4 / game-ci/unity-builder@v4
+#   actions/checkout@v4 / actions/cache@v4 / actions/upload-artifact@v4
+
+name: Addressables CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+# 同一ブランチで新しい push があれば実行中のワークフローをキャンセルする
+concurrency:
+  group: addressables-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
+jobs:
+  editmode-tests:
+    name: EditMode Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Library を OS とアセット/パッケージのハッシュでキャッシュし、import 時間を短縮する
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-editmode-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-editmode-${{ runner.os }}-
+            Library-${{ runner.os }}-
+
+      - name: Run EditMode tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          unityVersion: 6000.5.0f1
+          testMode: EditMode
+          artifactsPath: artifacts/editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: artifacts/editmode
+
+  convention-gate-build:
+    name: Convention Gate Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Library を OS とアセット/パッケージのハッシュでキャッシュし、import 時間を短縮する
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-build-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-build-${{ runner.os }}-
+            Library-${{ runner.os }}-
+
+      # buildMethod に AssetVaultCiBuild.BuildNewForCi を指定し、規約ゲート付き Addressables ビルドを実行する。
+      # 規約違反時は内部で EditorApplication.Exit(1) するため、このステップが失敗し CI が落ちる。
+      - name: Convention gate Addressables build
+        uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: 6000.5.0f1
+          targetPlatform: StandaloneLinux64
+          buildMethod: UniLab.AssetVault.Editor.AssetVaultCiBuild.BuildNewForCi
