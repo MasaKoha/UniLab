@@ -333,6 +333,36 @@ reference.Dispose(); // 参照-1。0 でも TTL 猶予中はキャッシュ保�
 - 参照0でも **TTL（既定10秒）** の間は保持＝出入りの激しいプールで再ロード（churn）しない。
 - **LRU（既定64件）** で溜め込みすぎを防止。設定は `AssetVaultCacheSettings`。
 
+### Prewarm: 事前ロードで本番を即時化
+
+ロード待ちを「暇な瞬間（ローディング画面・遷移）」へ前倒しする。`PrewarmAsync<T>(keys)` で cache に載せて **pin**（保持）し、以降の `AcquireAsync` を即時（cache ヒット）にする。
+
+```csharp
+// ローディング画面で先読み（pin される＝TTL で消えない）
+await _cache.PrewarmAsync<Sprite>(new[] { "Icons/coin", "Icons/gem" }, ct);
+...
+// 本番：cache ヒットで即時、hitch なし
+var reference = await _cache.AcquireAsync<Sprite>("Icons/coin", ct);
+...
+// そのシーン/バトルを抜けるとき、pin を解放（以降は TTL/LRU 管理に戻る）
+_cache.ReleasePrewarm();
+```
+
+- **Remote アセットは先に `DownloadAsync(labels)`**（バイトをディスクへ）→ `PrewarmAsync`（メモリへ展開）の順。Prewarm は通信の一段上。
+- **メモリ予算のため範囲を区切る**: そのシーン/バトルの集合だけ prewarm → 終わったら `ReleasePrewarm`。全部 prewarm は禁物。
+- pin 中は TTL/LRU で破棄されない。`ReleasePrewarm` を呼ばないと載りっぱなしになる。
+
+### ランタイム診断: `GetStats()`
+
+cache の占有状況スナップショットを取得する（デバッグ表示・リーク調査用）。
+
+```csharp
+var stats = _cache.GetStats();
+// EntryCount / ReferencedEntryCount / PinnedEntryCount / TotalReferenceCount / UnreferencedEntryCount
+```
+
+> Editor 側では Dashboard の **Conventions**（Check Conventions）で、重複アドレス・孤立ラベル・依存アセットのエントリ化（skip 漏れ候補）を検査できる。Addressables 標準の Analyze を補う AssetVault 規約の健全性チェック。
+
 ### スロット: 1枚を差し替える要素（プール要素向け）
 
 ```csharp
