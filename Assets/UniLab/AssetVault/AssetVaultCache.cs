@@ -30,6 +30,11 @@ namespace UniLab.AssetVault
             // default(struct) は TTL=0/Capacity=0 になるため、未指定は Default を採用する。
             _settings = settings.TtlSeconds <= 0f && settings.Capacity <= 0 ? AssetVaultCacheSettings.Default : settings;
             _timeProvider = timeProvider ?? (() => Time.realtimeSinceStartup);
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Editor のデバッグ表示から統計を読めるよう、生成時に自己登録する（デバッグ専用）。
+            AssetVaultCacheStatsRegistry.Register(this);
+#endif
         }
 
         /// <inheritdoc />
@@ -142,6 +147,11 @@ namespace UniLab.AssetVault
         /// </summary>
         public void Dispose()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // 自己登録した分を解除する（デバッグ専用）。
+            AssetVaultCacheStatsRegistry.Unregister(this);
+#endif
+
             // pin 参照は破棄するエントリと一緒に解放されるため、保持リストはクリアするだけでよい。
             _prewarmed.Clear();
 
