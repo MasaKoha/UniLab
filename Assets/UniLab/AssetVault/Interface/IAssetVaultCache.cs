@@ -38,5 +38,10 @@ namespace UniLab.AssetVault
         /// cache の現在の占有状況（エントリ数・参照中・pin 中・参照合計）のスナップショットを取得します。ランタイム診断用です。
         /// </summary>
         AssetVaultCacheStats GetStats();
+
+        /// <summary>
+        /// ロード済みアセットの実行時メモリ量（バイト）を Profiler で概算します。リーク調査・メモリ予算確認用の診断 API です（厳密値ではありません）。
+        /// </summary>
+        long EstimateMemoryBytes();
     }
 }
