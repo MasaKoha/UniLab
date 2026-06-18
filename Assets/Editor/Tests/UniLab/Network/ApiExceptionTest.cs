@@ -1,3 +1,4 @@
+using System.Text;
 using NUnit.Framework;
 using UniLab.Network;
 
@@ -8,26 +9,28 @@ namespace UniLab.Tests.EditMode.Network
         [Test]
         public void ApiException_StoresStatusCodeAndBody()
         {
-            var exception = new ApiException(500, "Internal Server Error", "server error");
+            var responseBody = Encoding.UTF8.GetBytes("Internal Server Error");
+            var exception = new ApiException(500, responseBody, "server error");
 
             Assert.AreEqual(500, exception.StatusCode);
-            Assert.AreEqual("Internal Server Error", exception.ResponseBody);
+            Assert.AreEqual("Internal Server Error", exception.ResponseBodyAsString);
             Assert.AreEqual("server error", exception.Message);
         }
 
         [Test]
         public void UnauthorizedException_HasStatus401()
         {
-            var exception = new UnauthorizedException("body");
+            var responseBody = Encoding.UTF8.GetBytes("body");
+            var exception = new UnauthorizedException(responseBody);
 
             Assert.AreEqual(401, exception.StatusCode);
-            Assert.AreEqual("body", exception.ResponseBody);
+            Assert.AreEqual("body", exception.ResponseBodyAsString);
         }
 
         [Test]
         public void UnauthorizedException_IsApiException()
         {
-            var exception = new UnauthorizedException("body");
+            var exception = new UnauthorizedException(Encoding.UTF8.GetBytes("body"));
 
             Assert.IsInstanceOf<ApiException>(exception);
         }
@@ -35,7 +38,7 @@ namespace UniLab.Tests.EditMode.Network
         [Test]
         public void TooManyRequestsException_HasStatus429()
         {
-            var exception = new TooManyRequestsException("rate limited");
+            var exception = new TooManyRequestsException(Encoding.UTF8.GetBytes("rate limited"));
 
             Assert.AreEqual(429, exception.StatusCode);
         }
@@ -43,7 +46,7 @@ namespace UniLab.Tests.EditMode.Network
         [Test]
         public void ServiceUnavailableException_HasStatus503()
         {
-            var exception = new ServiceUnavailableException("down");
+            var exception = new ServiceUnavailableException(Encoding.UTF8.GetBytes("down"));
 
             Assert.AreEqual(503, exception.StatusCode);
         }
@@ -51,9 +54,17 @@ namespace UniLab.Tests.EditMode.Network
         [Test]
         public void AllDerivedExceptions_AreApiException()
         {
-            Assert.IsInstanceOf<ApiException>(new UnauthorizedException(""));
-            Assert.IsInstanceOf<ApiException>(new TooManyRequestsException(""));
-            Assert.IsInstanceOf<ApiException>(new ServiceUnavailableException(""));
+            Assert.IsInstanceOf<ApiException>(new UnauthorizedException(new byte[0]));
+            Assert.IsInstanceOf<ApiException>(new TooManyRequestsException(new byte[0]));
+            Assert.IsInstanceOf<ApiException>(new ServiceUnavailableException(new byte[0]));
+        }
+
+        [Test]
+        public void ResponseBodyAsString_NullSafe_WhenResponseBodyIsNull()
+        {
+            var exception = new ApiException(500, null, "server error");
+
+            Assert.AreEqual(string.Empty, exception.ResponseBodyAsString);
         }
     }
 }
