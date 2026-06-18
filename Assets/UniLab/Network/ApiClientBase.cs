@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UnityEngine;
 using UnityEngine.Networking;
 
 namespace UniLab.Network
@@ -24,6 +23,26 @@ namespace UniLab.Network
         /// Timeout seconds per request attempt. Override in subclass constructor if needed.
         /// </summary>
         protected int _timeoutSeconds = 10;
+
+        private readonly IApiSerializer _serializer;
+
+        // --- Constructors ---
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="ApiClientBase"/> with the default
+        /// <see cref="JsonUtilityApiSerializer"/>.
+        /// </summary>
+        protected ApiClientBase() : this(new JsonUtilityApiSerializer())
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="ApiClientBase"/> with a custom serializer.
+        /// </summary>
+        protected ApiClientBase(IApiSerializer serializer)
+        {
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        }
 
         // --- Abstract members ---
 
@@ -51,7 +70,7 @@ namespace UniLab.Network
         }
 
         /// <summary>
-        /// Sends a POST request with a JSON-serialized <paramref name="body"/> to <paramref name="path"/>
+        /// Sends a POST request with a serialized <paramref name="body"/> to <paramref name="path"/>
         /// and deserializes the response as <typeparamref name="TResponse"/>.
         /// </summary>
         protected async UniTask<TResponse> PostAsync<TResponse, TRequest>(
@@ -60,10 +79,10 @@ namespace UniLab.Network
             CancellationToken cancellationToken = default)
         {
             var url = BuildUrl(path);
-            var json = JsonUtility.ToJson(body);
-            var uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(json))
+            var bodyBytes = _serializer.Serialize(body);
+            var uploadHandler = new UploadHandlerRaw(bodyBytes)
             {
-                contentType = "application/json"
+                contentType = _serializer.ContentType
             };
             using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST)
             {
@@ -93,7 +112,7 @@ namespace UniLab.Network
 
         private void SetCommonHeaders(UnityWebRequest request)
         {
-            request.SetRequestHeader("Accept", "application/json");
+            request.SetRequestHeader("Accept", _serializer.ContentType);
 
             var token = GetAccessToken();
             if (!string.IsNullOrEmpty(token))
@@ -115,21 +134,26 @@ namespace UniLab.Network
 
             if (request.result == UnityWebRequest.Result.Success)
             {
-                var responseText = request.downloadHandler.text;
-                return JsonUtility.FromJson<TResponse>(responseText);
+                var responseBytes = request.downloadHandler?.data;
+                if (statusCode == 204 || responseBytes == null || responseBytes.Length == 0)
+                {
+                    return default;
+                }
+
+                return _serializer.Deserialize<TResponse>(responseBytes);
             }
 
-            var responseBody = request.downloadHandler?.text ?? string.Empty;
+            var responseBodyBytes = request.downloadHandler?.data ?? Array.Empty<byte>();
 
             if (statusCode == 401)
             {
                 OnUnauthorized();
-                throw new UnauthorizedException(responseBody);
+                throw new UnauthorizedException(responseBodyBytes);
             }
 
             if (statusCode == 400 || statusCode == 404)
             {
-                throw new ApiException(statusCode, responseBody, $"Request failed with status {statusCode}.");
+                throw new ApiException(statusCode, responseBodyBytes, $"Request failed with status {statusCode}.");
             }
 
             // Retry only on 429 and 5xx (transient errors).
@@ -147,15 +171,15 @@ namespace UniLab.Network
 
             if (statusCode == 429)
             {
-                throw new TooManyRequestsException(responseBody);
+                throw new TooManyRequestsException(responseBodyBytes);
             }
 
             if (statusCode == 503)
             {
-                throw new ServiceUnavailableException(responseBody);
+                throw new ServiceUnavailableException(responseBodyBytes);
             }
 
-            throw new ApiException(statusCode, responseBody, $"Request failed with status {statusCode}.");
+            throw new ApiException(statusCode, responseBodyBytes, $"Request failed with status {statusCode}.");
         }
 
         /// <summary>
