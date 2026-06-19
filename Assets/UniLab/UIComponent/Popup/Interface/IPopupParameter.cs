@@ -3,13 +3,21 @@ using Cysharp.Threading.Tasks;
 
 namespace UniLab.UI.Popup
 {
+    /// <summary>
+    /// ポップアップ表示時の挙動を表すパラメータ。各ポップアップ生成時に Initialize へ渡される。
+    /// </summary>
     public interface IPopupParameter
     {
-        // Whether to respond to back key press
-        public bool EnableBackKey { get; }
+        /// <summary>表示要求の優先度。PopupService のキューイング順を決める。</summary>
+        PopupPriority Priority { get; }
 
-        // Function to execute on back key press. If null, default close behavior is used.
-        public Func<UniTask> CustomBackAsync { get; }
-        public bool EnableBackgroundClose { get; }
+        /// <summary>バックキーに反応して閉じるか。</summary>
+        bool EnableBackKey { get; }
+
+        /// <summary>バックキー時に実行する処理。null の場合は既定の閉じ動作を行う。</summary>
+        Func<UniTask> CustomBackAsync { get; }
+
+        /// <summary>背景タップで閉じられるか。</summary>
+        bool EnableBackgroundClose { get; }
     }
 }
