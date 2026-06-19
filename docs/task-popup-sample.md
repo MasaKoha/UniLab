@@ -1,11 +1,10 @@
-# タスク: Popup 基盤 v2 動作確認サンプルの実装
+# Popup 基盤 v2 動作確認サンプル
 
-作成日: 2026-06-19 / 対象ブランチ: `feature/popup-foundation`
+作成日: 2026-06-19 / 更新日: 2026-06-20 / 対象ブランチ: `feature/popup-foundation`
 
 ## 目的
 
-実装済みの Popup 基盤 v2（`IPopupService` / `PopupService` / `IPopupViewProvider` / `PopupBase<TParameter,TResult>`）を、
-Unity 実機で動作確認するためのサンプル。あわせて v1 後方互換（`UniLabPopupManager`）も確認する。
+Popup 基盤 v2（`IPopupService` / `PopupService` / `IPopupViewProvider` / `PopupBase<TParameter,TResult>`）を Unity 実機で動作確認する。
 
 ## 構成
 
@@ -13,45 +12,30 @@ Unity 実機で動作確認するためのサンプル。あわせて v1 後方�
   - `RewardPopupResult.cs` … 任意結果型のデモ（readonly struct）
   - `RewardPopupParameter.cs` … `IPopupParameter` 実装
   - `RewardPopup.cs` … `PopupBase<RewardPopupParameter, RewardPopupResult>`。フェード（UiTween）
-  - `PopupSampleEntry.cs` … 起点。各ボタンで v2/v1/優先度/入力ブロックを実演
-  - `UniLab.UIComponent.Sample.asmdef`
+  - `PopupSampleEntry.cs` … 起点。3ボタンで v2 を実演。プレハブは Resources からロードする内蔵 `ResourcesPopupViewProvider` を使う（Editor のアセット参照配線に依存しない）
 - **シーン/プレハブ生成**（`Assets/UniLab/Sample/Popup/Editor/`）
-  - `PopupSampleBuilder.cs` … メニュー `UniLab > Sample > Build Popup Sample` でシーン・プレハブ・配線を一括生成
-  - `UniLab.UIComponent.Sample.Editor.asmdef`
+  - `PopupSampleBuilder.cs` … メニュー `UniLab > Sample > Build Popup Sample` でシーン・プレハブを一括生成
+  - プレハブ出力先: `Assets/UniLab/Sample/Popup/Resources/Popup/`（`ConfirmPopup.prefab` / `RewardPopup.prefab`）
 
-## 公開 API（呼び出し側）
+## 設計メモ：Resources ロード方式
 
-```csharp
-UniTask<TResult> ShowAsync<TPopup, TResult>(IPopupParameter parameter, CancellationToken ct = default)
-    where TPopup : PopupBase<TResult>;
-ReadOnlyReactiveProperty<bool> HasActivePopup { get; }
-UniTask CloseTopAsync();
-public PopupService(IPopupViewProvider viewProvider);   // IDisposable
-
-new PopupParameter { Title, Message, ConfirmLabel="OK", CancelLabel=null };
-enum PopupResult { None, Confirm, Cancel }
-enum PopupPriority { None, Low, Normal, High, System }
-```
+Editor スクリプトの `SerializedObject` 経由では「シーン → プレハブアセット」への参照配線がこの環境で安定しなかったため、
+プレハブは `Resources.Load<TPopup>($"Popup/{型名}")` でロードする。これにより Editor でのプレハブ参照配線が不要になる。
+シーン内参照（ボタン / `_popupRoot` / `_buttonGroup`）は `SerializedObject` で確実に配線できるためそのまま使う。
 
 ## 使い方（Unity 上）
 
-1. Unity でコンパイルを通す
-2. メニュー `UniLab > Sample > Build Popup Sample` を実行
-   - `Assets/UniLab/Sample/Popup/PopupSample.unity` と `Prefabs/ConfirmPopup.prefab` / `RewardPopup.prefab` が生成・配線される
-3. Play して4ボタンを押す
-
-> batchmode 生成も可:
-> `Unity -batchmode -projectPath <repo> -executeMethod UniLab.UI.Popup.SampleEditor.PopupSampleBuilder.Build -quit -logFile -`
-> （同じプロジェクトを Unity Editor で開いていないこと）
+1. コンパイルを通す
+2. メニュー `UniLab > Sample > Build Popup Sample` を実行（既存のシーン・プレハブを上書き再生成）
+3. `Assets/UniLab/Sample/Popup/PopupSample.unity` を Play して3ボタンを押す
 
 ## 検証シナリオ
 
-1. v2 確認ダイアログ（Confirm/Cancel/背景タップ）
-2. 任意結果型（RewardPopupResult の claimed/amount）
-3. 直列化＋優先度（System→High→Normal→Low の順で処理）
-4. 入力ブロック（表示中は `_buttonGroup.interactable=false`）
-5. v1 後方互換（`UniLabPopupManager.ShowAsync`）
-6. リーク無し（Hierarchy に GameObject が残らない）
+1. **v2 確認ダイアログ**（Confirm ボタン）: `ShowAsync<ConfirmPopup, PopupResult>` → Yes/No/背景タップ
+2. **任意結果型**（Reward ボタン）: `ShowAsync<RewardPopup, RewardPopupResult>` → `claimed` / `amount` が返る
+3. **直列化＋優先度**（Priority Test ボタン）: System→High→Normal→Low の順で1つずつ表示
+4. **入力ブロック**: 表示中は `HasActivePopup` 購読で `_buttonGroup.interactable=false`
+5. **リーク無し**: 連打・表示中の別要求でも GameObject が残らない（finally で必ず Release）
 
 ## 規約
 

@@ -16,16 +16,10 @@ namespace UniLab.UI.Popup
             _resultSource.TrySetResult(result);
         }
 
-        /// <summary>結果が確定するまで待つ。PopupService / マネージャが await する。</summary>
+        /// <summary>結果が確定するまで待つ。PopupService が await する。</summary>
         public UniTask<TResult> GetResultAsync()
         {
             return _resultSource.Task;
-        }
-
-        /// <summary>結果確定を待機する。基底で共通実装し、派生での再実装を禁じる。</summary>
-        public sealed override async UniTask WaitAsync()
-        {
-            await _resultSource.Task;
         }
     }
 }
