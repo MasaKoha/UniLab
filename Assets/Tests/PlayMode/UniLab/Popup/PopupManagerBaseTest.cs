@@ -13,6 +13,7 @@ namespace UniLab.Tests.PlayMode.Popup
 
     internal class TestPopupParameter : IPopupParameter
     {
+        public PopupPriority Priority { get; set; } = PopupPriority.Normal;
         public bool EnableBackKey { get; set; } = true;
         public Func<UniTask> CustomBackAsync { get; set; } = null;
         public bool EnableBackgroundClose { get; set; } = false;

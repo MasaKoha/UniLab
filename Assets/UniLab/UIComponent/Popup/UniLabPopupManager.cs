@@ -7,7 +7,7 @@ namespace UniLab.UI.Popup
     /// <summary>
     /// 確認ポップアップを表示し応答を待つ Singleton マネージャ。ポップアップスタック基盤に統合する。
     /// </summary>
-    public class UniLabPopupManager : PopupManagerBase<UniLabPopupManager>, IPopupManager
+    public sealed class UniLabPopupManager : PopupManagerBase<UniLabPopupManager>, IPopupManager
     {
         [SerializeField] private ConfirmPopup _confirmPopupPrefab = null;
 

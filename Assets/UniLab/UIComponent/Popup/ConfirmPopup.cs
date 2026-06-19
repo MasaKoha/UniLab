@@ -8,9 +8,9 @@ using UnityEngine.UI;
 namespace UniLab.UI.Popup
 {
     /// <summary>
-    /// 確認 / キャンセルの 2 択ポップアップ View。既存のポップアップスタックに乗せるため PopupBase を継承する。
+    /// 確認 / キャンセルの 2 択ポップアップ View。結果型は PopupResult。
     /// </summary>
-    public class ConfirmPopup : PopupBase
+    public sealed class ConfirmPopup : PopupBase<PopupParameter, PopupResult>
     {
         // 開閉アニメーションの尺。DOTween 撤去に伴い UiTween へ渡す定数として保持する。
         private const float OpenDuration = 0.25f;
@@ -21,14 +21,8 @@ namespace UniLab.UI.Popup
         [SerializeField] private Button _confirmButton = null;
         [SerializeField] private Button _cancelButton = null;
 
-        private UniTaskCompletionSource<PopupResult> _resultSource;
-
-        protected override void OnInitialize()
+        protected override void OnSetup(PopupParameter parameter)
         {
-            _resultSource = new UniTaskCompletionSource<PopupResult>();
-
-            var parameter = (PopupParameter)Parameter;
-
             _titleText.text = parameter.Title;
             _messageText.text = parameter.Message;
             _confirmButton.GetComponentInChildren<TMP_Text>().text = parameter.ConfirmLabel;
@@ -42,10 +36,10 @@ namespace UniLab.UI.Popup
 
             // AddTo(this) で破棄時に購読解除し、プール化・再利用時のリスナー多重登録を防ぐ
             _confirmButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Confirm))
+                .Subscribe(_ => SetResult(PopupResult.Confirm))
                 .AddTo(this);
             _cancelButton.OnClickAsObservable()
-                .Subscribe(_ => _resultSource.TrySetResult(PopupResult.Cancel))
+                .Subscribe(_ => SetResult(PopupResult.Cancel))
                 .AddTo(this);
         }
 
@@ -57,15 +51,6 @@ namespace UniLab.UI.Popup
             // destroyCancellationToken で外部破棄・シーン遷移時にアニメーションを安全に中断する
             await UiTween.ScaleAsync(
                 transform, Vector3.zero, Vector3.one, OpenDuration, EaseType.OutBack, destroyCancellationToken);
-        }
-
-        /// <summary>
-        /// ユーザーが確認 / キャンセルを押すまで待機し、その後に閉じるアニメーションへ繋ぐ。
-        /// </summary>
-        public override async UniTask WaitAsync()
-        {
-            await _resultSource.Task;
-            await CloseAsync();
         }
 
         /// <summary>
@@ -82,15 +67,7 @@ namespace UniLab.UI.Popup
         /// </summary>
         public override void OnClose()
         {
-            _resultSource.TrySetResult(PopupResult.Cancel);
-        }
-
-        /// <summary>
-        /// ユーザー操作の結果で完了する UniTask を返す。Initialize 後に呼ぶこと（事前条件）。
-        /// </summary>
-        public UniTask<PopupResult> GetResultAsync()
-        {
-            return _resultSource.Task;
+            SetResult(PopupResult.Cancel);
         }
     }
 }

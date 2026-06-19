@@ -5,48 +5,55 @@ using Cysharp.Threading.Tasks;
 namespace UniLab.UI.Popup
 {
     /// <summary>
-    /// Manages confirmation popup presentation and awaiting user confirmation/cancellation.
+    /// 確認ポップアップの表示と、確認 / キャンセル応答の待機を担う。後方互換用の薄い API。
     /// </summary>
     public interface IPopupManager
     {
-        /// <summary>
-        /// Shows a confirmation popup with the given parameters and waits for user response.
-        /// </summary>
+        /// <summary>確認ポップアップを表示し、ユーザー応答を待つ。</summary>
         UniTask<PopupResult> ShowAsync(PopupParameter parameter, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
-    /// Represents the result of a confirmation popup interaction.
+    /// 確認ポップアップの応答結果。
     /// </summary>
     public enum PopupResult
     {
+        /// <summary>未確定（既定値）。</summary>
+        None = 0,
+
+        /// <summary>確認（OK）。</summary>
         Confirm,
+
+        /// <summary>キャンセル。</summary>
         Cancel,
     }
 
     /// <summary>
-    /// Parameters for configuring confirmation popup content and button visibility.
-    /// Implements IPopupParameter so it can be passed directly to the popup stack system.
+    /// 確認ポップアップの表示内容・ボタン構成を指定するパラメータ。
+    /// IPopupParameter を実装し、ポップアップ基盤へそのまま渡せる。
     /// </summary>
     public class PopupParameter : IPopupParameter
     {
-        /// <summary>Title text displayed at the top of the popup.</summary>
+        /// <summary>ポップアップ上部に表示するタイトル。</summary>
         public string Title { get; set; }
 
-        /// <summary>Body message text of the popup.</summary>
+        /// <summary>本文メッセージ。</summary>
         public string Message { get; set; }
 
-        /// <summary>Label for the confirm button.</summary>
+        /// <summary>確認ボタンのラベル。</summary>
         public string ConfirmLabel { get; set; } = "OK";
 
-        /// <summary>Label for the cancel button. When null, the cancel button is hidden.</summary>
+        /// <summary>キャンセルボタンのラベル。null のときはキャンセルボタンを隠す。</summary>
         public string CancelLabel { get; set; }
 
-        // Back key dismisses the popup as Cancel
+        // 確認ダイアログは通常優先度で扱う
+        PopupPriority IPopupParameter.Priority => PopupPriority.Normal;
+
+        // バックキーは Cancel として閉じる
         bool IPopupParameter.EnableBackKey => true;
         Func<UniTask> IPopupParameter.CustomBackAsync => null;
 
-        // Background tap should not close a confirmation popup to prevent accidental dismissal
+        // 誤操作防止のため確認ダイアログは背景タップで閉じない
         bool IPopupParameter.EnableBackgroundClose => false;
     }
 }
