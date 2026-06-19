@@ -61,9 +61,11 @@ namespace UniLab.Common
 
         public void Dispose()
         {
-            _instance = null;
-            DestroyImmediate(gameObject);
+            // 破棄後インスタンスに触れないよう、後始末フックを先に呼んでから GameObject を破棄する。
+            // DestroyImmediate はランタイムで不安定なため Destroy を使う。
             OnDispose();
+            _instance = null;
+            Destroy(gameObject);
         }
 
         protected virtual void OnDispose()
