@@ -244,14 +244,11 @@ namespace UniLab.UI.Popup.Tests
             yield return new WaitUntil(() => isCompleted);
 
             // Assert
-            Assert.Multiple(() =>
-            {
-                Assert.AreEqual(expectedResult, actualResult, "Resolve した値が戻り値に反映されること");
-                Assert.IsFalse(_service.HasActivePopup.CurrentValue, "完了後は HasActivePopup が false であること");
-                Assert.AreEqual(1, popup.OpenAsyncCallCount, "OpenAsync が 1 回呼ばれること");
-                Assert.AreEqual(1, popup.CloseAsyncCallCount, "CloseAsync が 1 回呼ばれること");
-                Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "Release が 1 回呼ばれること");
-            });
+            Assert.AreEqual(expectedResult, actualResult, "Resolve した値が戻り値に反映されること");
+            Assert.IsFalse(_service.HasActivePopup.CurrentValue, "完了後は HasActivePopup が false であること");
+            Assert.AreEqual(1, popup.OpenAsyncCallCount, "OpenAsync が 1 回呼ばれること");
+            Assert.AreEqual(1, popup.CloseAsyncCallCount, "CloseAsync が 1 回呼ばれること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "Release が 1 回呼ばれること");
         }
 
         // ---------------------------------------------------------------------------
@@ -386,12 +383,9 @@ namespace UniLab.UI.Popup.Tests
             yield return new WaitUntil(() => _viewProvider.ReleaseCallCount > 0);
 
             // Assert
-            Assert.Multiple(() =>
-            {
-                Assert.AreEqual(1, popup.CloseAsyncCallCount, "キャンセル時に CloseAsync が呼ばれること");
-                Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "キャンセル時に Release が呼ばれること");
-                Assert.IsFalse(_service.HasActivePopup.CurrentValue, "キャンセル後は HasActivePopup が false であること");
-            });
+            Assert.AreEqual(1, popup.CloseAsyncCallCount, "キャンセル時に CloseAsync が呼ばれること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "キャンセル時に Release が呼ばれること");
+            Assert.IsFalse(_service.HasActivePopup.CurrentValue, "キャンセル後は HasActivePopup が false であること");
         }
 
         // ---------------------------------------------------------------------------
@@ -476,14 +470,11 @@ namespace UniLab.UI.Popup.Tests
             yield return new WaitUntil(() => completionOrder.Count >= 4);
 
             // Assert: 完了順が First→High→Normal→Low であること
-            Assert.Multiple(() =>
-            {
-                Assert.AreEqual(4, completionOrder.Count, "4 件すべて完了すること");
-                Assert.AreEqual("First", completionOrder[0], "1 件目が最初に完了すること");
-                Assert.AreEqual("High", completionOrder[1], "High 優先度が 2 番目に完了すること");
-                Assert.AreEqual("Normal", completionOrder[2], "Normal 優先度が 3 番目に完了すること");
-                Assert.AreEqual("Low", completionOrder[3], "Low 優先度が最後に完了すること");
-            });
+            Assert.AreEqual(4, completionOrder.Count, "4 件すべて完了すること");
+            Assert.AreEqual("First", completionOrder[0], "1 件目が最初に完了すること");
+            Assert.AreEqual("High", completionOrder[1], "High 優先度が 2 番目に完了すること");
+            Assert.AreEqual("Normal", completionOrder[2], "Normal 優先度が 3 番目に完了すること");
+            Assert.AreEqual("Low", completionOrder[3], "Low 優先度が最後に完了すること");
         }
 
         // ---------------------------------------------------------------------------
@@ -537,12 +528,9 @@ namespace UniLab.UI.Popup.Tests
             yield return secondTask;
 
             // Assert
-            Assert.Multiple(() =>
-            {
-                Assert.IsInstanceOf<InvalidOperationException>(caughtException, "LoadAsync 例外が ShowAsync から伝播すること");
-                Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "2 件目は正常完了して Release されること");
-                Assert.IsFalse(_service.HasActivePopup.CurrentValue, "キュー詰まりなく完了すること");
-            });
+            Assert.IsInstanceOf<InvalidOperationException>(caughtException, "LoadAsync 例外が ShowAsync から伝播すること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "2 件目は正常完了して Release されること");
+            Assert.IsFalse(_service.HasActivePopup.CurrentValue, "キュー詰まりなく完了すること");
         }
 
         // ---------------------------------------------------------------------------
