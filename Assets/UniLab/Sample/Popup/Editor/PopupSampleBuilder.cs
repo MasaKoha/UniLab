@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using TMPro;
 using UniLab.UI.Popup;
 using UniLab.UI.Popup.Sample;
@@ -11,13 +10,13 @@ using UnityEngine.UI;
 namespace UniLab.UI.Popup.SampleEditor
 {
     /// <summary>
-    /// Popup 動作確認サンプルのシーン・プレハブ・配線をメニューから一括生成するビルダー。
-    /// 手書き YAML の参照破損を避け、Unity API で fileID / GUID 整合を保証するために用意する。
+    /// Popup 動作確認サンプルのシーン・プレハブをメニューから一括生成するビルダー。
+    /// プレハブは Resources/Popup へ出力し、ランタイムで型名ロードする。シーン側はシーン内参照のみ配線する。
     /// </summary>
     public static class PopupSampleBuilder
     {
         private const string SampleDirectory = "Assets/UniLab/Sample/Popup";
-        private const string PrefabDirectory = SampleDirectory + "/Prefabs";
+        private const string PrefabDirectory = SampleDirectory + "/Resources/Popup";
         private const string ConfirmPrefabPath = PrefabDirectory + "/ConfirmPopup.prefab";
         private const string RewardPrefabPath = PrefabDirectory + "/RewardPopup.prefab";
         private const string ScenePath = SampleDirectory + "/PopupSample.unity";
@@ -26,7 +25,7 @@ namespace UniLab.UI.Popup.SampleEditor
         private static readonly Vector2 ReferenceResolution = new(1920f, 1080f);
         private static readonly Vector2 PanelSize = new(800f, 480f);
 
-        /// <summary>シーン・プレハブ・配線を生成する。現在のシーンは保存確認後に置き換わる。</summary>
+        /// <summary>シーン・プレハブを生成する。現在のシーンは保存確認後に置き換わる。</summary>
         [MenuItem("UniLab/Sample/Build Popup Sample")]
         public static void Build()
         {
@@ -36,40 +35,42 @@ namespace UniLab.UI.Popup.SampleEditor
             }
 
             EnsureDirectory(PrefabDirectory);
+            CreateConfirmPrefab();
+            CreateRewardPrefab();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
 
-            var confirmPrefab = CreateConfirmPrefab();
-            var rewardPrefab = CreateRewardPrefab();
-            BuildScene(confirmPrefab, rewardPrefab);
+            BuildScene();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[PopupSample] シーンとプレハブを生成しました: " + ScenePath);
         }
 
-        private static ConfirmPopup CreateConfirmPrefab()
+        private static void CreateConfirmPrefab()
         {
             var root = NewUIObject("ConfirmPopup", null, Vector2.zero, ReferenceResolution);
             var confirmPopup = root.AddComponent<ConfirmPopup>();
 
             var background = CreateBackground(root.transform);
             var panel = CreatePanel(root.transform);
-            var title = CreateText(panel.transform, "Title", "タイトル", new Vector2(0f, 150f), 48f);
-            var message = CreateText(panel.transform, "Message", "メッセージ", new Vector2(0f, 30f), 32f);
+            var title = CreateText(panel.transform, "Title", "Title", new Vector2(0f, 150f), 48f);
+            var message = CreateText(panel.transform, "Message", "Message", new Vector2(0f, 30f), 32f);
             var confirmButton = CreateButton(panel.transform, "ConfirmButton", "OK", new Vector2(180f, -150f));
             var cancelButton = CreateButton(panel.transform, "CancelButton", "Cancel", new Vector2(-180f, -150f));
 
+            // プレハブ内部（同一プレハブ内オブジェクト間）の参照を設定してから保存する
             SetReference(confirmPopup, "_backgroundButton", background);
             SetReference(confirmPopup, "_titleText", title);
             SetReference(confirmPopup, "_messageText", message);
             SetReference(confirmPopup, "_confirmButton", confirmButton);
             SetReference(confirmPopup, "_cancelButton", cancelButton);
 
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, ConfirmPrefabPath);
+            PrefabUtility.SaveAsPrefabAsset(root, ConfirmPrefabPath);
             Object.DestroyImmediate(root);
-            return prefab.GetComponent<ConfirmPopup>();
         }
 
-        private static RewardPopup CreateRewardPrefab()
+        private static void CreateRewardPrefab()
         {
             var root = NewUIObject("RewardPopup", null, Vector2.zero, ReferenceResolution);
             var canvasGroup = root.AddComponent<CanvasGroup>();
@@ -77,10 +78,10 @@ namespace UniLab.UI.Popup.SampleEditor
 
             var background = CreateBackground(root.transform);
             var panel = CreatePanel(root.transform);
-            var title = CreateText(panel.transform, "Title", "報酬", new Vector2(0f, 150f), 48f);
-            var rewardText = CreateText(panel.transform, "RewardText", "アイテム ×0", new Vector2(0f, 30f), 36f);
-            var claimButton = CreateButton(panel.transform, "ClaimButton", "受け取る", new Vector2(180f, -150f));
-            var closeButton = CreateButton(panel.transform, "CloseButton", "閉じる", new Vector2(-180f, -150f));
+            var title = CreateText(panel.transform, "Title", "Reward", new Vector2(0f, 150f), 48f);
+            var rewardText = CreateText(panel.transform, "RewardText", "Item x0", new Vector2(0f, 30f), 36f);
+            var claimButton = CreateButton(panel.transform, "ClaimButton", "Claim", new Vector2(180f, -150f));
+            var closeButton = CreateButton(panel.transform, "CloseButton", "Close", new Vector2(-180f, -150f));
 
             SetReference(rewardPopup, "_backgroundButton", background);
             SetReference(rewardPopup, "_titleText", title);
@@ -89,12 +90,11 @@ namespace UniLab.UI.Popup.SampleEditor
             SetReference(rewardPopup, "_closeButton", closeButton);
             SetReference(rewardPopup, "_canvasGroup", canvasGroup);
 
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, RewardPrefabPath);
+            PrefabUtility.SaveAsPrefabAsset(root, RewardPrefabPath);
             Object.DestroyImmediate(root);
-            return prefab.GetComponent<RewardPopup>();
         }
 
-        private static void BuildScene(ConfirmPopup confirmPrefab, RewardPopup rewardPrefab)
+        private static void BuildScene()
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -106,14 +106,18 @@ namespace UniLab.UI.Popup.SampleEditor
             canvasScaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             canvasScaler.referenceResolution = ReferenceResolution;
 
-            // Both 入力なので StandaloneInputModule で動く（Input System Only の場合は差し替えが必要）
-            new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+            var eventSystemObject = new GameObject("EventSystem", typeof(EventSystem));
+#if ENABLE_INPUT_SYSTEM
+            eventSystemObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+#else
+            eventSystemObject.AddComponent<StandaloneInputModule>();
+#endif
 
             var popupRoot = NewUIObject("PopupRoot", canvasObject.transform, Vector2.zero, ReferenceResolution);
             StretchFull(popupRoot.GetComponent<RectTransform>());
 
             var buttonGroupObject = NewUIObject(
-                "ButtonGroup", canvasObject.transform, Vector2.zero, new Vector2(480f, 520f));
+                "ButtonGroup", canvasObject.transform, Vector2.zero, new Vector2(480f, 420f));
             var buttonGroup = buttonGroupObject.AddComponent<CanvasGroup>();
             var verticalLayout = buttonGroupObject.AddComponent<VerticalLayoutGroup>();
             verticalLayout.spacing = 24f;
@@ -123,31 +127,20 @@ namespace UniLab.UI.Popup.SampleEditor
             verticalLayout.childForceExpandWidth = true;
             verticalLayout.childForceExpandHeight = false;
 
-            var confirmButton = CreateButton(buttonGroupObject.transform, "ConfirmButton", "確認ダイアログ(v2)", Vector2.zero);
-            var rewardButton = CreateButton(buttonGroupObject.transform, "RewardButton", "報酬ダイアログ", Vector2.zero);
-            var priorityButton = CreateButton(buttonGroupObject.transform, "PriorityTestButton", "優先度テスト", Vector2.zero);
-            var legacyButton = CreateButton(buttonGroupObject.transform, "LegacyButton", "v1 互換", Vector2.zero);
-
-            var providerObject = new GameObject("PopupViewProvider");
-            var viewProvider = providerObject.AddComponent<SerializeFieldPopupViewProvider>();
-            SetReference(viewProvider, "_popupRoot", popupRoot.transform);
-            SetList(viewProvider, "_popupPrefabs", new PopupBase[] { confirmPrefab, rewardPrefab });
-
-            var legacyObject = new GameObject("LegacyPopupManager");
-            var legacyManager = legacyObject.AddComponent<UniLabPopupManager>();
-            SetReference(legacyManager, "_popupRoot", popupRoot.transform);
-            SetReference(legacyManager, "_confirmPopupPrefab", confirmPrefab);
+            var confirmButton = CreateButton(buttonGroupObject.transform, "ConfirmButton", "Confirm (v2)", Vector2.zero);
+            var rewardButton = CreateButton(buttonGroupObject.transform, "RewardButton", "Reward", Vector2.zero);
+            var priorityButton = CreateButton(buttonGroupObject.transform, "PriorityTestButton", "Priority Test", Vector2.zero);
 
             var entryObject = new GameObject("PopupSampleEntry");
             var sampleEntry = entryObject.AddComponent<PopupSampleEntry>();
-            SetReference(sampleEntry, "_viewProvider", viewProvider);
-            SetReference(sampleEntry, "_legacyManager", legacyManager);
+            // すべてシーン内オブジェクトへの参照なので SerializedObject 配線で確実に保存される
+            SetReference(sampleEntry, "_popupRoot", popupRoot.transform);
             SetReference(sampleEntry, "_confirmButton", confirmButton);
             SetReference(sampleEntry, "_rewardButton", rewardButton);
             SetReference(sampleEntry, "_priorityTestButton", priorityButton);
-            SetReference(sampleEntry, "_legacyButton", legacyButton);
             SetReference(sampleEntry, "_buttonGroup", buttonGroup);
 
+            EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
         }
 
@@ -232,26 +225,14 @@ namespace UniLab.UI.Popup.SampleEditor
             rectTransform.offsetMax = Vector2.zero;
         }
 
-        // --- SerializeField 配線ヘルパー ---
+        // --- 配線ヘルパー（シーン内参照専用） ---
 
         private static void SetReference(Object target, string fieldName, Object value)
         {
             var serializedObject = new SerializedObject(target);
             serializedObject.FindProperty(fieldName).objectReferenceValue = value;
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        private static void SetList(Object target, string fieldName, IReadOnlyList<PopupBase> values)
-        {
-            var serializedObject = new SerializedObject(target);
-            var property = serializedObject.FindProperty(fieldName);
-            property.arraySize = values.Count;
-            for (var index = 0; index < values.Count; index++)
-            {
-                property.GetArrayElementAtIndex(index).objectReferenceValue = values[index];
-            }
-
-            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(target);
         }
 
         private static void EnsureDirectory(string path)

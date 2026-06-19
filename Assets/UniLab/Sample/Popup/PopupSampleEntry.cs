@@ -8,19 +8,18 @@ using UnityEngine.UI;
 namespace UniLab.UI.Popup.Sample
 {
     /// <summary>
-    /// Popup 基盤 v2 の表示、優先度制御、入力ブロックと v1 後方互換を確認する起点。
+    /// Popup 基盤 v2 の表示・優先度制御・入力ブロックを確認する起点。
+    /// プレハブは Resources からロードするため、Editor でのアセット参照配線に依存しない。
     /// </summary>
     public sealed class PopupSampleEntry : MonoBehaviour
     {
         private const int RewardAmount = 100;
         private const int PriorityRewardAmount = 1;
 
-        [SerializeField] private SerializeFieldPopupViewProvider _viewProvider = null;
-        [SerializeField] private UniLabPopupManager _legacyManager = null;
+        [SerializeField] private Transform _popupRoot = null;
         [SerializeField] private Button _confirmButton = null;
         [SerializeField] private Button _rewardButton = null;
         [SerializeField] private Button _priorityTestButton = null;
-        [SerializeField] private Button _legacyButton = null;
         [SerializeField] private CanvasGroup _buttonGroup = null;
 
         private IPopupService _popupService = null;
@@ -28,7 +27,7 @@ namespace UniLab.UI.Popup.Sample
 
         private void Awake()
         {
-            _popupService = new PopupService(_viewProvider);
+            _popupService = new PopupService(new ResourcesPopupViewProvider(_popupRoot));
         }
 
         private void Start()
@@ -45,9 +44,6 @@ namespace UniLab.UI.Popup.Sample
             _priorityTestButton.OnClickAsObservable()
                 .Subscribe(_ => RunPriorityTest())
                 .AddTo(_disposables);
-            _legacyButton.OnClickAsObservable()
-                .Subscribe(_ => ShowLegacyAsync(destroyCancellationToken).Forget())
-                .AddTo(_disposables);
         }
 
         private async UniTask ShowConfirmAsync(CancellationToken cancellationToken)
@@ -55,14 +51,14 @@ namespace UniLab.UI.Popup.Sample
             var result = await _popupService.ShowAsync<ConfirmPopup, PopupResult>(
                 new PopupParameter
                 {
-                    Title = "確認",
-                    Message = "実行しますか？",
-                    ConfirmLabel = "はい",
-                    CancelLabel = "いいえ",
+                    Title = "Confirm",
+                    Message = "Are you sure?",
+                    ConfirmLabel = "Yes",
+                    CancelLabel = "No",
                 },
                 cancellationToken);
 
-            Debug.Log($"[Popup] Confirm 結果: {result}");
+            Debug.Log($"[Popup] Confirm result: {result}");
         }
 
         private async UniTask ShowRewardAsync(CancellationToken cancellationToken)
@@ -70,12 +66,12 @@ namespace UniLab.UI.Popup.Sample
             var result = await _popupService.ShowAsync<RewardPopup, RewardPopupResult>(
                 new RewardPopupParameter
                 {
-                    RewardName = "コイン",
+                    RewardName = "Coin",
                     Amount = RewardAmount,
                 },
                 cancellationToken);
 
-            Debug.Log($"[Popup] Reward 結果: claimed={result.Claimed}, amount={result.Amount}");
+            Debug.Log($"[Popup] Reward result: claimed={result.Claimed}, amount={result.Amount}");
         }
 
         private void RunPriorityTest()
@@ -99,28 +95,46 @@ namespace UniLab.UI.Popup.Sample
                 },
                 cancellationToken);
 
-            Debug.Log(
-                $"[Popup] Priority 結果: priority={priority}, claimed={result.Claimed}, amount={result.Amount}");
-        }
-
-        private async UniTask ShowLegacyAsync(CancellationToken cancellationToken)
-        {
-            var result = await _legacyManager.ShowAsync(
-                new PopupParameter
-                {
-                    Title = "v1",
-                    Message = "旧APIの確認",
-                    ConfirmLabel = "OK",
-                },
-                cancellationToken);
-
-            Debug.Log($"[Popup] Legacy 結果: {result}");
+            Debug.Log($"[Popup] Priority result: priority={priority}, claimed={result.Claimed}");
         }
 
         private void OnDestroy()
         {
             _disposables.Dispose();
             ((IDisposable)_popupService).Dispose();
+        }
+
+        /// <summary>
+        /// Resources からポップアッププレハブをロードする ViewProvider。
+        /// Editor でのプレハブ参照配線を介さず、型名で Resources/Popup/{型名} を解決する。
+        /// </summary>
+        private sealed class ResourcesPopupViewProvider : IPopupViewProvider
+        {
+            private readonly Transform _popupRoot;
+
+            public ResourcesPopupViewProvider(Transform popupRoot)
+            {
+                _popupRoot = popupRoot;
+            }
+
+            public UniTask<TPopup> LoadAsync<TPopup>(CancellationToken cancellationToken) where TPopup : PopupBase
+            {
+                var prefab = Resources.Load<TPopup>($"Popup/{typeof(TPopup).Name}");
+                if (prefab == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Resources/Popup/{typeof(TPopup).Name} が見つかりません。");
+                }
+
+                var instance = UnityEngine.Object.Instantiate(prefab, _popupRoot);
+                instance.gameObject.SetActive(false);
+                return UniTask.FromResult(instance);
+            }
+
+            public void Release(PopupBase popup)
+            {
+                UnityEngine.Object.Destroy(popup.gameObject);
+            }
         }
     }
 }

@@ -23,8 +23,8 @@ namespace UniLab.UI.Popup.Sample
 
         protected override void OnSetup(RewardPopupParameter parameter)
         {
-            _titleText.text = "報酬を獲得！";
-            _rewardText.text = $"{parameter.RewardName} ×{parameter.Amount}";
+            _titleText.text = "Reward!";
+            _rewardText.text = $"{parameter.RewardName} x{parameter.Amount}";
 
             Debug.Log($"[Popup] Reward 表示: priority={parameter.Priority}");
 
