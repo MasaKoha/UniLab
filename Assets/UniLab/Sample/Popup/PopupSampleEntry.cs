@@ -31,8 +31,10 @@ namespace UniLab.UI.Popup.Sample
 
         private void Awake()
         {
-            // 共通暗幕を注入する。各ポップアップは個別背景を持たず、この 1 枚を最前面ポップアップの背後に共有する
-            _popupService = new PopupService(new ResourcesPopupViewProvider(_popupRoot), _dimmer);
+            // ロード手段は IPopupAssetLoader で差し替え可能。サンプルは Resources 版を使う（本番は AssetVault 版に差し替え）。
+            // 共通暗幕を注入し、各ポップアップは個別背景を持たず 1 枚を最前面ポップアップの背後に共有する
+            var viewProvider = new PopupViewProvider(new ResourcesPopupAssetLoader(), _popupRoot);
+            _popupService = new PopupService(viewProvider, _dimmer);
             // 非 DI 環境のため手動で生成・購読開始する。DI 環境では PopupInstaller が代行する
             _backKeyHandler = new PopupBackKeyHandler(_popupService);
             _backKeyHandler.Start();
@@ -183,46 +185,6 @@ namespace UniLab.UI.Popup.Sample
             _disposables.Dispose();
             _backKeyHandler.Dispose();
             ((IDisposable)_popupService).Dispose();
-        }
-
-        /// <summary>
-        /// Resources からポップアッププレハブをロードする ViewProvider。
-        /// Editor でのプレハブ参照配線を介さず、型名で Resources/Popup/{型名} を解決する。
-        /// </summary>
-        private sealed class ResourcesPopupViewProvider : IPopupViewProvider
-        {
-            private readonly Transform _popupRoot;
-
-            public ResourcesPopupViewProvider(Transform popupRoot)
-            {
-                _popupRoot = popupRoot;
-            }
-
-            public UniTask<TPopup> LoadAsync<TPopup>(CancellationToken cancellationToken) where TPopup : PopupBase
-            {
-                var prefab = Resources.Load<TPopup>($"Popup/{typeof(TPopup).Name}");
-                if (prefab == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Resources/Popup/{typeof(TPopup).Name} が見つかりません。");
-                }
-
-                var instance = UnityEngine.Object.Instantiate(prefab, _popupRoot);
-                instance.gameObject.SetActive(false);
-                return UniTask.FromResult(instance);
-            }
-
-            public void Release(PopupBase popup)
-            {
-                // Play モード停止・シーン破棄で GameObject が先に破棄されると、Unity の == は破棄済みを null 扱いする。
-                // この状態で gameObject へアクセスすると MissingReferenceException になるため、破棄済みなら何もしない
-                if (popup == null)
-                {
-                    return;
-                }
-
-                UnityEngine.Object.Destroy(popup.gameObject);
-            }
         }
     }
 }

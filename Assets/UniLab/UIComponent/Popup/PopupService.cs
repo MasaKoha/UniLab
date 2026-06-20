@@ -90,6 +90,27 @@ namespace UniLab.UI.Popup
             top.OnClose();
         }
 
+        /// <summary>
+        /// 表示中の全ポップアップを最前面から順に閉じ、全て閉じ終わる（スタックが空になる）まで待つ。
+        /// EnableBackKey に依らず強制クローズする。待機列の未表示要求は対象外。
+        /// </summary>
+        public async UniTask CloseAllAsync()
+        {
+            // OnClose は結果確定のみで、実際の除去は各 PresentAsync の finally で行われる。
+            // よってこのループ中に _stack は変化しない。最前面から順に閉じ要求を出す
+            for (var index = _stack.Count - 1; index >= 0; index--)
+            {
+                var popup = _stack[index];
+                if (popup != null)
+                {
+                    popup.OnClose();
+                }
+            }
+
+            // 全 PresentAsync のクローズ・解放完了（スタックが空）まで待つ
+            await UniTask.WaitWhile(() => _stack.Count > 0);
+        }
+
         /// <summary>暗幕タップ購読と HasActivePopup の購読リソースを破棄する。</summary>
         public void Dispose()
         {
