@@ -13,18 +13,21 @@ namespace UniLab.AssetVault.Editor
     {
         private const string LocalFolderPropertyName = "_localFolder";
         private const string RemoteFolderPropertyName = "_remoteFolder";
+        // Sync AssetResource が走査するルートフォルダの説明。スロットが Local/Remote を決め、フォルダ名は分類に影響しない。
         private const string HelpMessage =
-            "Sync AssetResource が走査するルートフォルダを指定します。\n"
-            + "・Local Folder【必須】: プレイヤー同梱。直下サブフォルダ → グループ Local_<名>\n"
-            + "・Remote Folder【任意】: CDN 配信。直下サブフォルダ → グループ Remote_<名>\n"
-            + "フォルダ名は分類に影響しません（スロット自体が Local/Remote を決めます）。フォルダを指定して下のボタンで同期します。";
+            "Specify the root folders that Sync AssetResource scans.\n"
+            + "- Local Folder [Required]: bundled with the player. Direct subfolder -> group Local_<name>\n"
+            + "- Remote Folder [Optional]: served from CDN. Direct subfolder -> group Remote_<name>\n"
+            + "Folder names do not affect classification (the slot itself decides Local/Remote). Assign folders, then sync with the button below.";
 
-        private const string LocalMissingMessage = "Local Folder が未設定です。Local は必須のため、フォルダを指定するまで Sync できません。";
-        private const string LocalNotFolderMessage = "Local Folder にフォルダ以外が割り当てられています。フォルダを指定してください。";
-        private const string RemoteNotFolderMessage = "Remote Folder にフォルダ以外が割り当てられています。フォルダを指定してください。";
-        private const string OverlapMessage = "Local と Remote は別フォルダにしてください（同一・入れ子は二重登録やアドレス衝突を招きます）。";
-        private const string AutoRegisterEnabledMessage = "自動登録が有効です。Local/Remote 配下の追加・移動・削除は Addressables へ差分反映されます。厳密な重複検出や全体掃除が必要な場合は Sync AssetResource を実行してください。";
-        private const string AutoRegisterDisabledMessage = "自動登録はオフです。Local/Remote 配下の変更は、下の Sync AssetResource を実行して反映してください。";
+        // Local 未設定の警告。Local は必須のためフォルダ指定まで Sync 不可。
+        private const string LocalMissingMessage = "Local Folder is not set. Local is required, so you cannot sync until a folder is assigned.";
+        private const string LocalNotFolderMessage = "Local Folder is assigned a non-folder asset. Please assign a folder.";
+        private const string RemoteNotFolderMessage = "Remote Folder is assigned a non-folder asset. Please assign a folder.";
+        // 同一・入れ子は二重登録やアドレス衝突を招くため、別フォルダを要求する。
+        private const string OverlapMessage = "Local and Remote must be different folders (identical or nested folders cause duplicate registration and address collisions).";
+        private const string AutoRegisterEnabledMessage = "Auto-registration is on. Additions/moves/deletions under Local/Remote are incrementally reflected to Addressables. Run Sync AssetResource when you need strict duplicate detection or a full cleanup.";
+        private const string AutoRegisterDisabledMessage = "Auto-registration is off. Run Sync AssetResource below to reflect changes under Local/Remote.";
 
         public override void OnInspectorGUI()
         {

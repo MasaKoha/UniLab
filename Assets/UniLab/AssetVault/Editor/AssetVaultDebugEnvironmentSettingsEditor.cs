@@ -13,10 +13,11 @@ namespace UniLab.AssetVault.Editor
     public sealed class AssetVaultDebugEnvironmentSettingsEditor : UnityEditor.Editor
     {
         private const string PresetsPropertyName = "_presets";
+        // デバッグ環境プリセットの編集方法と適用範囲を説明するヘルプ文言。
         private const string HelpMessage =
-            "デバッグ環境プリセット（表示名・BaseUrl）を編集します。BaseUrl のみ上書きし、ContentPath（版）は version.json 解決に任せます。\n"
-            + "有効化・選択は UI からは行えません。コードから AssetVaultDebugEnvironmentSettings.Activate(\"<名前>\") / Deactivate() を呼んでください。\n"
-            + "Editor Play と development ビルドでのみ適用され、release ビルドではコードごとストリップされます。";
+            "Edit debug environment presets (display name and BaseUrl). Only BaseUrl is overridden; ContentPath (version) is resolved from version.json.\n"
+            + "Activation and selection cannot be done from the UI. Call AssetVaultDebugEnvironmentSettings.Activate(\"<name>\") / Deactivate() from code.\n"
+            + "Applied only in Editor Play and development builds; the code is stripped entirely from release builds.";
 
         private SerializedProperty _presetsProperty;
 
@@ -55,16 +56,19 @@ namespace UniLab.AssetVault.Editor
             {
                 if (string.IsNullOrEmpty(preset.DisplayName))
                 {
-                    issues.Add("表示名が空のプリセットがあります。");
+                    // 表示名が空のプリセットがある。
+                    issues.Add("A preset has an empty display name.");
                 }
                 else if (!seenNames.Add(preset.DisplayName))
                 {
-                    issues.Add($"表示名が重複しています: {preset.DisplayName}");
+                    // 表示名が重複している。
+                    issues.Add($"Duplicate display name: {preset.DisplayName}");
                 }
 
                 if (string.IsNullOrEmpty(preset.BaseUrl))
                 {
-                    issues.Add($"BaseUrl が空です: {(string.IsNullOrEmpty(preset.DisplayName) ? "(無名)" : preset.DisplayName)}");
+                    // BaseUrl が空である。
+                    issues.Add($"BaseUrl is empty: {(string.IsNullOrEmpty(preset.DisplayName) ? "(unnamed)" : preset.DisplayName)}");
                 }
             }
 

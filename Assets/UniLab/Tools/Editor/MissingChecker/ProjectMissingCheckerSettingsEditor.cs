@@ -21,16 +21,18 @@ namespace UniLab.Tools.Editor.MissingChecker
             EditorGUILayout.PropertyField(serializedObject.FindProperty("_extensionsCsv"), GUIContent.none);
             EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField("Project 背景色", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_projectSelfBackgroundColor"), new GUIContent("Missing 自身"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_projectParentBackgroundColor"), new GUIContent("親フォルダ"));
+            // Project 背景色
+            EditorGUILayout.LabelField("Project Background Color", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_projectSelfBackgroundColor"), new GUIContent("Missing Itself"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_projectParentBackgroundColor"), new GUIContent("Parent Folder"));
             EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField("ヒエラルキー", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_enableHierarchyHighlight"), new GUIContent("色付けを有効"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchySelfBackgroundColor"), new GUIContent("Missing 自身"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchyParentBackgroundColor"), new GUIContent("親"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchyIconColor"), new GUIContent("アイコン色"));
+            // ヒエラルキー
+            EditorGUILayout.LabelField("Hierarchy", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_enableHierarchyHighlight"), new GUIContent("Enable Highlight"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchySelfBackgroundColor"), new GUIContent("Missing Itself"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchyParentBackgroundColor"), new GUIContent("Parent"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("_hierarchyIconColor"), new GUIContent("Icon Color"));
 
             if (serializedObject.ApplyModifiedProperties())
             {

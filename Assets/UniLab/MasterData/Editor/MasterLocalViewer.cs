@@ -109,20 +109,21 @@ namespace UniLab.MasterData.Editor
 
             if (_key == null || _iv == null)
             {
-                _status = "aes_key.txt が見つかりませんでした。マスター出力時に鍵を保存してください。";
+                // aes_key.txt が無い場合はマスター出力時に鍵を保存するよう促す
+                _status = "aes_key.txt not found. Please save the key when exporting masters.";
                 return;
             }
 
             var dir = adapter.SavePath;
             if (string.IsNullOrWhiteSpace(dir))
             {
-                _status = "SavePath が空です。";
+                _status = "SavePath is empty.";
                 return;
             }
 
             if (!Directory.Exists(dir))
             {
-                _status = $"SavePath が存在しません: {dir}";
+                _status = $"SavePath does not exist: {dir}";
                 return;
             }
 

@@ -20,7 +20,7 @@ namespace UnityCore.Scene.Editor
             var scenesFolder = ScenesFolder;
             if (!Directory.Exists(scenesFolder))
             {
-                Debug.LogError($"Scenesフォルダが見つかりません: {scenesFolder}");
+                Debug.LogError($"Scenes folder not found: {scenesFolder}");
                 return;
             }
 
@@ -36,7 +36,8 @@ namespace UnityCore.Scene.Editor
                 .ToArray();
             var buildScenes = scenePaths.Select(path => new EditorBuildSettingsScene(path, true)).ToArray();
             EditorBuildSettings.scenes = buildScenes;
-            Debug.Log("Build Settings に全シーンを登録しました。");
+            // Build Settings に全シーンを登録した旨のログ
+            Debug.Log("Registered all scenes to Build Settings.");
 
             var usedNames = new Dictionary<string, int>();
             var enumEntries = sceneFiles.Select(originalName =>
@@ -67,7 +68,7 @@ namespace {Namespace}
             Directory.CreateDirectory(Path.GetDirectoryName(OutputPath) ?? string.Empty);
             File.WriteAllText(OutputPath, code);
             AssetDatabase.Refresh();
-            Debug.Log("SceneNames.cs を自動生成しました。");
+            Debug.Log("Generated SceneNames.cs.");
         }
 
         [MenuItem("UniLab/Scene/SceneName Enum Generator")]
@@ -100,22 +101,22 @@ namespace {Namespace}
 
         private void OnGUI()
         {
-            GUILayout.Label("Scenes フォルダを指定してください", EditorStyles.boldLabel);
+            GUILayout.Label("Specify the Scenes folder", EditorStyles.boldLabel);
             _scenesFolderAsset = (DefaultAsset)EditorGUILayout.ObjectField("Scenes Folder", _scenesFolderAsset, typeof(DefaultAsset), false);
 
             if (_scenesFolderAsset != null)
             {
                 var path = AssetDatabase.GetAssetPath(_scenesFolderAsset);
-                if (GUILayout.Button("保存"))
+                if (GUILayout.Button("Save"))
                 {
                     SceneNamesEnumGenerator.SetScenesFolder(path);
-                    EditorUtility.DisplayDialog("保存", "ScenesFolder のパスを保存しました", "OK");
+                    EditorUtility.DisplayDialog("Save", "Saved the ScenesFolder path", "OK");
                 }
             }
 
             GUILayout.Space(10);
 
-            if (GUILayout.Button("SceneNames.cs を生成"))
+            if (GUILayout.Button("Generate SceneNames.cs"))
             {
                 SceneNamesEnumGenerator.Generate();
             }

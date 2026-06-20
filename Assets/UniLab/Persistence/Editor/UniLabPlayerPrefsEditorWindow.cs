@@ -35,7 +35,7 @@ namespace UniLab.Persistence.Editor
         /// <summary>
         /// Opens the UniLab PlayerPrefs management window.
         /// </summary>
-        [MenuItem("UniLab/PlayerPrefs/管理")]
+        [MenuItem("UniLab/PlayerPrefs/Manage")]
         public static void ShowWindow()
         {
             GetWindow<UniLabPlayerPrefsEditorWindow>("UniLab PlayerPrefs");
@@ -58,7 +58,7 @@ namespace UniLab.Persistence.Editor
 
         private void OnGUI()
         {
-            EditorGUILayout.HelpBox("保存済みのPlayerPrefsを管理します。", MessageType.Info);
+            EditorGUILayout.HelpBox("Manage saved PlayerPrefs.", MessageType.Info);
             EditorGUILayout.Space();
 
             DrawDeleteAllSection();
@@ -74,11 +74,11 @@ namespace UniLab.Persistence.Editor
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("全削除", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Delete All", EditorStyles.boldLabel);
 
-                if (GUILayout.Button("PlayerPrefs をすべて削除"))
+                if (GUILayout.Button("Delete All PlayerPrefs"))
                 {
-                    if (!EditorUtility.DisplayDialog("確認", "PlayerPrefs をすべて削除します。よろしいですか？", "削除", "キャンセル"))
+                    if (!EditorUtility.DisplayDialog("Confirm", "Delete all PlayerPrefs. Are you sure?", "Delete", "Cancel"))
                     {
                         return;
                     }
@@ -94,14 +94,14 @@ namespace UniLab.Persistence.Editor
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("キー指定削除", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Delete by Key", EditorStyles.boldLabel);
                 _targetKey = EditorGUILayout.TextField("Key", _targetKey);
 
                 using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_targetKey)))
                 {
-                    if (GUILayout.Button("入力した Key を削除"))
+                    if (GUILayout.Button("Delete Entered Key"))
                     {
-                        if (!EditorUtility.DisplayDialog("確認", $"PlayerPrefs のキー \"{_targetKey}\" を削除します。よろしいですか？", "削除", "キャンセル"))
+                        if (!EditorUtility.DisplayDialog("Confirm", $"Delete PlayerPrefs key \"{_targetKey}\". Are you sure?", "Delete", "Cancel"))
                         {
                             return;
                         }
@@ -120,9 +120,9 @@ namespace UniLab.Persistence.Editor
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("既知のキー", EditorStyles.boldLabel);
+                    EditorGUILayout.LabelField("Known Keys", EditorStyles.boldLabel);
 
-                    if (GUILayout.Button("再読込", GUILayout.Width(RefreshButtonWidth)))
+                    if (GUILayout.Button("Reload", GUILayout.Width(RefreshButtonWidth)))
                     {
                         InvalidateCache();
                     }
@@ -131,7 +131,7 @@ namespace UniLab.Persistence.Editor
                 var keys = GetKeys();
                 if (keys.Count == 0)
                 {
-                    EditorGUILayout.LabelField("キーは見つかりませんでした。");
+                    EditorGUILayout.LabelField("No keys found.");
                     return;
                 }
 
@@ -149,13 +149,13 @@ namespace UniLab.Persistence.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.SelectableLabel(key, GUILayout.Height(EditorGUIUtility.singleLineHeight));
-                GUILayout.Label(PlayerPrefs.HasKey(key) ? "保存済み" : "未保存", GUILayout.Width(StatusLabelWidth));
+                GUILayout.Label(PlayerPrefs.HasKey(key) ? "Saved" : "Not Saved", GUILayout.Width(StatusLabelWidth));
 
                 using (new EditorGUI.DisabledScope(!PlayerPrefs.HasKey(key)))
                 {
-                    if (GUILayout.Button("削除", GUILayout.Width(DeleteButtonWidth)))
+                    if (GUILayout.Button("Delete", GUILayout.Width(DeleteButtonWidth)))
                     {
-                        if (!EditorUtility.DisplayDialog("確認", $"PlayerPrefs のキー \"{key}\" を削除します。よろしいですか？", "削除", "キャンセル"))
+                        if (!EditorUtility.DisplayDialog("Confirm", $"Delete PlayerPrefs key \"{key}\". Are you sure?", "Delete", "Cancel"))
                         {
                             return;
                         }

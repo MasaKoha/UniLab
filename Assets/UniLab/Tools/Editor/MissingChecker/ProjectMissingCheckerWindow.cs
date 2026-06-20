@@ -77,7 +77,8 @@ namespace UniLab.Tools.Editor.MissingChecker
             }
 
             EditorGUILayout.Space(6);
-            EditorGUILayout.LabelField($"Missing 検出数: {_missingEntries.Count}");
+            // Missing 検出数
+            EditorGUILayout.LabelField($"Missing Found: {_missingEntries.Count}");
 
             if (_missingEntries.Count > 0)
             {

@@ -8,7 +8,8 @@ namespace UniLab.AssetVault.Editor
     /// </summary>
     internal sealed class AssetVaultDuplicateAddressCollector
     {
-        private const string DuplicateAddressLineFormat = "重複アドレス: {0}（{1} と {2}）";
+        // 重複アドレスのレポート1行。{0}=アドレス, {1}=最初のアセット, {2}=重複したアセット。
+        private const string DuplicateAddressLineFormat = "Duplicate address: {0} ({1} and {2})";
 
         private readonly Dictionary<string, string> _registeredAssetPathsByAddress = new();
         private readonly List<DuplicateAddress> _duplicateAddresses = new();

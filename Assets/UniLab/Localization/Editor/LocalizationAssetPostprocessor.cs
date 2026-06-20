@@ -28,7 +28,8 @@ namespace UniLab.Localization.Editor
                 TextManager.ResetLoadedAsset();
                 LocalizedTextUpdater.UpdateAllLocalizedTexts();
                 _lastProcessedTime = now;
-                Debug.Log("LocalizationData.asset インポート後に LocalizedText を更新しました。");
+                // LocalizationData.asset インポート後に LocalizedText を更新した旨のログ
+                Debug.Log("Updated LocalizedText after importing LocalizationData.asset.");
             }
         }
     }
