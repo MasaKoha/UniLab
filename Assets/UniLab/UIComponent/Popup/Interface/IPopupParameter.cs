@@ -19,5 +19,11 @@ namespace UniLab.UI.Popup
 
         /// <summary>背景タップで閉じられるか。</summary>
         bool EnableBackgroundClose { get; }
+
+        /// <summary>
+        /// 現在の最前面に重ねて即時表示するか。true は待機列を介さずスタック表示する。
+        /// false（既定）は優先度キューで 1 枚ずつ直列表示する。
+        /// </summary>
+        bool Stack { get; }
     }
 }

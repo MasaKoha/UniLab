@@ -25,5 +25,8 @@ namespace UniLab.UI.Popup.Sample
 
         /// <summary>背景タップで閉じることを許可する。</summary>
         public bool EnableBackgroundClose => true;
+
+        /// <summary>既存表示に重ねて即時表示するか。既定は重ねず優先度キューで直列表示する。</summary>
+        public bool Stack { get; set; }
     }
 }
