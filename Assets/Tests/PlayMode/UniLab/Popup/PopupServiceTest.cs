@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using NUnit.Framework;
+using R3;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
@@ -149,6 +150,78 @@ namespace UniLab.UI.Popup.Tests
             // PopupService は SetActive(true) を呼ぶため初期非表示にしておく
             gameObject.SetActive(false);
             return popup;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // 追加テストダブル
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// テスト用の IPopupDimmer モック。Subject&lt;Unit&gt; でクリックを発火し、
+    /// Show/Hide の呼び出し回数と現在の可視状態を記録する。
+    /// </summary>
+    internal sealed class MockPopupDimmer : IPopupDimmer
+    {
+        private readonly Subject<Unit> _clickSubject = new();
+
+        /// <summary>暗幕タップ通知。PopupService が購読する。</summary>
+        public Observable<Unit> OnClick => _clickSubject;
+
+        /// <summary>Show が呼ばれた回数。</summary>
+        public int ShowCallCount { get; private set; }
+
+        /// <summary>Hide が呼ばれた回数。</summary>
+        public int HideCallCount { get; private set; }
+
+        /// <summary>現在 Show 状態か。</summary>
+        public bool IsVisible { get; private set; }
+
+        /// <summary>外部からクリックイベントを発火する。</summary>
+        public void EmitClick()
+        {
+            _clickSubject.OnNext(Unit.Default);
+        }
+
+        /// <summary>暗幕を表示状態にする。</summary>
+        public void Show(Transform popupTransform)
+        {
+            ShowCallCount++;
+            IsVisible = true;
+        }
+
+        /// <summary>暗幕を非表示にする。</summary>
+        public void Hide()
+        {
+            HideCallCount++;
+            IsVisible = false;
+        }
+    }
+
+    /// <summary>
+    /// PlayOpenAsync / PlayCloseAsync の呼び出し回数を記録するトランジション。
+    /// アニメーションは持たず即座に完了する。
+    /// </summary>
+    internal sealed class RecordingPopupTransition : PopupTransitionBase
+    {
+        /// <summary>PlayOpenAsync が呼ばれた回数。</summary>
+        public int OpenCallCount { get; private set; }
+
+        /// <summary>PlayCloseAsync が呼ばれた回数。</summary>
+        public int CloseCallCount { get; private set; }
+
+        /// <summary>開くアニメーション再生を記録して即完了する。</summary>
+        public override UniTask PlayOpenAsync(CancellationToken cancellationToken)
+        {
+            OpenCallCount++;
+            return UniTask.CompletedTask;
+        }
+
+        /// <summary>閉じるアニメーション再生を記録して即完了する。</summary>
+        public override UniTask PlayCloseAsync(CancellationToken cancellationToken)
+        {
+            CloseCallCount++;
+            return UniTask.CompletedTask;
         }
     }
 
@@ -571,6 +644,323 @@ namespace UniLab.UI.Popup.Tests
             // テスト後始末: 手動で Resolve して ShowAsync を終了させる
             popup.Resolve(0);
             yield return showTask.ToCoroutine();
+        }
+
+        // ---------------------------------------------------------------------------
+        // テストケース 8: スタック同時表示
+        // ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// Stack=false のベース表示後に Stack=true を重ね、両方が同時に表示されること。
+        /// スタック上のポップアップを閉じてもベースは引き続き表示されること。
+        /// 最後にベースを閉じると両方 Release されること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ShowAsync_StackTrue_OverlaysOnTopOfBase()
+        {
+            // Arrange
+            var basePopup = MockPopupFactory.Create("Base");
+            var stackedPopup = MockPopupFactory.Create("Stacked");
+            _viewProvider.EnqueueInstance(basePopup);
+            _viewProvider.EnqueueInstance(stackedPopup);
+
+            var baseParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                Stack = false,
+            };
+            var stackParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                Stack = true,
+            };
+
+            // Act: ベースを Forget 表示し 1 フレーム待ってから Stack=true を重ねる
+            _service.ShowAsync<MockResultPopup, int>(baseParameter).Forget();
+            yield return null;
+
+            Assert.AreEqual(1, _viewProvider.LoadCallCount, "ベース表示で LoadAsync が 1 回呼ばれること");
+
+            _service.ShowAsync<MockResultPopup, int>(stackParameter).Forget();
+            yield return null;
+
+            // Assert: 両方表示中
+            Assert.AreEqual(2, _viewProvider.LoadCallCount, "スタック表示で LoadAsync が計 2 回呼ばれること");
+            Assert.IsTrue(_service.HasActivePopup.CurrentValue, "2 枚同時表示中は HasActivePopup が true であること");
+
+            // スタック上（最前面）を閉じる
+            stackedPopup.Resolve(0);
+            yield return new WaitUntil(() => _viewProvider.ReleaseCallCount >= 1);
+
+            // ベースはまだ表示中
+            Assert.IsTrue(_service.HasActivePopup.CurrentValue, "スタック上を閉じてもベースはまだ表示中であること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "スタック上の Release のみ 1 回であること");
+
+            // ベースも閉じる
+            basePopup.Resolve(0);
+            yield return new WaitUntil(() => _viewProvider.ReleaseCallCount >= 2);
+
+            // Assert: 全て閉じた
+            Assert.IsFalse(_service.HasActivePopup.CurrentValue, "ベースを閉じると HasActivePopup が false になること");
+            Assert.AreEqual(2, _viewProvider.ReleaseCallCount, "両方 Release されること");
+        }
+
+        // ---------------------------------------------------------------------------
+        // テストケース 9: CloseAllAsync
+        // ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// ベース＋スタックの 2 枚表示中に CloseAllAsync を呼び出すと
+        /// 両方閉じ、HasActivePopup が false に、ReleaseCallCount が 2 になること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator CloseAllAsync_WithStackedPopups_ClosesAllAndReleasesAll()
+        {
+            // Arrange
+            var basePopup = MockPopupFactory.Create("Base");
+            var stackedPopup = MockPopupFactory.Create("Stacked");
+            _viewProvider.EnqueueInstance(basePopup);
+            _viewProvider.EnqueueInstance(stackedPopup);
+
+            var baseParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                Stack = false,
+            };
+            var stackParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                Stack = true,
+            };
+
+            // Act: 2 枚表示
+            _service.ShowAsync<MockResultPopup, int>(baseParameter).Forget();
+            yield return null;
+
+            _service.ShowAsync<MockResultPopup, int>(stackParameter).Forget();
+            yield return null;
+
+            Assert.AreEqual(2, _viewProvider.LoadCallCount, "2 枚表示されていること");
+
+            // CloseAllAsync で全部閉じる
+            yield return _service.CloseAllAsync().ToCoroutine();
+
+            // Assert
+            Assert.IsFalse(_service.HasActivePopup.CurrentValue, "CloseAllAsync 後は HasActivePopup が false であること");
+            Assert.AreEqual(2, _viewProvider.ReleaseCallCount, "両方 Release されること");
+        }
+
+        // ---------------------------------------------------------------------------
+        // テストケース 10: 暗幕ルーティング
+        // ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// MockPopupDimmer を注入した PopupService で、
+        /// ポップアップ表示時に Show が呼ばれ、閉じると Hide が呼ばれること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Dimmer_WhenPopupShownAndClosed_ShowAndHideCalled()
+        {
+            // Arrange
+            var dimmer = new MockPopupDimmer();
+            var viewProvider = new MockPopupViewProvider();
+            var service = new PopupService(viewProvider, dimmer);
+
+            var popup = MockPopupFactory.Create();
+            viewProvider.EnqueueInstance(popup);
+
+            var parameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                Stack = false,
+            };
+
+            // Act: 表示
+            service.ShowAsync<MockResultPopup, int>(parameter).Forget();
+            yield return null;
+
+            // Assert: Show が 1 回呼ばれ、暗幕が表示状態であること
+            Assert.AreEqual(1, dimmer.ShowCallCount, "表示時に Show が呼ばれること");
+            Assert.IsTrue(dimmer.IsVisible, "表示中は暗幕が可視状態であること");
+
+            // ポップアップを閉じる
+            popup.Resolve(0);
+            yield return new WaitUntil(() => viewProvider.ReleaseCallCount >= 1);
+
+            // Assert: Hide が呼ばれ、暗幕が非表示になること
+            Assert.AreEqual(1, dimmer.HideCallCount, "閉じた後に Hide が呼ばれること");
+            Assert.IsFalse(dimmer.IsVisible, "閉じた後は暗幕が非表示であること");
+
+            service.Dispose();
+        }
+
+        /// <summary>
+        /// スタック 2 枚表示中に暗幕タップ（EmitClick）すると
+        /// EnableBackgroundClose=true の最前面のみが閉じ、
+        /// EnableBackgroundClose=false のベースは残ること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Dimmer_WhenClickedWithStackedPopups_ClosesOnlyTopPopup()
+        {
+            // Arrange
+            var dimmer = new MockPopupDimmer();
+            var viewProvider = new MockPopupViewProvider();
+            var service = new PopupService(viewProvider, dimmer);
+
+            var basePopup = MockPopupFactory.Create("Base");
+            var stackedPopup = MockPopupFactory.Create("Stacked");
+            viewProvider.EnqueueInstance(basePopup);
+            viewProvider.EnqueueInstance(stackedPopup);
+
+            // ベースは背景タップで閉じない設定
+            var baseParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                EnableBackgroundClose = false,
+                Stack = false,
+            };
+            // スタック上は背景タップで閉じる設定
+            var stackParameter = new TestPopupServiceParameter
+            {
+                Priority = PopupPriority.Normal,
+                EnableBackKey = true,
+                EnableBackgroundClose = true,
+                Stack = true,
+            };
+
+            // Act: 2 枚表示
+            service.ShowAsync<MockResultPopup, int>(baseParameter).Forget();
+            yield return null;
+
+            var stackedResult = -999;
+            async UniTaskVoid StartStacked()
+            {
+                stackedResult = await service.ShowAsync<MockResultPopup, int>(stackParameter);
+            }
+
+            StartStacked().Forget();
+            yield return null;
+
+            Assert.AreEqual(2, viewProvider.LoadCallCount, "2 枚表示されていること");
+
+            // 暗幕タップ → 最前面（EnableBackgroundClose=true）のみ閉じる
+            dimmer.EmitClick();
+            yield return new WaitUntil(() => viewProvider.ReleaseCallCount >= 1);
+
+            // Assert: 最前面が閉じ(-1)、ベースはまだ表示中
+            Assert.AreEqual(-1, stackedResult, "暗幕タップで最前面が OnClose(-1) で閉じること");
+            Assert.IsTrue(service.HasActivePopup.CurrentValue, "ベースはまだ表示中であること");
+            Assert.AreEqual(1, viewProvider.ReleaseCallCount, "最前面のみ Release されること");
+
+            // ベースを閉じて後始末
+            basePopup.Resolve(0);
+            yield return new WaitUntil(() => viewProvider.ReleaseCallCount >= 2);
+
+            Assert.IsFalse(service.HasActivePopup.CurrentValue, "ベースを閉じると HasActivePopup が false であること");
+
+            service.Dispose();
+        }
+
+        // ---------------------------------------------------------------------------
+        // テストケース 11: CompositePopupTransition
+        // ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// CompositePopupTransition の _transitions にリフレクションで複数の RecordingPopupTransition を注入し、
+        /// PlayOpenAsync / PlayCloseAsync を呼び出すと全子トランジションが 1 回ずつ再生されること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator CompositePopupTransition_PlayOpenAndClose_InvokesAllChildTransitions()
+        {
+            // Arrange
+            var gameObject = new GameObject("CompositeTransitionTest");
+            var composite = gameObject.AddComponent<CompositePopupTransition>();
+
+            var firstRecorder = gameObject.AddComponent<RecordingPopupTransition>();
+            var secondRecorder = gameObject.AddComponent<RecordingPopupTransition>();
+
+            // private SerializeField _transitions にリフレクションで代入する
+            var transitionsField = typeof(CompositePopupTransition).GetField(
+                "_transitions",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            transitionsField?.SetValue(composite, new PopupTransitionBase[] { firstRecorder, secondRecorder });
+
+            // Act: PlayOpenAsync
+            yield return composite.PlayOpenAsync(CancellationToken.None).ToCoroutine();
+
+            // Assert: 全子が Open を 1 回再生したこと
+            Assert.AreEqual(1, firstRecorder.OpenCallCount, "1 つ目の子トランジションの PlayOpenAsync が 1 回呼ばれること");
+            Assert.AreEqual(1, secondRecorder.OpenCallCount, "2 つ目の子トランジションの PlayOpenAsync が 1 回呼ばれること");
+            Assert.AreEqual(0, firstRecorder.CloseCallCount, "Open 後は Close が呼ばれていないこと");
+
+            // Act: PlayCloseAsync
+            yield return composite.PlayCloseAsync(CancellationToken.None).ToCoroutine();
+
+            // Assert: 全子が Close を 1 回再生したこと
+            Assert.AreEqual(1, firstRecorder.CloseCallCount, "1 つ目の子トランジションの PlayCloseAsync が 1 回呼ばれること");
+            Assert.AreEqual(1, secondRecorder.CloseCallCount, "2 つ目の子トランジションの PlayCloseAsync が 1 回呼ばれること");
+
+            UnityEngine.Object.Destroy(gameObject);
+        }
+
+        // ---------------------------------------------------------------------------
+        // テストケース 12: キャンセル時 Release 保証（回帰）
+        // ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// 表示中の ShowAsync を CancellationTokenSource でキャンセルしたとき、
+        /// OperationCanceledException がスローされ、ReleaseCallCount が 1 になること。
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ShowAsync_CancelledAfterDisplaying_ThrowsCancelledAndReleasesView()
+        {
+            // Arrange
+            var popup = MockPopupFactory.Create();
+            _viewProvider.EnqueueInstance(popup);
+            var parameter = CreateParameter();
+            var cancellationTokenSource = new CancellationTokenSource();
+            Exception caughtException = null;
+            var isCompleted = false;
+
+            // Act
+            async UniTaskVoid StartRequest()
+            {
+                try
+                {
+                    await _service.ShowAsync<MockResultPopup, int>(
+                        parameter, cancellationTokenSource.Token);
+                }
+                catch (OperationCanceledException exception)
+                {
+                    caughtException = exception;
+                }
+                finally
+                {
+                    isCompleted = true;
+                }
+            }
+
+            StartRequest().Forget();
+
+            // 1 フレーム待って表示状態になることを確認する
+            yield return null;
+            Assert.IsTrue(_service.HasActivePopup.CurrentValue, "キャンセル前は表示中であること");
+
+            // キャンセル実行
+            cancellationTokenSource.Cancel();
+
+            // finally の Release 処理が完了するまで待つ
+            yield return new WaitUntil(() => isCompleted);
+
+            // Assert
+            Assert.IsInstanceOf<OperationCanceledException>(caughtException, "キャンセル時に OperationCanceledException がスローされること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "キャンセル時も Release が 1 回呼ばれること");
         }
     }
 }
