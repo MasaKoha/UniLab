@@ -38,11 +38,8 @@ namespace UniLab.UI.Popup.Tests
     /// </summary>
     internal sealed class MockResultPopup : PopupBase<int>
     {
-        /// <summary>OpenAsync が呼ばれた回数。</summary>
-        public int OpenAsyncCallCount { get; private set; }
-
-        /// <summary>CloseAsync が呼ばれた回数。</summary>
-        public int CloseAsyncCallCount { get; private set; }
+        /// <summary>Initialize（表示処理の開始）が呼ばれたか。処理順の検証に使う。</summary>
+        public bool IsInitialized { get; private set; }
 
         /// <summary>外部から結果を確定してポップアップを閉じる。</summary>
         public void Resolve(int value)
@@ -50,21 +47,10 @@ namespace UniLab.UI.Popup.Tests
             SetResult(value);
         }
 
-        /// <summary>派生クラス固有の初期化処理。テストでは何もしない。</summary>
-        protected override void OnInitialize() { }
-
-        /// <summary>開くアニメーション。テストでは即完了する。</summary>
-        public override async UniTask OpenAsync()
+        /// <summary>派生クラス固有の初期化処理。表示されたことを記録する。</summary>
+        protected override void OnInitialize()
         {
-            OpenAsyncCallCount++;
-            await UniTask.CompletedTask;
-        }
-
-        /// <summary>閉じるアニメーション。テストでは即完了する。</summary>
-        public override async UniTask CloseAsync()
-        {
-            CloseAsyncCallCount++;
-            await UniTask.CompletedTask;
+            IsInitialized = true;
         }
 
         /// <summary>バックキー / 背景タップ時の閉じ処理。-1 を結果として返す。</summary>
@@ -246,8 +232,7 @@ namespace UniLab.UI.Popup.Tests
             // Assert
             Assert.AreEqual(expectedResult, actualResult, "Resolve した値が戻り値に反映されること");
             Assert.IsFalse(_service.HasActivePopup.CurrentValue, "完了後は HasActivePopup が false であること");
-            Assert.AreEqual(1, popup.OpenAsyncCallCount, "OpenAsync が 1 回呼ばれること");
-            Assert.AreEqual(1, popup.CloseAsyncCallCount, "CloseAsync が 1 回呼ばれること");
+            Assert.IsTrue(popup.IsInitialized, "表示処理（Initialize）が行われること");
             Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "Release が 1 回呼ばれること");
         }
 
@@ -383,8 +368,7 @@ namespace UniLab.UI.Popup.Tests
             yield return new WaitUntil(() => _viewProvider.ReleaseCallCount > 0);
 
             // Assert
-            Assert.AreEqual(1, popup.CloseAsyncCallCount, "キャンセル時に CloseAsync が呼ばれること");
-            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "キャンセル時に Release が呼ばれること");
+            Assert.AreEqual(1, _viewProvider.ReleaseCallCount, "キャンセル時に Release が呼ばれること（Close 後に解放）");
             Assert.IsFalse(_service.HasActivePopup.CurrentValue, "キャンセル後は HasActivePopup が false であること");
         }
 
@@ -455,15 +439,15 @@ namespace UniLab.UI.Popup.Tests
 
             // 1 件目を完了させ、High が LoadAsync されるまで待つ
             firstPopup.Resolve(0);
-            yield return new WaitUntil(() => highPopup.OpenAsyncCallCount > 0);
+            yield return new WaitUntil(() => highPopup.IsInitialized);
 
-            // High を Resolve し、Normal が LoadAsync されるまで待つ
+            // High を Resolve し、Normal が処理されるまで待つ
             highPopup.Resolve(0);
-            yield return new WaitUntil(() => normalPopup.OpenAsyncCallCount > 0);
+            yield return new WaitUntil(() => normalPopup.IsInitialized);
 
-            // Normal を Resolve し、Low が LoadAsync されるまで待つ
+            // Normal を Resolve し、Low が処理されるまで待つ
             normalPopup.Resolve(0);
-            yield return new WaitUntil(() => lowPopup.OpenAsyncCallCount > 0);
+            yield return new WaitUntil(() => lowPopup.IsInitialized);
 
             // Low を Resolve して全件完了を待つ
             lowPopup.Resolve(0);
