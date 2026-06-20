@@ -133,6 +133,13 @@ namespace UniLab.UI.Popup.Sample
 
             public void Release(PopupBase popup)
             {
+                // Play モード停止・シーン破棄で GameObject が先に破棄されると、Unity の == は破棄済みを null 扱いする。
+                // この状態で gameObject へアクセスすると MissingReferenceException になるため、破棄済みなら何もしない
+                if (popup == null)
+                {
+                    return;
+                }
+
                 UnityEngine.Object.Destroy(popup.gameObject);
             }
         }

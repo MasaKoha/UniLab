@@ -51,6 +51,7 @@ namespace UniLab.UI.Popup.SampleEditor
         {
             var root = NewUIObject("ConfirmPopup", null, Vector2.zero, ReferenceResolution);
             var confirmPopup = root.AddComponent<ConfirmPopup>();
+            var transition = root.AddComponent<ScalePopupTransition>();
 
             var background = CreateBackground(root.transform);
             var panel = CreatePanel(root.transform);
@@ -65,6 +66,8 @@ namespace UniLab.UI.Popup.SampleEditor
             SetReference(confirmPopup, "_messageText", message);
             SetReference(confirmPopup, "_confirmButton", confirmButton);
             SetReference(confirmPopup, "_cancelButton", cancelButton);
+            SetReference(confirmPopup, "_transition", transition);
+            SetReference(transition, "_target", root.transform);
 
             PrefabUtility.SaveAsPrefabAsset(root, ConfirmPrefabPath);
             Object.DestroyImmediate(root);
@@ -75,6 +78,7 @@ namespace UniLab.UI.Popup.SampleEditor
             var root = NewUIObject("RewardPopup", null, Vector2.zero, ReferenceResolution);
             var canvasGroup = root.AddComponent<CanvasGroup>();
             var rewardPopup = root.AddComponent<RewardPopup>();
+            var transition = root.AddComponent<FadePopupTransition>();
 
             var background = CreateBackground(root.transform);
             var panel = CreatePanel(root.transform);
@@ -88,7 +92,8 @@ namespace UniLab.UI.Popup.SampleEditor
             SetReference(rewardPopup, "_rewardText", rewardText);
             SetReference(rewardPopup, "_claimButton", claimButton);
             SetReference(rewardPopup, "_closeButton", closeButton);
-            SetReference(rewardPopup, "_canvasGroup", canvasGroup);
+            SetReference(rewardPopup, "_transition", transition);
+            SetReference(transition, "_target", canvasGroup);
 
             PrefabUtility.SaveAsPrefabAsset(root, RewardPrefabPath);
             Object.DestroyImmediate(root);

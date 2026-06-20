@@ -6,11 +6,12 @@ using UnityEngine.UI;
 namespace UniLab.UI.Popup
 {
     /// <summary>
-    /// 全ポップアップ View の基底。背景タップとライフサイクルフックを共通化する。
+    /// 全ポップアップ View の基底。背景タップ・初期化・開閉アニメーション委譲を共通化する。
     /// </summary>
     public abstract class PopupBase : MonoBehaviour, IPopupView
     {
         [SerializeField] private Button _backgroundButton = null;
+        [SerializeField] private PopupTransitionBase _transition = null;
 
         /// <summary>このポップアップに渡された表示パラメータ。Initialize で設定される。</summary>
         public IPopupParameter Parameter { get; private set; }
@@ -34,16 +35,29 @@ namespace UniLab.UI.Popup
                 .AddTo(this);
         }
 
+        /// <summary>開くアニメーションを再生する。Transition 未設定なら即時完了する。</summary>
+        public async UniTask OpenAsync()
+        {
+            if (_transition != null)
+            {
+                // destroyCancellationToken で外部破棄・シーン遷移時にアニメーションを安全に中断する
+                await _transition.PlayOpenAsync(destroyCancellationToken);
+            }
+        }
+
+        /// <summary>閉じるアニメーションを再生する。Transition 未設定なら即時完了する。</summary>
+        public async UniTask CloseAsync()
+        {
+            if (_transition != null)
+            {
+                await _transition.PlayCloseAsync(destroyCancellationToken);
+            }
+        }
+
         /// <summary>派生クラス固有の初期化。Parameter 設定後に呼ばれる。</summary>
         protected abstract void OnInitialize();
 
-        /// <summary>開くアニメーションを再生する。PopupService の表示処理から呼ばれる。</summary>
-        public abstract UniTask OpenAsync();
-
         /// <summary>バックキー / 背景タップ時の閉じ処理。結果を確定する。</summary>
         public abstract void OnClose();
-
-        /// <summary>閉じるアニメーションを再生する。PopupService のクローズ処理から呼ばれる。</summary>
-        public abstract UniTask CloseAsync();
     }
 }
