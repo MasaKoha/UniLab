@@ -14,13 +14,16 @@ namespace UniLab.AssetVault.Editor
         /// </summary>
         public const string AssetPath = GeneratedAssetFolder.Path + "/AssetVaultSetupSettings.asset";
 
-        [Tooltip("同梱(Local)アセットのルートフォルダ。【必須】直下サブフォルダがグループ Local_<名> になります。")]
+        // 同梱(Local)アセットのルートフォルダ。【必須】直下サブフォルダがグループ Local_<名> になる。
+        [Tooltip("Root folder for bundled (Local) assets. [Required] Each direct subfolder becomes group Local_<name>.")]
         [SerializeField] private DefaultAsset _localFolder;
 
-        [Tooltip("CDN(Remote)アセットのルートフォルダ。【任意】未設定可。直下サブフォルダがグループ Remote_<名> になります。")]
+        // CDN(Remote)アセットのルートフォルダ。【任意】未設定可。直下サブフォルダがグループ Remote_<名> になる。
+        [Tooltip("Root folder for CDN (Remote) assets. [Optional] Each direct subfolder becomes group Remote_<name>.")]
         [SerializeField] private DefaultAsset _remoteFolder;
 
-        [Tooltip("オンにすると Local/Remote 配下のアセット追加・移動・削除を検知して Addressables を自動登録/更新します。既定オフ。")]
+        // オンにすると Local/Remote 配下のアセット追加・移動・削除を検知して Addressables を自動登録/更新する。既定オフ。
+        [Tooltip("When enabled, additions/moves/deletions under Local/Remote are detected and Addressables entries are auto-registered/updated. Off by default.")]
         [SerializeField] private bool _autoRegisterOnAssetChange;
 
         /// <summary>

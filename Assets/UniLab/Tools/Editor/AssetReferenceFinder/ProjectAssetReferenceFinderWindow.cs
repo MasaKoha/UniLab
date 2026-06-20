@@ -98,7 +98,8 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
             if (!CanScanTarget())
             {
-                EditorGUILayout.HelpBox("Project 内のアセットを 1 つ以上指定してください。", MessageType.Info);
+                // Project 内のアセットを 1 つ以上指定してください。
+                EditorGUILayout.HelpBox("Please specify at least one asset from the Project.", MessageType.Info);
             }
 
             using (new EditorGUI.DisabledScope(_isScanning || !CanScanTarget()))
@@ -120,7 +121,8 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
             EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField($"参照元数: {_totalReferenceCount}");
+            // 参照元数
+            EditorGUILayout.LabelField($"References: {_totalReferenceCount}");
 
             // --- CSV export ---
             if (_totalReferenceCount > 0)
@@ -299,7 +301,7 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
                 }
 
                 EditorGUILayout.Space(4);
-                EditorGUILayout.LabelField($"[{Path.GetFileName(targetPath)}]  ({referencePaths.Count} 件)", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField($"[{Path.GetFileName(targetPath)}]  ({referencePaths.Count})", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField(targetPath, EditorStyles.miniLabel);
 
                 for (int i = 0; i < referencePaths.Count; i++)

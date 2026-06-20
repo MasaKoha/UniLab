@@ -44,7 +44,8 @@ namespace UniLab.UI.Popup.SampleEditor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("[PopupSample] シーンとプレハブを生成しました: " + ScenePath);
+            // シーンとプレハブを生成した旨のログ
+            Debug.Log("[PopupSample] Generated scene and prefabs: " + ScenePath);
         }
 
         private static void CreateConfirmPrefab()

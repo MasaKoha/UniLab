@@ -20,7 +20,8 @@ namespace UniLab.UI.Popup.Sample
             _titleText.text = "Reward!";
             _rewardText.text = $"{parameter.RewardName} x{parameter.Amount}";
 
-            Debug.Log($"[Popup] Reward 表示: priority={parameter.Priority}");
+            // Reward ポップアップ表示時のログ
+            Debug.Log($"[Popup] Reward shown: priority={parameter.Priority}");
 
             _claimButton.OnClickAsObservable()
                 .Subscribe(_ => SetResult(new RewardPopupResult(true, parameter.Amount)))

@@ -340,13 +340,15 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
         private void DrawResultHeader()
         {
             var totalSize = CalculateTotalFileSize(_unreferencedEntries);
-            EditorGUILayout.LabelField($"未参照アセット数: {_unreferencedEntries.Count}  合計サイズ: {FormatFileSize(totalSize)}");
+            // 未参照アセット数 / 合計サイズ
+            EditorGUILayout.LabelField($"Unreferenced Assets: {_unreferencedEntries.Count}  Total Size: {FormatFileSize(totalSize)}");
 
             if (_unreferencedEntries.Count > 0)
             {
                 var selectedCount = CountSelectedEntries(_unreferencedEntries);
                 var selectedSize = CalculateSelectedFileSize(_unreferencedEntries);
-                EditorGUILayout.LabelField($"選択中: {selectedCount} 件 ({FormatFileSize(selectedSize)})");
+                // 選択中の件数とサイズ
+                EditorGUILayout.LabelField($"Selected: {selectedCount} ({FormatFileSize(selectedSize)})");
             }
         }
 
@@ -394,7 +396,8 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             var selectedCount = CountSelectedEntries(_unreferencedEntries);
             using (new EditorGUI.DisabledScope(selectedCount == 0))
             {
-                if (GUILayout.Button($"選択を削除 ({selectedCount})"))
+                // 選択を削除
+                if (GUILayout.Button($"Delete Selected ({selectedCount})"))
                 {
                     DeleteSelectedAssets();
                 }
@@ -622,7 +625,8 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
 
             if (!EditorUtility.DisplayDialog(
                     EditorToolLabels.Get(LabelKey.DeleteSelectedTitle),
-                    selectedCount + " 件 (" + FormatFileSize(selectedSize) + ") のアセットを完全に削除します。\nこの操作は元に戻せません。",
+                    // ○件 (サイズ) のアセットを完全に削除する。元に戻せない旨の警告。
+                    selectedCount + " assets (" + FormatFileSize(selectedSize) + ") will be permanently deleted.\nThis operation cannot be undone.",
                     EditorToolLabels.Get(LabelKey.Delete),
                     EditorToolLabels.Get(LabelKey.Cancel)))
             {
@@ -672,7 +676,8 @@ namespace UniLab.Tools.Editor.UnreferencedAssetFinder
             var isolationFolder = "Assets/_Unused/" + System.DateTime.Now.ToString("yyyy-MM-dd");
             if (!EditorUtility.DisplayDialog(
                     EditorToolLabels.Get(LabelKey.IsolateAssets),
-                    _unreferencedEntries.Count + " 件のアセットを " + isolationFolder + "/ に移動します",
+                    // ○件のアセットを隔離フォルダへ移動する
+                    _unreferencedEntries.Count + " assets will be moved to " + isolationFolder + "/",
                     EditorToolLabels.Get(LabelKey.Move),
                     EditorToolLabels.Get(LabelKey.Cancel)))
             {

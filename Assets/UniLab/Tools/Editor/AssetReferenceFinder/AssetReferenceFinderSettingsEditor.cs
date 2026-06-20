@@ -28,7 +28,8 @@ namespace UniLab.Tools.Editor.AssetReferenceFinder
 
             EditorGUILayout.Space(6);
 
-            EditorGUILayout.LabelField("Project 背景色", EditorStyles.boldLabel);
+            // Project 背景色
+            EditorGUILayout.LabelField("Project Background Color", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
             var nextColor = EditorGUILayout.ColorField(EditorToolLabels.Get(LabelKey.ReferenceColorLabel), settings.ProjectReferenceBackgroundColor);
             if (EditorGUI.EndChangeCheck())

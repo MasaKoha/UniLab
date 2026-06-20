@@ -126,8 +126,9 @@ namespace UniLab.Tools.Editor.ComponentUsageProfiler
             }
 
             EditorGUILayout.Space(4);
+            // チェック対象 / 使用中 / 未使用
             EditorGUILayout.LabelField(
-                $"チェック対象: {_allEntries.Count}  使用中: {_usedEntries.Count}  未使用: {_unusedEntries.Count}");
+                $"Checked: {_allEntries.Count}  Used: {_usedEntries.Count}  Unused: {_unusedEntries.Count}");
         }
 
         private void DrawExportButton()
@@ -205,7 +206,8 @@ namespace UniLab.Tools.Editor.ComponentUsageProfiler
                 isExpanded = false;
             }
 
-            var label = entry.TypeName + "  (" + entry.Locations.Count + " 箇所)";
+            // (○箇所) = 配置箇所数
+            var label = entry.TypeName + "  (" + entry.Locations.Count + " locations)";
             var newExpanded = EditorGUILayout.Foldout(isExpanded, label, true);
             _foldoutStates[entry.ScriptPath] = newExpanded;
 
@@ -240,7 +242,8 @@ namespace UniLab.Tools.Editor.ComponentUsageProfiler
 
             if (entry.Locations.Count > MaxVisibleLocations)
             {
-                EditorGUILayout.LabelField($"... 他 {entry.Locations.Count - MaxVisibleLocations} 件", EditorStyles.miniLabel);
+                // 表示上限を超えた残り件数
+                EditorGUILayout.LabelField($"... and {entry.Locations.Count - MaxVisibleLocations} more", EditorStyles.miniLabel);
             }
 
             EditorGUI.indentLevel--;

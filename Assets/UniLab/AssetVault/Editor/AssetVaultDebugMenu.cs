@@ -13,7 +13,8 @@ namespace UniLab.AssetVault.Editor
         private const string SelectMenuPath = "UniLab/AssetVault/Debug/Select Environment...";
         private const string DisableMenuPath = "UniLab/AssetVault/Debug/Disable Override";
         private const string DisableItemLabel = "Disable Override";
-        private const string NoPresetsMessage = "プリセットが未登録です。Dashboard の Edit Presets から追加してください。";
+        // プリセット未登録時の警告。Dashboard の Edit Presets から追加するよう促す。
+        private const string NoPresetsMessage = "No presets registered. Add one from Edit Presets in the Dashboard.";
 
         /// <summary>
         /// 登録済みプリセットをドロップダウンで提示し、選んだものを有効化します。
