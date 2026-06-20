@@ -7,48 +7,114 @@ using R3;
 namespace UniLab.UI.Popup
 {
     /// <summary>
-    /// IPopupService 実装。優先度付き待機列でポップアップ表示を直列化する。
-    /// 重ね表示（スタック）は当面非対応で、常に 1 度に 1 つだけ表示する。VContainer に Singleton 登録する。
+    /// IPopupService 実装。Stack=false は優先度付き待機列で 1 枚ずつ直列表示し、
+    /// Stack=true は待機列を介さず現在の最前面へ即時に重ねる（オプトイン・スタック）。
+    /// 共通暗幕は常に最前面ポップアップの背後へ移動し、タップで最前面のみを閉じる。VContainer に Singleton 登録する。
     /// </summary>
     public sealed class PopupService : IPopupService, IDisposable
     {
         private readonly IPopupViewProvider _viewProvider;
+        private readonly IPopupDimmer _dimmer;
         private readonly List<PopupRequest> _waiting = new();
+        private readonly List<PopupBase> _stack = new();
         private readonly ReactiveProperty<bool> _hasActivePopup = new(false);
-        private PopupBase _currentPopup;
+        private readonly IDisposable _dimmerClickSubscription;
 
-        /// <summary>表示中のポップアップがあるか。</summary>
+        /// <summary>表示中のポップアップが 1 つでもあるか。</summary>
         public ReadOnlyReactiveProperty<bool> HasActivePopup => _hasActivePopup;
 
-        /// <summary>表示に用いる View 供給元を注入する。</summary>
-        public PopupService(IPopupViewProvider viewProvider)
+        /// <summary>
+        /// 表示に用いる View 供給元と、任意の共通暗幕を注入する。
+        /// dimmer 未指定時は各ポップアップが個別背景を持つ従来挙動になる。
+        /// </summary>
+        public PopupService(IPopupViewProvider viewProvider, IPopupDimmer dimmer = null)
         {
             _viewProvider = viewProvider;
+            _dimmer = dimmer;
+            // 暗幕タップは常に最前面へ集約する。スタック時に下位まで閉じないよう購読は 1 つに限定する
+            _dimmerClickSubscription = _dimmer?.OnClick.Subscribe(_ => OnDimmerClicked());
         }
 
         /// <summary>
-        /// ポップアップを表示し結果を待つ。優先度順に直列化し、finally で必ずクローズ・解放してリークを防ぐ。
+        /// ポップアップを表示し結果を待つ。Stack 指定は即時に重ね、非指定は優先度順に直列化する。
+        /// いずれもキャンセル・例外時に finally で必ずクローズ・解放してリークを防ぐ。
         /// </summary>
         public async UniTask<TResult> ShowAsync<TPopup, TResult>(
             IPopupParameter parameter, CancellationToken cancellationToken = default)
             where TPopup : PopupBase<TResult>
         {
+            // スタック指定は待機列を介さず、現在の最前面に即時に重ねる
+            if (parameter.Stack)
+            {
+                return await PresentAsync<TPopup, TResult>(parameter, cancellationToken);
+            }
+
+            // ベース表示は優先度順に直列化する。自分の番が来るまで待機列で待つ
             var request = new PopupRequest(parameter.Priority);
             Enqueue(request);
             TrySignalHead();
+            try
+            {
+                await request.StartSignal.Task.AttachExternalCancellation(cancellationToken);
+                return await PresentAsync<TPopup, TResult>(parameter, cancellationToken);
+            }
+            finally
+            {
+                // 自分の処理が完全に終わってから待機列を抜け、次のベースへ番を渡す
+                _waiting.Remove(request);
+                TrySignalHead();
+            }
+        }
 
+        /// <summary>表示中の最前面ポップアップをバックキー相当で閉じる。表示中でなければ何もしない。</summary>
+        public async UniTask CloseTopAsync()
+        {
+            var top = TopPopup();
+            if (top == null)
+            {
+                return;
+            }
+
+            var parameter = top.Parameter;
+            if (!parameter.EnableBackKey)
+            {
+                return;
+            }
+
+            if (parameter.CustomBackAsync != null)
+            {
+                await parameter.CustomBackAsync();
+                return;
+            }
+
+            top.OnClose();
+        }
+
+        /// <summary>暗幕タップ購読と HasActivePopup の購読リソースを破棄する。</summary>
+        public void Dispose()
+        {
+            _dimmerClickSubscription?.Dispose();
+            _hasActivePopup.Dispose();
+        }
+
+        // --- 表示処理（スタック / ベース共通） ---
+
+        /// <summary>
+        /// 表示〜結果待ち〜クローズ〜解放の共通処理。スタックへ積み、暗幕を最前面へ移動して表示する。
+        /// </summary>
+        private async UniTask<TResult> PresentAsync<TPopup, TResult>(
+            IPopupParameter parameter, CancellationToken cancellationToken)
+            where TPopup : PopupBase<TResult>
+        {
             // 基底クラス制約のみでは null 直接代入が NRT 警告となるため default を使う
             TPopup popup = default;
             try
             {
-                // 待機列の先頭（自分の番）になるまで待つ
-                await request.StartSignal.Task.AttachExternalCancellation(cancellationToken);
-
                 popup = await _viewProvider.LoadAsync<TPopup>(cancellationToken);
-                _currentPopup = popup;
-                _hasActivePopup.Value = true;
                 popup.Initialize(parameter);
                 popup.gameObject.SetActive(true);
+                _stack.Add(popup);
+                RefreshState();
                 await popup.OpenAsync();
 
                 return await popup.GetResultAsync().AttachExternalCancellation(cancellationToken);
@@ -64,50 +130,58 @@ namespace UniLab.UI.Popup
                     }
                     finally
                     {
+                        _stack.Remove(popup);
+                        RefreshState();
                         _viewProvider.Release(popup);
                     }
                 }
-
-                // popup と _currentPopup がともに null のときに誤一致して表示状態を消さないよう popup != null を前置する
-                if (popup != null && _currentPopup == popup)
-                {
-                    _currentPopup = null;
-                    _hasActivePopup.Value = false;
-                }
-
-                _waiting.Remove(request);
-                TrySignalHead();
             }
         }
 
-        /// <summary>表示中のポップアップをバックキー相当で閉じる。</summary>
-        public async UniTask CloseTopAsync()
+        // 暗幕タップは最前面のみを閉じる。背景タップ許可時だけ反応する
+        private void OnDimmerClicked()
         {
-            if (_currentPopup == null)
+            var top = TopPopup();
+            if (top != null && top.Parameter.EnableBackgroundClose)
             {
-                return;
+                top.OnClose();
             }
-
-            var parameter = _currentPopup.Parameter;
-            if (!parameter.EnableBackKey)
-            {
-                return;
-            }
-
-            if (parameter.CustomBackAsync != null)
-            {
-                await parameter.CustomBackAsync();
-                return;
-            }
-
-            _currentPopup.OnClose();
         }
 
-        /// <summary>HasActivePopup の購読リソースを破棄する。</summary>
-        public void Dispose()
+        // スタックの増減に応じて表示中フラグと暗幕位置を更新する
+        private void RefreshState()
         {
-            _hasActivePopup.Dispose();
+            _hasActivePopup.Value = _stack.Count > 0;
+            if (_dimmer == null)
+            {
+                return;
+            }
+
+            var top = TopPopup();
+            if (top == null)
+            {
+                _dimmer.Hide();
+            }
+            else
+            {
+                // 暗幕を最前面ポップアップの直下へ移動する。下位ポップアップは暗幕で減光される
+                _dimmer.Show(top.transform);
+            }
         }
+
+        // 最前面ポップアップ。空なら null。破棄済み（Unity の == 判定）も null として扱う
+        private PopupBase TopPopup()
+        {
+            if (_stack.Count == 0)
+            {
+                return null;
+            }
+
+            var top = _stack[_stack.Count - 1];
+            return top != null ? top : null;
+        }
+
+        // --- 待機列（ベース表示の直列化） ---
 
         private void Enqueue(PopupRequest request)
         {

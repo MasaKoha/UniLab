@@ -20,6 +20,9 @@ namespace UniLab.UI.Popup
         /// <summary>キャンセルボタンのラベル。null のときはキャンセルボタンを隠す。</summary>
         public string CancelLabel { get; set; }
 
+        /// <summary>既存表示に重ねて即時表示するか。既定は重ねず優先度キューで直列表示する。</summary>
+        public bool Stack { get; set; }
+
         // 確認ダイアログは通常優先度で扱う
         PopupPriority IPopupParameter.Priority => PopupPriority.Normal;
 

@@ -30,6 +30,9 @@ namespace UniLab.UI.Popup.Tests
 
         /// <summary>背景タップで閉じるか。</summary>
         public bool EnableBackgroundClose { get; set; } = false;
+
+        /// <summary>既存表示に重ねて即時表示するか。既定は重ねず優先度キューで直列表示する。</summary>
+        public bool Stack { get; set; } = false;
     }
 
     /// <summary>
