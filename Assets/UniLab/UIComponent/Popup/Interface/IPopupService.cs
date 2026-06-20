@@ -21,5 +21,11 @@ namespace UniLab.UI.Popup
 
         /// <summary>表示中のポップアップをバックキー相当で閉じる。表示中でなければ何もしない。</summary>
         UniTask CloseTopAsync();
+
+        /// <summary>
+        /// 表示中の全ポップアップを最前面から順に強制的に閉じ、全て閉じ終わるまで待つ。
+        /// シーン遷移・ログアウト時の一括クローズ用。待機列の未表示要求は対象外。
+        /// </summary>
+        UniTask CloseAllAsync();
     }
 }
