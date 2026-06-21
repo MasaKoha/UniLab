@@ -1,18 +1,30 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 
 namespace UniLab.Persistence
 {
     public static class LocalSave
     {
+        // 既定は後方互換のため JSON。アプリ起動時に SetSerializer で付け替える。
+        private static ILocalSaveSerializer _serializer = new JsonLocalSaveSerializer();
+
+        /// <summary>
+        /// シリアライズ方式を差し替える。Save / Load より前（アプリ起動時の合成ルート）で
+        /// 一度だけ呼ぶ想定。方式を変えると既存の保存データは読めなくなるため、
+        /// 移行が必要な場合は別途対応すること。
+        /// </summary>
+        public static void SetSerializer(ILocalSaveSerializer serializer)
+        {
+            _serializer = serializer;
+        }
+
         private static string GetKeyName<TData>() => typeof(TData).FullName;
 
         public static void Save<TData>(TData data)
         {
-            var json = JsonUtility.ToJson(data);
-            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+            var bytes = _serializer.Serialize(data);
+            var base64 = Convert.ToBase64String(bytes);
             var key = GetKeyName<TData>();
             PlayerPrefs.SetString(key, base64);
             PlayerPrefs.Save();
@@ -30,8 +42,8 @@ namespace UniLab.Persistence
             }
 
             var base64 = PlayerPrefs.GetString(key);
-            var json = Encoding.UTF8.GetString(Convert.FromBase64String(base64));
-            return JsonUtility.FromJson<TData>(json);
+            var bytes = Convert.FromBase64String(base64);
+            return _serializer.Deserialize<TData>(bytes);
         }
 
         public static void Delete<T>()
