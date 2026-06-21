@@ -8,19 +8,28 @@ using UniLab.Common.Utility;
 namespace UniLab.Persistence
 {
     /// <summary>
-    /// ILocalStorage implementation that persists data as AES-encrypted JSON files
-    /// under Application.persistentDataPath. Supports optional TTL-based expiry.
+    /// ILocalStorage implementation that persists data as AES-encrypted blobs under
+    /// Application.persistentDataPath. Supports optional TTL-based expiry.
+    /// シリアライズ方式は ILocalSaveSerializer で差し替え可能（既定は JSON）。
+    /// 保存形式は「8バイトの有効期限ヘッダ + 直列化済みペイロード」を AES 暗号化したもの。
+    /// 有効期限をペイロードと分離することで、シリアライザ非依存に期限判定できる。
     /// </summary>
     public class EncryptedLocalStorage : ILocalStorage
     {
+        // 有効期限ヘッダのバイト数（long = Unixエポック秒）。
+        private const int ExpiryHeaderSize = sizeof(long);
+
         private readonly StorageKeyManager _keyManager;
+        private readonly ILocalSaveSerializer _serializer;
 
         /// <summary>
         /// Initializes a new instance with a lazily-loaded AES key/IV pair.
+        /// serializer 省略時は JSON（JsonLocalSaveSerializer）を使う。
         /// </summary>
-        public EncryptedLocalStorage()
+        public EncryptedLocalStorage(ILocalSaveSerializer serializer = null)
         {
             _keyManager = new StorageKeyManager();
+            _serializer = serializer ?? new JsonLocalSaveSerializer();
         }
 
         /// <inheritdoc/>
@@ -30,9 +39,12 @@ namespace UniLab.Persistence
                 ? DateTimeOffset.UtcNow.Add(ttl.Value).ToUnixTimeSeconds()
                 : 0L;
 
-            var entry = new StorageEntry<T> { Data = data, ExpiresAt = expiresAt };
-            var json = JsonUtility.ToJson(entry);
-            var plainBytes = Encoding.UTF8.GetBytes(json);
+            var payload = _serializer.Serialize(data);
+            var plainBytes = new byte[ExpiryHeaderSize + payload.Length];
+            // 先頭8バイトに有効期限、その後ろにペイロードを連結する。
+            BitConverter.GetBytes(expiresAt).CopyTo(plainBytes, 0);
+            payload.CopyTo(plainBytes, ExpiryHeaderSize);
+
             var encryptedBytes = AesEncryptionUtility.Encrypt(plainBytes, _keyManager.Key, _keyManager.Iv);
             var base64 = Convert.ToBase64String(encryptedBytes);
             File.WriteAllText(GetFilePath(key), base64, Encoding.UTF8);
@@ -47,20 +59,17 @@ namespace UniLab.Persistence
                 return new T();
             }
 
-            var base64 = File.ReadAllText(filePath, Encoding.UTF8);
-            var encryptedBytes = Convert.FromBase64String(base64);
-            var plainBytes = AesEncryptionUtility.Decrypt(encryptedBytes, _keyManager.Key, _keyManager.Iv);
-            var json = Encoding.UTF8.GetString(plainBytes);
-            var entry = JsonUtility.FromJson<StorageEntry<T>>(json);
-
-            // Treat ExpiresAt == 0 as no expiry; positive values are Unix timestamps.
-            if (entry.ExpiresAt > 0 && DateTimeOffset.UtcNow.ToUnixTimeSeconds() > entry.ExpiresAt)
+            var plainBytes = ReadDecrypted(filePath);
+            var expiresAt = BitConverter.ToInt64(plainBytes, 0);
+            if (IsExpired(expiresAt))
             {
                 Delete(key);
                 return new T();
             }
 
-            return entry.Data;
+            var payload = new byte[plainBytes.Length - ExpiryHeaderSize];
+            Array.Copy(plainBytes, ExpiryHeaderSize, payload, 0, payload.Length);
+            return _serializer.Deserialize<T>(payload);
         }
 
         /// <inheritdoc/>
@@ -82,18 +91,10 @@ namespace UniLab.Persistence
                 return false;
             }
 
-            // Reuse Load's expiry logic: if the entry is expired it will be deleted and a
-            // default instance is returned, but we cannot distinguish that from "not found"
-            // without re-reading. Reading the entry is the most reliable approach here.
-            var base64 = File.ReadAllText(filePath, Encoding.UTF8);
-            var encryptedBytes = Convert.FromBase64String(base64);
-            var plainBytes = AesEncryptionUtility.Decrypt(encryptedBytes, _keyManager.Key, _keyManager.Iv);
-            var json = Encoding.UTF8.GetString(plainBytes);
-
-            // StorageEntry<object> cannot be used with JsonUtility due to generic constraints;
-            // use a lightweight expiry-only struct instead.
-            var expiryProbe = JsonUtility.FromJson<StorageExpiryProbe>(json);
-            if (expiryProbe.ExpiresAt > 0 && DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiryProbe.ExpiresAt)
+            // 期限ヘッダだけ見れば判定できるため、ペイロード（型 T）の復元は不要。
+            var plainBytes = ReadDecrypted(filePath);
+            var expiresAt = BitConverter.ToInt64(plainBytes, 0);
+            if (IsExpired(expiresAt))
             {
                 Delete(key);
                 return false;
@@ -102,34 +103,26 @@ namespace UniLab.Persistence
             return true;
         }
 
+        // ファイルを読み、Base64復号 + AES復号した平文（期限ヘッダ + ペイロード）を返す。
+        private byte[] ReadDecrypted(string filePath)
+        {
+            var base64 = File.ReadAllText(filePath, Encoding.UTF8);
+            var encryptedBytes = Convert.FromBase64String(base64);
+            return AesEncryptionUtility.Decrypt(encryptedBytes, _keyManager.Key, _keyManager.Iv);
+        }
+
+        // ExpiresAt == 0 は無期限。正値は Unixエポック秒で、現在時刻を過ぎていれば期限切れ。
+        private static bool IsExpired(long expiresAt)
+        {
+            return expiresAt > 0 && DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAt;
+        }
+
         private static string GetFilePath(string key)
         {
             return Path.Combine(Application.persistentDataPath, $"{key}.dat");
         }
 
         // --- Nested types ---
-
-        /// <summary>
-        /// Wraps the actual payload with expiry metadata so TTL can be enforced on load.
-        /// </summary>
-        [Serializable]
-        private class StorageEntry<T>
-        {
-            public T Data;
-
-            /// <summary>Unix timestamp (seconds). 0 means no expiry.</summary>
-            public long ExpiresAt;
-        }
-
-        /// <summary>
-        /// Used in Exists() to check expiry without knowing the generic type T.
-        /// JsonUtility only populates fields that exist in the JSON, so unknown fields are ignored.
-        /// </summary>
-        [Serializable]
-        private class StorageExpiryProbe
-        {
-            public long ExpiresAt;
-        }
 
         /// <summary>
         /// Manages the AES key and IV used for encryption. Generates them once per device
