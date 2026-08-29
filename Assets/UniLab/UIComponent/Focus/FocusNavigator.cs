@@ -1,0 +1,139 @@
+using System;
+using System.Collections.Generic;
+using R3;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace UniLab.UI.Focus
+{
+    /// <summary>
+    /// IFocusNavigator の実装。BootLifetimeScope 配下に常駐させ、フォーカスグリッドのスタックと
+    /// 方向入力に応じた選択切り替えを一元管理する。EventSystem は選択状態の保持のみ担当させる。
+    /// </summary>
+    public sealed class FocusNavigator : MonoBehaviour, IFocusNavigator, IDisposable
+    {
+        private readonly CompositeDisposable _disposables = new();
+        private readonly List<FocusGrid> _gridStack = new();
+        private int _desiredColumnIndex;
+
+        // 静的な EventSystem.current は OnEnable 後にしか値が入らず、初期化フェーズでは
+        // null になり得るため、シーンから明示的に渡してもらうことで初期化順に依存しないようにする
+        private EventSystem _eventSystem;
+
+        /// <summary>積まれているグリッドを下から順に返す。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
+        public IReadOnlyList<FocusGrid> GridStack => _gridStack;
+
+        /// <summary>スタック最上位のアクティブグリッド。空なら null。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
+        public FocusGrid ActiveGrid => _gridStack.Count == 0 ? null : _gridStack[_gridStack.Count - 1];
+
+        /// <summary>上下移動で維持している列記憶。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
+        public int DesiredColumnIndex => _desiredColumnIndex;
+
+        /// <summary>
+        /// 方向入力ストリームを購読して方向解決を開始する。所有者が初期化時に一度だけ呼ぶ。
+        /// 入力元の具体的な型を知らないことで、UniLab から利用側の入力実装へ依存しないようにする。
+        /// </summary>
+        public void Initialize(Observable<FocusDirection> moveStream)
+        {
+            moveStream.Subscribe(HandleMove).AddTo(_disposables);
+        }
+
+        /// <inheritdoc/>
+        public void SetEventSystem(EventSystem eventSystem)
+        {
+            _eventSystem = eventSystem;
+        }
+
+        /// <inheritdoc/>
+        public void PushGrid(FocusGrid grid)
+        {
+            _gridStack.Add(grid);
+        }
+
+        /// <inheritdoc/>
+        public void PopGrid(FocusGrid grid)
+        {
+            if (_gridStack.Count == 0 || _gridStack[_gridStack.Count - 1] != grid)
+            {
+                return;
+            }
+
+            _gridStack.RemoveAt(_gridStack.Count - 1);
+        }
+
+        /// <inheritdoc/>
+        public void SetSelected(Selectable selectable)
+        {
+            // EventSystem は Boot シーンにのみ存在するため、単体シーン再生時は null になり得る
+            if (_eventSystem == null)
+            {
+                return;
+            }
+
+            _eventSystem.SetSelectedGameObject(selectable.gameObject);
+
+            if (_gridStack.Count > 0 && _gridStack[_gridStack.Count - 1].TryFindCell(selectable.gameObject, out var cell))
+            {
+                _desiredColumnIndex = cell.ColumnIndex;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void FocusFirst()
+        {
+            if (_gridStack.Count == 0)
+            {
+                return;
+            }
+
+            if (_gridStack[_gridStack.Count - 1].TryGetFirstSelectable(out var selectable))
+            {
+                SetSelected(selectable);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            Dispose();
+        }
+
+        /// <summary>方向入力の購読をすべて破棄する。</summary>
+        public void Dispose()
+        {
+            _disposables.Dispose();
+        }
+
+        /// <summary>
+        /// 方向入力を受けてアクティブグリッド（スタック最上位）上で選択を1セル分移動する。
+        /// </summary>
+        private void HandleMove(FocusDirection direction)
+        {
+            if (_gridStack.Count == 0 || _eventSystem == null)
+            {
+                return;
+            }
+
+            var activeGrid = _gridStack[_gridStack.Count - 1];
+
+            // ダイアログなどグリッド外にフォーカスがある間は、背後のグリッドを勝手に動かさない
+            if (!activeGrid.TryFindCell(_eventSystem.currentSelectedGameObject, out var currentCell))
+            {
+                return;
+            }
+
+            if (!activeGrid.TryResolve(currentCell, _desiredColumnIndex, direction, out var next))
+            {
+                return;
+            }
+
+            _eventSystem.SetSelectedGameObject(activeGrid.GetSelectable(next).gameObject);
+
+            // 上下移動では列記憶を維持し、次に左右移動したときに近い列へ戻れるようにする
+            if (direction == FocusDirection.Left || direction == FocusDirection.Right)
+            {
+                _desiredColumnIndex = next.ColumnIndex;
+            }
+        }
+    }
+}
