@@ -19,6 +19,12 @@ namespace UniLab.UI.Focus
         void SetSelected(Selectable selectable);
 
         /// <summary>
+        /// 現在選択中の Selectable。未選択・EventSystem 未設定なら null。
+        /// ポップアップのように一時的にフォーカスを奪うものが、閉じたあと元の位置へ戻すために控える用途で使う。
+        /// </summary>
+        Selectable CurrentSelected { get; }
+
+        /// <summary>
         /// アクティブグリッドの startRowIndex 行目以降で最初の有効セルへフォーカスする。
         /// タブバーのような共通行を先頭に持つ画面では、その行数を渡して中身の先頭へ移す。
         /// </summary>

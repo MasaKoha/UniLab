@@ -1,6 +1,7 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
+using UniLab.UI.Focus;
 
 namespace UniLab.UI.Popup
 {
@@ -21,6 +22,17 @@ namespace UniLab.UI.Popup
 
         /// <summary>表示中のポップアップをバックキー相当で閉じる。表示中でなければ何もしない。</summary>
         UniTask CloseTopAsync();
+
+        /// <summary>
+        /// フォーカスグリッドの積み先を差し替える。パッド操作を行う場合のみ必要で、
+        /// 未接続なら PopupService はフォーカス制御を一切行わない（ポインタ専用プロジェクトはこのままでよい）。
+        /// FocusNavigator はシーンごとに寿命を持つのに対し PopupService は常駐のため、
+        /// コンストラクタ注入ではなく各シーンの初期化時にこのメソッドで渡す。
+        /// </summary>
+        void AttachFocusNavigator(IFocusNavigator focusNavigator);
+
+        /// <summary>シーン破棄時に呼ぶ。破棄済みの FocusNavigator を握り続けないようにする。</summary>
+        void DetachFocusNavigator();
 
         /// <summary>
         /// 表示中の全ポップアップを最前面から順に強制的に閉じ、全て閉じ終わるまで待つ。

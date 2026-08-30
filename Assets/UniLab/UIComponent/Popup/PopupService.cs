@@ -3,6 +3,8 @@ using System.Threading;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using R3;
+using UniLab.UI.Focus;
+using UnityEngine.UI;
 
 namespace UniLab.UI.Popup
 {
@@ -19,6 +21,9 @@ namespace UniLab.UI.Popup
         private readonly List<PopupBase> _stack = new();
         private readonly ReactiveProperty<bool> _hasActivePopup = new(false);
         private readonly IDisposable _dimmerClickSubscription;
+
+        /// <summary>パッド操作時のフォーカス積み先。未接続ならフォーカス制御を行わない。</summary>
+        private IFocusNavigator _focusNavigator;
 
         /// <summary>表示中のポップアップが 1 つでもあるか。</summary>
         public ReadOnlyReactiveProperty<bool> HasActivePopup => _hasActivePopup;
@@ -111,6 +116,18 @@ namespace UniLab.UI.Popup
             await UniTask.WaitWhile(() => _stack.Count > 0);
         }
 
+        /// <inheritdoc/>
+        public void AttachFocusNavigator(IFocusNavigator focusNavigator)
+        {
+            _focusNavigator = focusNavigator;
+        }
+
+        /// <inheritdoc/>
+        public void DetachFocusNavigator()
+        {
+            _focusNavigator = null;
+        }
+
         /// <summary>暗幕タップ購読と HasActivePopup の購読リソースを破棄する。</summary>
         public void Dispose()
         {
@@ -129,6 +146,10 @@ namespace UniLab.UI.Popup
         {
             // 基底クラス制約のみでは null 直接代入が NRT 警告となるため default を使う
             TPopup popup = default;
+
+            // 閉じたあとに元の位置へフォーカスを戻すため、奪う前の選択を控える
+            var previousSelected = _focusNavigator?.CurrentSelected;
+            FocusGrid focusGrid = null;
             try
             {
                 popup = await _viewProvider.LoadAsync<TPopup>(cancellationToken);
@@ -138,10 +159,16 @@ namespace UniLab.UI.Popup
                 RefreshState();
                 await popup.OpenAsync();
 
+                // 開くアニメーションの完了後に積む。再生中は PopupBase が操作不可にしているため
+                focusGrid = PushFocus(popup);
+
                 return await popup.GetResultAsync().AttachExternalCancellation(cancellationToken);
             }
             finally
             {
+                // グリッドは View の解放より先に降ろす。破棄済みの Selectable を握ったまま方向解決が走るのを防ぐ
+                PopFocus(focusGrid, previousSelected);
+
                 if (popup != null)
                 {
                     // CloseAsync が中断例外を投げても、Release を必ず実行して View リークを防ぐ
@@ -156,6 +183,51 @@ namespace UniLab.UI.Popup
                         _viewProvider.Release(popup);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// ポップアップのフォーカスグリッドを積み、初期フォーカスを当てる。
+        /// FocusNavigator 未接続、またはポップアップがグリッドを返さない場合は何もしない。
+        /// </summary>
+        private FocusGrid PushFocus(PopupBase popup)
+        {
+            if (_focusNavigator == null)
+            {
+                return null;
+            }
+
+            var grid = popup.BuildFocusGrid();
+            if (grid == null)
+            {
+                return null;
+            }
+
+            _focusNavigator.PushGrid(grid);
+
+            var initialFocus = popup.InitialFocus;
+            if (initialFocus != null)
+            {
+                _focusNavigator.SetSelected(initialFocus);
+            }
+
+            return grid;
+        }
+
+        /// <summary>積んだグリッドを降ろし、ポップアップを開く前の選択へ戻す。</summary>
+        private void PopFocus(FocusGrid grid, Selectable previousSelected)
+        {
+            if (_focusNavigator == null || grid == null)
+            {
+                return;
+            }
+
+            _focusNavigator.PopGrid(grid);
+
+            // 元の要素が破棄されている（シーン遷移を挟んだ等）場合は復元しない
+            if (previousSelected != null)
+            {
+                _focusNavigator.SetSelected(previousSelected);
             }
         }
 
