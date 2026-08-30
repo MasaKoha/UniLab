@@ -38,6 +38,7 @@ namespace UniLab.Scene
 
         /// <summary>
         /// 戻る入力と、各シーンの LifetimeScope に親として継承させるスコープを受け取る。所有者が起動時に一度だけ呼ぶ。
+        /// LoadSceneAsync に渡すトークンは「前シーンを離れる前」にだけ効く。シーン寿命のトークンを渡しても遷移は完走する。
         /// parentScope はシーンロード中に <see cref="LifetimeScope.EnqueueParent"/> で積まれ、
         /// 新シーンの LifetimeScope がアプリ全体の登録（常駐サービス等）を解決できるようにする。
         /// </summary>
@@ -151,16 +152,19 @@ namespace UniLab.Scene
             _backKeyInput.SetBlock(true);
             try
             {
+                // 呼び出し元のトークンが効くのは前シーンを離れるまで。
+                // 前シーンの Presenter が自分の寿命に紐づくトークンを渡してくると、シーン破棄と同時にキャンセルされ、
+                // 新シーンの入場・明転が飛んで画面が暗転したまま止まる（実機で発生）。ロード以降は本マネージャの寿命で進める
                 await LeavePreviousSceneAsync(cancellationToken);
                 await CoverScreenAsync().AttachExternalCancellation(cancellationToken);
 
                 // 新シーンの LifetimeScope が生成される瞬間だけ親を積む
                 using (LifetimeScope.EnqueueParent(_parentScope))
                 {
-                    await SceneManager.LoadSceneAsync(sceneName, mode).ToUniTask(cancellationToken: cancellationToken);
+                    await SceneManager.LoadSceneAsync(sceneName, mode).ToUniTask(cancellationToken: destroyCancellationToken);
                 }
 
-                await EnterNewSceneAsync(sceneName, sceneParameter, cancellationToken);
+                await EnterNewSceneAsync(sceneName, sceneParameter, destroyCancellationToken);
             }
             finally
             {
