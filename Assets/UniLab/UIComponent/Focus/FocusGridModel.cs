@@ -10,13 +10,11 @@ namespace UniLab.UI.Focus
     public sealed class FocusGridModel
     {
         private readonly IReadOnlyList<IReadOnlyList<bool>> _rows;
-        private readonly FocusWrapMode _wrapMode;
 
         /// <summary>行ごとのセル有効フラグ列とラップモードを受け取る。行の長さは可変長でよい。</summary>
-        public FocusGridModel(IReadOnlyList<IReadOnlyList<bool>> rows, FocusWrapMode wrapMode)
+        public FocusGridModel(IReadOnlyList<IReadOnlyList<bool>> rows)
         {
             _rows = rows;
-            _wrapMode = wrapMode;
         }
 
         /// <summary>行数。</summary>
@@ -68,7 +66,7 @@ namespace UniLab.UI.Focus
         /// current から direction の方向へ移動した先の有効セルを解決する。
         /// 左右は同一行内の列走査、上下は desiredColumnIndex に最も近い列を持つ行を探す。
         /// </summary>
-        public bool TryResolve(FocusCell current, int desiredColumnIndex, FocusDirection direction, out FocusCell next)
+        public bool TryResolve(FocusCell current, int desiredColumnIndex, FocusDirection direction, FocusWrapMode wrapMode, out FocusCell next)
         {
             next = FocusCell.Invalid;
 
@@ -80,25 +78,25 @@ namespace UniLab.UI.Focus
             switch (direction)
             {
                 case FocusDirection.Left:
-                    return TryResolveHorizontal(current, -1, out next);
+                    return TryResolveHorizontal(current, -1, wrapMode, out next);
                 case FocusDirection.Right:
-                    return TryResolveHorizontal(current, 1, out next);
+                    return TryResolveHorizontal(current, 1, wrapMode, out next);
                 case FocusDirection.Up:
-                    return TryResolveVertical(current, desiredColumnIndex, -1, out next);
+                    return TryResolveVertical(current, desiredColumnIndex, -1, wrapMode, out next);
                 case FocusDirection.Down:
-                    return TryResolveVertical(current, desiredColumnIndex, 1, out next);
+                    return TryResolveVertical(current, desiredColumnIndex, 1, wrapMode, out next);
                 default:
                     return false;
             }
         }
 
         /// <summary>行内で columnStep 方向へ列を走査し、最初に見つかった有効セルを返す。</summary>
-        private bool TryResolveHorizontal(FocusCell current, int columnStep, out FocusCell next)
+        private bool TryResolveHorizontal(FocusCell current, int columnStep, FocusWrapMode wrapMode, out FocusCell next)
         {
             next = FocusCell.Invalid;
 
             var columnCount = GetColumnCount(current.RowIndex);
-            var wrapAllowed = _wrapMode == FocusWrapMode.Horizontal || _wrapMode == FocusWrapMode.Both;
+            var wrapAllowed = wrapMode == FocusWrapMode.Horizontal || wrapMode == FocusWrapMode.Both;
             var columnIndex = current.ColumnIndex;
 
             // columnCount - 1 回のループで他の全列をちょうど1周分だけ走査できる（自分自身には戻らない）
@@ -127,11 +125,11 @@ namespace UniLab.UI.Focus
         }
 
         /// <summary>rowStep 方向へ行を走査し、有効セルを持つ最初の行から desiredColumnIndex に最も近い列を選ぶ。</summary>
-        private bool TryResolveVertical(FocusCell current, int desiredColumnIndex, int rowStep, out FocusCell next)
+        private bool TryResolveVertical(FocusCell current, int desiredColumnIndex, int rowStep, FocusWrapMode wrapMode, out FocusCell next)
         {
             next = FocusCell.Invalid;
 
-            var wrapAllowed = _wrapMode == FocusWrapMode.Vertical || _wrapMode == FocusWrapMode.Both;
+            var wrapAllowed = wrapMode == FocusWrapMode.Vertical || wrapMode == FocusWrapMode.Both;
             var rowIndex = current.RowIndex;
 
             // RowCount - 1 回のループで他の全行をちょうど1周分だけ走査できる（自分自身には戻らない）

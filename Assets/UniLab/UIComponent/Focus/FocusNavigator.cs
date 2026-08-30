@@ -19,6 +19,7 @@ namespace UniLab.UI.Focus
 
         /// <summary>押せない項目にもフォーカスを乗せるか。Initialize で受け取り、全ての方向解決へ引き渡す。</summary>
         private bool _focusNonInteractable;
+        private FocusWrapMode _defaultWrapMode;
 
         // EventSystem はシーンごとに生成・破棄されるため、シーンをまたいで参照を持ち越さないよう
         // 初期化時にそのシーンのものを受け取る
@@ -34,6 +35,9 @@ namespace UniLab.UI.Focus
         /// <inheritdoc/>
         public bool FocusNonInteractable => _focusNonInteractable;
 
+        /// <inheritdoc/>
+        public FocusWrapMode DefaultWrapMode => _defaultWrapMode;
+
         /// <summary>上下移動で維持している列記憶。</summary>
         public int DesiredColumnIndex => _desiredColumnIndex;
 
@@ -42,9 +46,10 @@ namespace UniLab.UI.Focus
         /// このシーンの Presenter が初期化時に一度だけ呼ぶ。
         /// 入力元の具体的な型を知らないことで、UniLab から利用側の入力実装へ依存しないようにする。
         /// </summary>
-        public void Initialize(Observable<FocusDirection> moveStream, EventSystem eventSystem, bool focusNonInteractable)
+        public void Initialize(Observable<FocusDirection> moveStream, EventSystem eventSystem, bool focusNonInteractable, FocusWrapMode defaultWrapMode)
         {
             _focusNonInteractable = focusNonInteractable;
+            _defaultWrapMode = defaultWrapMode;
             _eventSystem = eventSystem;
             moveStream.Subscribe(HandleMove).AddTo(_disposables);
         }
@@ -130,7 +135,7 @@ namespace UniLab.UI.Focus
                 return;
             }
 
-            if (!activeGrid.TryResolve(currentCell, _desiredColumnIndex, direction, _focusNonInteractable, out var next))
+            if (!activeGrid.TryResolve(currentCell, _desiredColumnIndex, direction, _focusNonInteractable, _defaultWrapMode, out var next))
             {
                 return;
             }

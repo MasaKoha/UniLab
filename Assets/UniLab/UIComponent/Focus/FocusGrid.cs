@@ -18,8 +18,12 @@ namespace UniLab.UI.Focus
         private readonly bool[][] _enabledFlagsByRow;
         private readonly FocusGridModel _gridModel;
 
-        /// <summary>ラップモード。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
-        public FocusWrapMode WrapMode { get; }
+        /// <summary>
+        /// このグリッド固有のラップモード。null なら FocusNavigator に渡した既定値に従う。
+        /// 「基本は既定に任せ、必要な画面だけ上書きする」形にするため null 許容にしている。
+        /// 可視化・デバッグ用途で外部から位相を読むためにも公開する。
+        /// </summary>
+        public FocusWrapMode? WrapModeOverride { get; }
 
         /// <summary>行数。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
         public int RowCount => _rows.Count;
@@ -28,10 +32,12 @@ namespace UniLab.UI.Focus
         /// Selectable の行グリッドを受け取る。全 Selectable の navigation.mode を None にして
         /// Unity 標準の自動/明示ナビゲーションを完全に無効化する（方向解決は本クラスに一元化するため）。
         /// </summary>
-        public FocusGrid(IReadOnlyList<IReadOnlyList<Selectable>> rows, FocusWrapMode wrapMode)
+        /// <param name="rows">行ごとの Selectable。</param>
+        /// <param name="wrapModeOverride">このグリッドだけラップモードを変えたい場合に指定する。null なら FocusNavigator の既定値に従う。</param>
+        public FocusGrid(IReadOnlyList<IReadOnlyList<Selectable>> rows, FocusWrapMode? wrapModeOverride = null)
         {
             _rows = rows;
-            WrapMode = wrapMode;
+            WrapModeOverride = wrapModeOverride;
             _enabledFlagsByRow = new bool[rows.Count][];
 
             for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
@@ -47,7 +53,7 @@ namespace UniLab.UI.Focus
                 }
             }
 
-            _gridModel = new FocusGridModel(_enabledFlagsByRow, wrapMode);
+            _gridModel = new FocusGridModel(_enabledFlagsByRow);
         }
 
         /// <summary>指定行の列数を返す。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
@@ -87,15 +93,23 @@ namespace UniLab.UI.Focus
         }
 
         /// <summary>current から direction 方向へ移動した先の有効セルを解決する。</summary>
+        /// <param name="defaultWrapMode">FocusNavigator の既定ラップモード。<see cref="WrapModeOverride"/> が指定されていればそちらが優先される。</param>
         public bool TryResolve(
             FocusCell current,
             int desiredColumnIndex,
             FocusDirection direction,
             bool includeNonInteractable,
+            FocusWrapMode defaultWrapMode,
             out FocusCell next)
         {
             RefreshEnabledFlags(includeNonInteractable);
-            return _gridModel.TryResolve(current, desiredColumnIndex, direction, out next);
+            return _gridModel.TryResolve(current, desiredColumnIndex, direction, ResolveWrapMode(defaultWrapMode), out next);
+        }
+
+        /// <summary>このグリッドに実際に適用されるラップモードを返す。</summary>
+        public FocusWrapMode ResolveWrapMode(FocusWrapMode defaultWrapMode)
+        {
+            return WrapModeOverride ?? defaultWrapMode;
         }
 
         /// <summary>セル位置に対応する Selectable を返す。</summary>

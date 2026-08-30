@@ -28,12 +28,18 @@ namespace UniLab.UI.Focus
         /// 方向入力ストリームと操作対象の EventSystem を受け取り、方向解決を開始する。
         /// このシーンの Presenter が初期化時に一度だけ呼ぶ。
         /// </summary>
-        void Initialize(Observable<FocusDirection> moveStream, EventSystem eventSystem, bool focusNonInteractable);
+        void Initialize(Observable<FocusDirection> moveStream, EventSystem eventSystem, bool focusNonInteractable, FocusWrapMode defaultWrapMode);
 
         /// <summary>
         /// 押せない項目（interactable=false）にもフォーカスを乗せるか。Initialize で決まる。
         /// 可視化ツールが解決結果を再現するために公開する。
         /// </summary>
         bool FocusNonInteractable { get; }
+
+        /// <summary>
+        /// グリッドがラップモードを指定しなかった場合に使う既定値。Initialize で決まる。
+        /// 画面ごとに個別指定したい場合は FocusGridBuilder.SetWrapMode で上書きする。
+        /// </summary>
+        FocusWrapMode DefaultWrapMode { get; }
     }
 }
