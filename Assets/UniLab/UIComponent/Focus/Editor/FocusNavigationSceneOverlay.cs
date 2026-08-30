@@ -189,7 +189,7 @@ namespace UniLab.UI.Focus.Editor
 
         private static void DrawResolvedDirectionLine(FocusNavigator focusNavigator, FocusGrid activeGrid, FocusCell currentCell, Vector3 currentCenter, FocusDirection direction)
         {
-            if (!activeGrid.TryResolve(currentCell, focusNavigator.DesiredColumnIndex, direction, focusNavigator.FocusNonInteractable, out var nextCell))
+            if (!activeGrid.TryResolve(currentCell, focusNavigator.DesiredColumnIndex, direction, focusNavigator.FocusNonInteractable, focusNavigator.DefaultWrapMode, out var nextCell))
             {
                 return;
             }

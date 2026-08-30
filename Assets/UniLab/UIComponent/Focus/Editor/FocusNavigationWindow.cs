@@ -234,7 +234,7 @@ namespace UniLab.UI.Focus.Editor
             {
                 var grid = gridStack[stackIndex];
                 var isActiveGrid = grid == activeGrid;
-                DrawGrid(grid, stackIndex, isActiveGrid, isActiveGrid ? currentCell : FocusCell.Invalid);
+                DrawGrid(grid, stackIndex, isActiveGrid, isActiveGrid ? currentCell : FocusCell.Invalid, focusNavigator.DefaultWrapMode);
             }
 
             if (activeGrid == null)
@@ -246,10 +246,10 @@ namespace UniLab.UI.Focus.Editor
             DrawDirectionalPad(focusNavigator, activeGrid, hasCurrentCell ? currentCell : FocusCell.Invalid);
         }
 
-        private void DrawGrid(FocusGrid grid, int stackIndex, bool isActiveGrid, FocusCell currentCell)
+        private void DrawGrid(FocusGrid grid, int stackIndex, bool isActiveGrid, FocusCell currentCell, FocusWrapMode defaultWrapMode)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            DrawGridHeader(grid, stackIndex, isActiveGrid);
+            DrawGridHeader(grid, stackIndex, isActiveGrid, defaultWrapMode);
 
             for (var rowIndex = 0; rowIndex < grid.RowCount; rowIndex++)
             {
@@ -260,11 +260,13 @@ namespace UniLab.UI.Focus.Editor
             EditorGUILayout.Space();
         }
 
-        private void DrawGridHeader(FocusGrid grid, int stackIndex, bool isActiveGrid)
+        private void DrawGridHeader(FocusGrid grid, int stackIndex, bool isActiveGrid, FocusWrapMode defaultWrapMode)
         {
             EditorGUILayout.BeginHorizontal();
 
-            var headerLabel = $"#{stackIndex}  {grid.RowCount}行  wrap={grid.WrapMode}";
+            // 個別指定が無いグリッドは FocusNavigator の既定に従うため、実際に効く値と由来を併記する。
+            var wrapSource = grid.WrapModeOverride.HasValue ? "個別" : "既定";
+            var headerLabel = $"#{stackIndex}  {grid.RowCount}行  wrap={grid.ResolveWrapMode(defaultWrapMode)}({wrapSource})";
             EditorGUILayout.LabelField(headerLabel, EditorStyles.boldLabel, GUILayout.ExpandWidth(false));
 
             if (isActiveGrid)
@@ -433,6 +435,7 @@ namespace UniLab.UI.Focus.Editor
                 focusNavigator.DesiredColumnIndex,
                 direction,
                 focusNavigator.FocusNonInteractable,
+                focusNavigator.DefaultWrapMode,
                 out var nextCell);
 
             var label = BuildDirectionLabel(activeGrid, arrowSymbol, canResolve, nextCell, includeCoordinates);
