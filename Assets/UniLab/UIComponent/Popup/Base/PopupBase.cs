@@ -18,23 +18,37 @@ namespace UniLab.UI.Popup
         /// <summary>このポップアップに渡された表示パラメータ。Initialize で設定される。</summary>
         public IPopupParameter Parameter { get; private set; }
 
+        /// <summary>背景ボタンの購読は一度だけでよい。シーン常駐 View を再利用しても購読が重複しないよう控える。</summary>
+        private bool _isBackgroundSubscribed;
+
         /// <summary>
         /// パラメータを受け取り、背景タップ購読と派生クラス初期化を行う。表示前に PopupService が呼ぶ。
         /// </summary>
         public void Initialize(IPopupParameter parameter)
         {
             Parameter = parameter;
+            OnPrepare();
             SetEvent();
             OnInitialize();
+        }
+
+        /// <summary>
+        /// 表示のたびに最初に呼ばれる。前回表示の結果や購読を捨てる用途で、View を再利用する供給元
+        /// （<see cref="SceneInstancePopupViewProvider"/>）と組み合わせるために必要。
+        /// </summary>
+        protected virtual void OnPrepare()
+        {
         }
 
         private void SetEvent()
         {
             // 個別背景ボタンは任意。共通暗幕（IPopupDimmer）使用時は未配線で、背景タップは PopupService が暗幕経由で処理する
-            if (_backgroundButton == null)
+            if (_backgroundButton == null || _isBackgroundSubscribed)
             {
                 return;
             }
+
+            _isBackgroundSubscribed = true;
 
             // AddTo(this) で破棄時に購読解除する。背景タップ許可時のみ閉じる
             _backgroundButton.OnClickAsObservable()

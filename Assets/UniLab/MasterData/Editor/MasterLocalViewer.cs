@@ -178,23 +178,7 @@ namespace UniLab.MasterData.Editor
                 return false;
             }
 
-            return InheritsGeneric(type, typeof(MasterManager<>));
-        }
-
-        private static bool InheritsGeneric(Type type, Type genericBase)
-        {
-            while (type != null && type != typeof(object))
-            {
-                var current = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-                if (current == genericBase)
-                {
-                    return true;
-                }
-
-                type = type.BaseType;
-            }
-
-            return false;
+            return typeof(MasterManager).IsAssignableFrom(type);
         }
 
     }
@@ -242,27 +226,15 @@ namespace UniLab.MasterData.Editor
                 return null;
             }
 
-            object instance = null;
+            // シングルトンを廃止したため、ビューア用に一時インスタンスを生成する（鍵とパスを読むだけ）
+            object instance;
             try
             {
-                var instanceProp = managerType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-                instance = instanceProp?.GetValue(null);
+                instance = Activator.CreateInstance(managerType);
             }
             catch
             {
-                // ignore and fallback
-            }
-
-            if (instance == null)
-            {
-                try
-                {
-                    instance = Activator.CreateInstance(managerType);
-                }
-                catch
-                {
-                    instance = null;
-                }
+                instance = null;
             }
 
             if (instance == null)

@@ -1,20 +1,24 @@
 using System;
-using UniLab.Common;
-using UniLab.UI;
 using UnityEngine;
 
 namespace UniLab.UI.Loading
 {
     /// <summary>
-    /// Singleton manager for a full-screen loading overlay.
-    /// Uses a reference counter so nested Show() calls work correctly:
-    /// the overlay only hides when all handles have been disposed.
+    /// 全画面ローディングオーバーレイ。参照カウントで入れ子の Show() に対応し、全ハンドルが Dispose されたときだけ隠す。
+    /// 常駐オブジェクトに載せ、利用側の LifetimeScope で <see cref="ILoadingOverlayManager"/> として登録する。
     /// </summary>
-    public class LoadingOverlayManager : SingletonMonoBehaviour<LoadingOverlayManager>, ILoadingOverlayManager
+    public class LoadingOverlayManager : MonoBehaviour, ILoadingOverlayManager
     {
         [SerializeField] private GameObject _overlayRoot = null;
 
         private int _showCount = 0;
+        private IInputBlockManager _inputBlockManager;
+
+        /// <summary>入力ブロックの発行元を受け取る。所有者が起動時に一度だけ呼ぶ。</summary>
+        public void Initialize(IInputBlockManager inputBlockManager)
+        {
+            _inputBlockManager = inputBlockManager;
+        }
 
         /// <summary>
         /// Increments the show counter, activates the overlay, and blocks input.
@@ -26,7 +30,7 @@ namespace UniLab.UI.Loading
             _overlayRoot.SetActive(true);
 
             // Hold an input block for the lifetime of this overlay handle
-            var inputBlock = InputBlockManager.CreateInputBlockWithLoading();
+            var inputBlock = _inputBlockManager.CreateInputBlockWithLoading();
 
             return new OverlayHandle(this, inputBlock);
         }

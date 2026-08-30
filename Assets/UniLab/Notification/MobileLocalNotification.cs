@@ -1,12 +1,15 @@
 using System;
 using Cysharp.Threading.Tasks;
-using UniLab.Common;
 using UniLab.Notification.Platform;
 using UniLab.Notification.Platform.Interface;
 
 namespace UniLab.Notification
 {
-    public sealed class MobileLocalNotification : SingletonPureClass<MobileLocalNotification>
+    /// <summary>
+    /// ローカル通知のプラットフォーム差を吸収する窓口。利用側の LifetimeScope で Singleton 登録し、
+    /// 起動時に Initialize を呼んでから使う。
+    /// </summary>
+    public sealed class MobileLocalNotification
     {
         private ILocalMobileNotification _localMobileNotification;
 

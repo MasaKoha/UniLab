@@ -1,16 +1,14 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UniLab.Common;
 using UnityEngine;
 
 namespace UniLab.UI.Toast
 {
     /// <summary>
-    /// Singleton manager for displaying toast notifications.
-    /// Only one toast is shown at a time; calling Show() while a toast is visible
-    /// cancels the current one before displaying the new one.
+    /// トースト通知の表示。同時に出すのは1件で、表示中に Show() を呼ぶと今のものを取り消して差し替える。
+    /// 常駐オブジェクトに載せ、利用側の LifetimeScope で <see cref="IToastManager"/> として登録する。
     /// </summary>
-    public class ToastManager : SingletonMonoBehaviour<ToastManager>, IToastManager
+    public class ToastManager : MonoBehaviour, IToastManager
     {
         [SerializeField] private RectTransform _toastRoot = null;
         [SerializeField] private ToastView _toastPrefab = null;
@@ -71,7 +69,7 @@ namespace UniLab.UI.Toast
             _currentToastCts = null;
         }
 
-        protected override void OnDispose()
+        private void OnDestroy()
         {
             CancelCurrentToast();
         }

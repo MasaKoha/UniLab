@@ -5,34 +5,35 @@ using R3;
 namespace UniLab.UI
 {
     /// <summary>
-    /// Static factory and registry for input blocks. Tracks all active blocks and fires show/hide observables.
+    /// <see cref="IInputBlockManager"/> の実装。発行中のブロックを ID で管理し、表示／解除の Observable を流す。
+    /// 静的クラスではなくインスタンスにしているのは、状態を DI の寿命に閉じ込めテストで差し替えられるようにするため。
     /// </summary>
-    public static class InputBlockManager
+    public sealed class InputBlockManager : IInputBlockManager, IDisposable
     {
-        private static ulong _blockingIdCounter = 0;
-        private static readonly Dictionary<ulong, IDisposable> _inputBlocks = new();
+        private ulong _blockingIdCounter = 0;
+        private readonly Dictionary<ulong, IDisposable> _inputBlocks = new();
+        private readonly Subject<Unit> _onShowLoading = new();
+        private readonly Subject<Unit> _onHideLoading = new();
+        private readonly Subject<Unit> _onShow = new();
+        private readonly Subject<Unit> _onHide = new();
 
-        /// <summary>True while any input block is active.</summary>
-        public static bool BlockedInput => _inputBlocks.Count > 0;
+        /// <inheritdoc/>
+        public bool BlockedInput => _inputBlocks.Count > 0;
 
-        /// <summary>Fires when a loading input block is created.</summary>
-        private static readonly Subject<Unit> _onShowLoading = new();
-        public static Observable<Unit> OnShowLoading => _onShowLoading;
+        /// <inheritdoc/>
+        public Observable<Unit> OnShowLoading => _onShowLoading;
 
-        /// <summary>Fires when a loading input block is disposed.</summary>
-        private static readonly Subject<Unit> _onHideLoading = new();
-        public static Observable<Unit> OnHideLoading => _onHideLoading;
+        /// <inheritdoc/>
+        public Observable<Unit> OnHideLoading => _onHideLoading;
 
-        /// <summary>Fires when any input block (loading or plain) is created.</summary>
-        private static readonly Subject<Unit> _onShow = new();
-        public static Observable<Unit> OnShow => _onShow;
+        /// <inheritdoc/>
+        public Observable<Unit> OnShow => _onShow;
 
-        /// <summary>Fires when any input block (loading or plain) is disposed.</summary>
-        private static readonly Subject<Unit> _onHide = new();
-        public static Observable<Unit> OnHide => _onHide;
+        /// <inheritdoc/>
+        public Observable<Unit> OnHide => _onHide;
 
-        /// <summary>Creates an input block that also triggers loading overlay observables.</summary>
-        public static LoadingInputBlock CreateInputBlockWithLoading()
+        /// <inheritdoc/>
+        public LoadingInputBlock CreateInputBlockWithLoading()
         {
             _onShowLoading.OnNext(Unit.Default);
             _onShow.OnNext(Unit.Default);
@@ -50,8 +51,8 @@ namespace UniLab.UI
             return block;
         }
 
-        /// <summary>Creates a plain input block without a loading indicator.</summary>
-        public static InputBlock CreateInputBlock()
+        /// <inheritdoc/>
+        public InputBlock CreateInputBlock()
         {
             _onShow.OnNext(Unit.Default);
             var blockingId = _blockingIdCounter++;
@@ -67,18 +68,25 @@ namespace UniLab.UI
             return block;
         }
 
-        /// <summary>
-        /// Immediately disposes and removes all active input blocks.
-        /// Use only in error recovery paths — normal flow should dispose handles individually.
-        /// </summary>
-        public static void ForceReleaseAllInputBlocks()
+        /// <inheritdoc/>
+        public void ForceReleaseAllInputBlocks()
         {
-            foreach (var block in _inputBlocks.Values)
+            // Dispose 内でコレクションが変わるため、複製を回す
+            foreach (var block in new List<IDisposable>(_inputBlocks.Values))
             {
                 block.Dispose();
             }
 
             _inputBlocks.Clear();
+        }
+
+        /// <summary>Subject を破棄する。</summary>
+        public void Dispose()
+        {
+            _onShowLoading.Dispose();
+            _onHideLoading.Dispose();
+            _onShow.Dispose();
+            _onHide.Dispose();
         }
     }
 
