@@ -8,7 +8,7 @@ namespace UniLab.UI.Transition
     /// <summary>
     /// MonoBehaviour that drives fullscreen fade transitions via a CanvasGroup.
     /// Attach to a Canvas with a full-screen black Image and a CanvasGroup component.
-    /// Called from UniLabSceneManagerBase.FadeInAsync / FadeOutAsync.
+    /// UniLabSceneManagerBase の派生が CoverScreenAsync（→ FadeOutAsync）/ RevealScreenAsync（→ FadeInAsync）から呼ぶ。
     /// </summary>
     public class SceneFadeTransition : MonoBehaviour, ISceneTransition
     {
