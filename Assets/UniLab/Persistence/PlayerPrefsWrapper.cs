@@ -6,6 +6,8 @@ namespace UniLab.Persistence
     /// <summary>
     /// Type-safe wrapper around PlayerPrefs that handles bool, int, float, string, and Enum values.
     /// Enum values are persisted as their underlying int representation.
+    /// Callers should go through this class rather than touching PlayerPrefs directly, so that the
+    /// key handling and the Save() flush stay in one place.
     /// </summary>
     public static class PlayerPrefsWrapper
     {
@@ -80,6 +82,24 @@ namespace UniLab.Persistence
             }
 
             throw new NotSupportedException($"PlayerPrefsWrapper does not support type {typeof(T).FullName}.");
+        }
+
+        /// <summary>
+        /// Deletes the entry stored under the specified key and flushes PlayerPrefs to disk.
+        /// Does nothing when the key does not exist.
+        /// </summary>
+        public static void Delete(string key)
+        {
+            PlayerPrefs.DeleteKey(key);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>
+        /// Returns true when a value is stored under the specified key.
+        /// </summary>
+        public static bool HasKey(string key)
+        {
+            return PlayerPrefs.HasKey(key);
         }
     }
 }
