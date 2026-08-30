@@ -3,77 +3,83 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
-using UniLab.Common;
 using UniLab.Input;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using VContainer.Unity;
 
 namespace UniLab.Scene
 {
     /// <summary>
-    /// Singleton scene manager base. Handles scene loading lifecycle and implements ISceneManager for DI consumers.
+    /// シーン遷移のライフサイクル（暗転 → 前シーンの退場 → ロード → 新シーンの入場 → 明転）と履歴を管理する基底。
+    /// 常駐オブジェクトに載せ、利用側の LifetimeScope で <see cref="ISceneManager"/> として登録する。
+    /// シングルトンではないため、所有者が <see cref="Initialize"/> を明示的に呼んでから使う。
     /// </summary>
-    public abstract class UniLabSceneManagerBase<T> : SingletonMonoBehaviour<T>, ISceneManager
-        where T : MonoBehaviour
+    public abstract class UniLabSceneManagerBase : MonoBehaviour, ISceneManager, IDisposable
     {
         private readonly Stack<SceneParameterBase> _sceneHistory = new();
-        private IDisposable _updateDisposable;
+        private readonly CompositeDisposable _disposables = new();
 
-        /// <summary>
-        /// True after ExecuteBootSequence has completed.
-        /// </summary>
+        private IBackKeyInput _backKeyInput;
+        private LifetimeScope _parentScope;
+
+        /// <summary><see cref="ExecuteBootSequence"/> が完了したか。</summary>
         public bool IsBoot { get; private set; }
 
-        /// <summary>Plays the fade-in animation before leaving a scene.</summary>
-        protected abstract UniTask FadeInAsync();
+        /// <summary>
+        /// 前シーンを離れる前に画面を覆う（暗転）。ロード中の画面が見えないようにする。
+        /// </summary>
+        protected abstract UniTask CoverScreenAsync();
 
-        /// <summary>Plays the fade-out animation after entering a scene.</summary>
-        protected abstract UniTask FadeOutAsync();
+        /// <summary>
+        /// 新シーンの準備が済んだあとに覆いを外す（明転）。
+        /// </summary>
+        protected abstract UniTask RevealScreenAsync();
 
-        protected override void OnAwake()
+        /// <summary>
+        /// 戻る入力と、各シーンの LifetimeScope に親として継承させるスコープを受け取る。所有者が起動時に一度だけ呼ぶ。
+        /// parentScope はシーンロード中に <see cref="LifetimeScope.EnqueueParent"/> で積まれ、
+        /// 新シーンの LifetimeScope がアプリ全体の登録（常駐サービス等）を解決できるようにする。
+        /// </summary>
+        public void Initialize(IBackKeyInput backKeyInput, LifetimeScope parentScope)
         {
-            SetDontDestroyOnLoad();
-            BackKeyInputManager.Instance.OnPressBackKey
+            _backKeyInput = backKeyInput;
+            _parentScope = parentScope;
+
+            _backKeyInput.OnPressBackKey
                 .Subscribe(_ => GoBack())
-                .AddTo(destroyCancellationToken);
+                .AddTo(_disposables);
         }
 
-        private void Update()
+        /// <summary>購読を破棄する。</summary>
+        public void Dispose()
         {
-#if UNITY_ANDROID
-            if (!Keyboard.current.escapeKey.wasPressedThisFrame)
-            {
-                return;
-            }
+            _disposables.Dispose();
+        }
 
-            GoBack();
-#endif
+        private void OnDestroy()
+        {
+            Dispose();
         }
 
         private void GoBack()
         {
-#if UNITY_ANDROID
-            if (_sceneHistory.Count <= 1 || BackKeyInputManager.Instance.IsBlocked)
+            // 遷移中は IBackKeyInput 側が発火を止めるが、履歴が無いときの戻るはここで弾く
+            if (_sceneHistory.Count <= 1)
             {
                 return;
             }
 
             BackToPreviousScene();
-#endif
         }
 
-        /// <summary>
-        /// Starts loading the next scene. Fire-and-forget wrapper over LoadSceneAsync.
-        /// </summary>
+        /// <inheritdoc/>
         public void GoToNextScene(SceneParameterBase sceneParameter, bool addToHistory = false)
         {
             LoadSceneAsync(sceneParameter, addToHistory).Forget();
         }
 
-        /// <summary>
-        /// Overload that preserves backward compatibility with callers that pass LoadSceneMode explicitly.
-        /// </summary>
+        /// <summary>LoadSceneMode を明示する版。Additive 読み込みが要る画面で使う。</summary>
         public void GoToNextScene(SceneParameterBase sceneParameter, bool addToHistory, LoadSceneMode mode)
         {
             if (addToHistory)
@@ -81,12 +87,10 @@ namespace UniLab.Scene
                 _sceneHistory.Push(sceneParameter);
             }
 
-            LoadScene(sceneParameter.SceneName.ToString(), sceneParameter, CancellationToken.None, mode).Forget();
+            LoadScene(sceneParameter, CancellationToken.None, mode).Forget();
         }
 
-        /// <summary>
-        /// Pops the history stack and returns to the previous scene.
-        /// </summary>
+        /// <inheritdoc/>
         public void BackToPreviousScene()
         {
             if (_sceneHistory.Count <= 1)
@@ -95,22 +99,16 @@ namespace UniLab.Scene
             }
 
             _sceneHistory.Pop();
-            var sceneParameter = _sceneHistory.Peek();
-            LoadScene(sceneParameter.SceneName.ToString(), sceneParameter, CancellationToken.None).Forget();
+            LoadScene(_sceneHistory.Peek(), CancellationToken.None).Forget();
         }
 
-        /// <summary>
-        /// Clears the scene navigation history stack.
-        /// </summary>
+        /// <summary>履歴を空にする。タイトルへ戻るなど、戻り先を断ち切りたいときに呼ぶ。</summary>
         public void ClearHistory()
         {
             _sceneHistory.Clear();
         }
 
-        /// <summary>
-        /// Loads the scene described by <paramref name="parameter"/> and awaits the full lifecycle sequence.
-        /// Pushes to history when <paramref name="addToHistory"/> is true.
-        /// </summary>
+        /// <inheritdoc/>
         public UniTask LoadSceneAsync(
             SceneParameterBase parameter,
             bool addToHistory = false,
@@ -121,13 +119,10 @@ namespace UniLab.Scene
                 _sceneHistory.Push(parameter);
             }
 
-            return LoadScene(parameter.SceneName.ToString(), parameter, cancellationToken);
+            return LoadScene(parameter, cancellationToken);
         }
 
-        /// <summary>
-        /// Returns the current scene's parameter cast to <typeparamref name="TParameter"/>.
-        /// Returns null and logs an error if the cast fails.
-        /// </summary>
+        /// <inheritdoc/>
         public TParameter GetCurrentSceneParameter<TParameter>() where TParameter : SceneParameterBase
         {
             if (_sceneHistory.Count == 0)
@@ -146,56 +141,66 @@ namespace UniLab.Scene
         }
 
         private async UniTask LoadScene(
-            string sceneName,
             SceneParameterBase sceneParameter,
             CancellationToken cancellationToken,
             LoadSceneMode mode = LoadSceneMode.Single)
         {
-            BackKeyInputManager.Instance.SetBlock(true);
-            var previousScene = SceneManager.GetActiveScene();
-            foreach (var rootGameObject in previousScene.GetRootGameObjects())
+            var sceneName = sceneParameter.SceneName.ToString();
+
+            // 遷移中の二重遷移を防ぐ。例外・キャンセルで抜けても受付を戻すため finally で解除する
+            _backKeyInput.SetBlock(true);
+            try
             {
-                var previousComponent = rootGameObject.GetComponent<SceneMainBase>();
-                if (previousComponent == null)
+                await LeavePreviousSceneAsync(cancellationToken);
+                await CoverScreenAsync().AttachExternalCancellation(cancellationToken);
+
+                // 新シーンの LifetimeScope が生成される瞬間だけ親を積む
+                using (LifetimeScope.EnqueueParent(_parentScope))
                 {
-                    continue;
+                    await SceneManager.LoadSceneAsync(sceneName, mode).ToUniTask(cancellationToken: cancellationToken);
                 }
 
-                await previousComponent.TransitionAsync().AttachExternalCancellation(cancellationToken);
-                await FadeInAsync().AttachExternalCancellation(cancellationToken);
-                previousComponent.Leave();
-                break;
+                await EnterNewSceneAsync(sceneName, sceneParameter, cancellationToken);
             }
-
-            SceneManager.LoadScene(sceneName, mode);
-            // Wait until the new scene is fully active before proceeding with its lifecycle.
-            await UniTask.WaitUntil(
-                () => SceneManager.GetActiveScene().name == sceneName,
-                cancellationToken: cancellationToken);
-
-            var currentScene = SceneManager.GetActiveScene();
-            foreach (var gameObjectInstance in currentScene.GetRootGameObjects())
+            finally
             {
-                var component = gameObjectInstance.GetComponent<SceneMainBase>();
-                if (component == null)
-                {
-                    continue;
-                }
+                _backKeyInput.SetBlock(false);
+            }
+        }
 
-                component.SetParameter(sceneParameter);
-                component.Setup();
-                _ = component.Initialize();
-                await component.PreEnterAsync().AttachExternalCancellation(cancellationToken);
-                await FadeOutAsync().AttachExternalCancellation(cancellationToken);
-                component.Enter();
-                break;
+        /// <summary>前シーンの SceneMainBase があれば退場処理を走らせる。無いシーンではスキップする。</summary>
+        private static async UniTask LeavePreviousSceneAsync(CancellationToken cancellationToken)
+        {
+            var previous = FindSceneMain(SceneManager.GetActiveScene());
+            if (previous == null)
+            {
+                return;
             }
 
-            BackKeyInputManager.Instance.SetBlock(false);
+            await previous.TransitionAsync().AttachExternalCancellation(cancellationToken);
+            previous.Leave();
+        }
+
+        /// <summary>新シーンの SceneMainBase があれば入場処理を走らせる。明転はその準備が済んでから行う。</summary>
+        private async UniTask EnterNewSceneAsync(string sceneName, SceneParameterBase sceneParameter, CancellationToken cancellationToken)
+        {
+            var current = FindSceneMain(SceneManager.GetSceneByName(sceneName));
+            if (current == null)
+            {
+                await RevealScreenAsync().AttachExternalCancellation(cancellationToken);
+                return;
+            }
+
+            current.SetParameter(sceneParameter);
+            current.Setup();
+            current.Initialize();
+            await current.PreEnterAsync().AttachExternalCancellation(cancellationToken);
+            await RevealScreenAsync().AttachExternalCancellation(cancellationToken);
+            current.Enter();
         }
 
         /// <summary>
-        /// Runs the boot sequence for the initial scene. No-op if already booted.
+        /// 起動シーンの入場処理を走らせる。既に実行済みなら何もしない。
         /// </summary>
         public async UniTask ExecuteBootSequence()
         {
@@ -204,37 +209,44 @@ namespace UniLab.Scene
                 return;
             }
 
-            var currentScene = SceneManager.GetActiveScene();
-            foreach (var rootGameObject in currentScene.GetRootGameObjects())
+            var current = FindSceneMain(SceneManager.GetActiveScene());
+            if (current != null)
             {
-                var currentComponent = rootGameObject.GetComponent<SceneMainBase>();
-                if (currentComponent == null)
+                current.Setup();
+                var alreadyInitialized = current.Initialize();
+                if (!alreadyInitialized)
                 {
-                    continue;
+                    await current.PreEnterAsync();
+                    await RevealScreenAsync();
+                    current.Enter();
+                    await current.TransitionAsync();
                 }
-
-                currentComponent.Setup();
-                var initialized = currentComponent.Initialize();
-                if (initialized)
-                {
-                    break;
-                }
-
-                await currentComponent.PreEnterAsync();
-                await FadeOutAsync();
-                currentComponent.Enter();
-                await currentComponent.TransitionAsync();
-
-                break;
             }
 
             IsBoot = true;
         }
 
-        protected override void OnDispose()
+        /// <summary>
+        /// シーンのルートから SceneMainBase を探す。シーンごとに高々1つの前提。
+        /// ルート直下の限られた数だけを見るため、遷移時1回の探索コストは許容する。
+        /// </summary>
+        private static SceneMainBase FindSceneMain(UnityEngine.SceneManagement.Scene scene)
         {
-            _updateDisposable?.Dispose();
-            _updateDisposable = null;
+            if (!scene.IsValid())
+            {
+                return null;
+            }
+
+            foreach (var rootGameObject in scene.GetRootGameObjects())
+            {
+                var sceneMain = rootGameObject.GetComponent<SceneMainBase>();
+                if (sceneMain != null)
+                {
+                    return sceneMain;
+                }
+            }
+
+            return null;
         }
     }
 }

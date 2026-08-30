@@ -33,6 +33,8 @@ public sealed class UniLabSampleScene : MonoBehaviour
     // ----- Inspector -----
 
     [Header("Prefab-required features (toggle on after wiring the manager prefab)")]
+    // シングルトン経由の取得をやめたため、サンプルシーンでも Inspector で結線する
+    [SerializeField] private BackKeyInputManager _backKeyInputManager = null;
     [SerializeField] private bool _hasToastManager = false;
     [SerializeField] private bool _hasLoadingManager = false;
 
@@ -131,7 +133,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         // Echo back-key presses (Android only; Observable always available)
         _disposables.Add(
-            BackKeyInputManager.Instance.OnPressBackKey
+            _backKeyInputManager.OnPressBackKey
                 .Subscribe(_ => Log("[BackKey] Back pressed")));
 
         Log("UniLab Sample ready. Tap any button to demo a feature.");
@@ -473,7 +475,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
     private void DemoBackKeyToggleBlock()
     {
-        var manager = BackKeyInputManager.Instance;
+        var manager = _backKeyInputManager;
         manager.SetBlock(!manager.IsBlocked);
         Log($"[BackKey] IsBlocked={manager.IsBlocked} (Android only; Observable always active)");
         UpdateStatus(

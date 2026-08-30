@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
+using UniLab.Input;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,6 +25,7 @@ namespace UniLab.UI.Popup.Sample
         [SerializeField] private Button _sequenceButton = null;
         [SerializeField] private Button _stackButton = null;
         [SerializeField] private CanvasGroup _buttonGroup = null;
+        [SerializeField] private BackKeyInputManager _backKeyInput = null;
 
         private IPopupService _popupService = null;
         private PopupBackKeyHandler _backKeyHandler = null;
@@ -36,7 +38,8 @@ namespace UniLab.UI.Popup.Sample
             var viewProvider = new PopupViewProvider(new ResourcesPopupAssetLoader(), _popupRoot);
             _popupService = new PopupService(viewProvider, _dimmer);
             // 非 DI 環境のため手動で生成・購読開始する。DI 環境では PopupInstaller が代行する
-            _backKeyHandler = new PopupBackKeyHandler(_popupService);
+            _backKeyInput.Initialize();
+            _backKeyHandler = new PopupBackKeyHandler(_popupService, new BackKeyInputPopupBackKeySource(_backKeyInput));
             _backKeyHandler.Start();
         }
 
