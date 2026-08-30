@@ -5,8 +5,9 @@ namespace UniLab.UI.Popup
 {
     /// <summary>
     /// Popup 基盤の DI 登録をまとめる Installer。IPopupService と バックキー連携を登録する。
-    /// IPopupViewProvider は供給手段（Resources / Addressables / SerializeField）が利用側依存のため、
-    /// 呼び出し側の LifetimeScope で別途登録すること。
+    /// 利用側の LifetimeScope で以下の 2 つを別途登録すること。
+    /// ・IPopupViewProvider — 供給手段（Resources / Addressables / SerializeField）が利用側依存のため
+    /// ・IPopupBackKeySource — 何を「閉じる操作」とみなすか（戻るキー / Ⓑ / Esc）が利用側依存のため
     /// </summary>
     public sealed class PopupInstaller : IInstaller
     {

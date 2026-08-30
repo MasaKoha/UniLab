@@ -1,5 +1,6 @@
 using Cysharp.Threading.Tasks;
 using R3;
+using UniLab.UI.Focus;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -78,6 +79,22 @@ namespace UniLab.UI.Popup
                 _canvasGroup.interactable = interactable;
             }
         }
+
+        /// <summary>
+        /// このポップアップのフォーカス配置を組み立てる。パッド／キーボードで操作するプロジェクトで override する。
+        /// null を返した場合 PopupService はフォーカス制御を行わない（ポインタ専用プロジェクトの既定）。
+        /// 表示のたびに呼ばれるため、ボタンの表示数が可変でも実際の並びを返せる。
+        /// </summary>
+        public virtual FocusGrid BuildFocusGrid()
+        {
+            return null;
+        }
+
+        /// <summary>
+        /// 開いた直後にフォーカスを当てる要素。null なら PopupService はフォーカスを移動せず、
+        /// グリッドを積むだけに留める。肯定側ボタンを初期選択にしたい場合などに override する。
+        /// </summary>
+        public virtual Selectable InitialFocus => null;
 
         /// <summary>派生クラス固有の初期化。Parameter 設定後に呼ばれる。</summary>
         protected abstract void OnInitialize();

@@ -31,6 +31,17 @@ namespace UniLab.UI.Focus
         /// <summary>スタック最上位のアクティブグリッド。空なら null。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
         public FocusGrid ActiveGrid => _gridStack.Count == 0 ? null : _gridStack[_gridStack.Count - 1];
 
+        /// <inheritdoc/>
+        public Selectable CurrentSelected
+        {
+            get
+            {
+                // Initialize 前や、選択が外れている（画面遷移直後など）ケースがあるため素直に null を返す
+                var selectedObject = _eventSystem == null ? null : _eventSystem.currentSelectedGameObject;
+                return selectedObject == null ? null : selectedObject.GetComponent<Selectable>();
+            }
+        }
+
         /// <summary>上下移動で維持している列記憶。可視化・デバッグ用途で外部から位相を読むために公開する。</summary>
         /// <inheritdoc/>
         public bool FocusNonInteractable => _focusNonInteractable;
