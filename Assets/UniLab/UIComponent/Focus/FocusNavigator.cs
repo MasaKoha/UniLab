@@ -58,12 +58,16 @@ namespace UniLab.UI.Focus
         /// <inheritdoc/>
         public void PopGrid(FocusGrid grid)
         {
-            if (_gridStack.Count == 0 || _gridStack[_gridStack.Count - 1] != grid)
+            // 最上位一致のときだけ降ろす方式だと、他のグリッドが上に積まれている間に再構築が走った場合に
+            // 古いグリッドが降ろされず埋もれて積み残る（実機でスタックが6枚まで育った）。
+            // 所有者が「自分のグリッドを降ろす」意図は位置に依らないため、どこにあっても取り除く。
+            var index = _gridStack.LastIndexOf(grid);
+            if (index < 0)
             {
                 return;
             }
 
-            _gridStack.RemoveAt(_gridStack.Count - 1);
+            _gridStack.RemoveAt(index);
         }
 
         /// <inheritdoc/>

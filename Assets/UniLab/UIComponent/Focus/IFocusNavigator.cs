@@ -12,7 +12,7 @@ namespace UniLab.UI.Focus
         /// <summary>アクティブなグリッドを積む。候補パネル等の一時的なフォーカス領域はこれで切り替える。</summary>
         void PushGrid(FocusGrid grid);
 
-        /// <summary>積んだグリッドを降ろす。指定グリッドがスタック最上位でない場合は何もしない。</summary>
+        /// <summary>積んだグリッドを降ろす。スタックのどこにあっても取り除く（積まれていなければ何もしない）。</summary>
         void PopGrid(FocusGrid grid);
 
         /// <summary>指定 Selectable を選択状態にし、列記憶を同期する。</summary>
