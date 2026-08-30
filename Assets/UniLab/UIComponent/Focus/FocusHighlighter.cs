@@ -21,20 +21,18 @@ namespace UniLab.UI.Focus
 
         private readonly CompositeDisposable _disposables = new();
         private GameObject _lastSelectedGameObject;
+
+        // EventSystem はシーンごとに生成・破棄されるため、シーンをまたいで参照を持ち越さないよう
+        // 初期化時にそのシーンのものを受け取る
         private EventSystem _eventSystem;
 
         /// <summary>
-        /// 操作対象の EventSystem を差し替える。各シーンの初期化時に、そのシーンの
-        /// EventSystem を渡して呼ぶ。
+        /// 操作対象の EventSystem を受け取り、初期表示状態の設定と毎フレーム追従の購読を開始する。
+        /// このシーンの Presenter が初期化時に一度だけ呼ぶ。
         /// </summary>
-        public void SetEventSystem(EventSystem eventSystem)
+        public void Initialize(EventSystem eventSystem)
         {
             _eventSystem = eventSystem;
-        }
-
-        /// <summary>AppEntryPoint から呼ばれる。初期表示状態の設定と毎フレーム追従の購読を開始する。</summary>
-        public void Initialize()
-        {
             _highlightVisualRoot.SetActive(false);
             EnsureIgnoreLayout();
 

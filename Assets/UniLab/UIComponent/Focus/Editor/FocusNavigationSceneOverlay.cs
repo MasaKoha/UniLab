@@ -3,6 +3,7 @@ using UniLab.UI.Focus;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace UniLab.UI.Focus.Editor
 {
@@ -124,37 +125,57 @@ namespace UniLab.UI.Focus.Editor
             var worldCorners = new Vector3[4];
             rectTransform.GetWorldCorners(worldCorners);
 
-            var isEnabled = activeGrid.IsEnabled(cell);
-            var faceColor = ResolveFaceColor(isEnabled, isCurrentCell);
-            var outlineColor = ResolveOutlineColor(isEnabled, isCurrentCell);
+            // 「非アクティブ」「押せない（枠は乗る）」「通常」の3状態を区別するため、FocusGrid の有効判定ではなく
+            // Selectable の実状態を直接見る。現在セルはこれらの状態に関わらず黄色で強調する。
+            var isInactive = !selectable.gameObject.activeInHierarchy;
+            var isNonInteractable = !isInactive && !selectable.IsInteractable();
+
+            var faceColor = ResolveFaceColor(isCurrentCell, isInactive, isNonInteractable);
+            var outlineColor = ResolveOutlineColor(isCurrentCell, isInactive, isNonInteractable);
             Handles.DrawSolidRectangleWithOutline(worldCorners, faceColor, outlineColor);
 
             var labelPosition = (worldCorners[0] + worldCorners[2]) * 0.5f;
             Handles.Label(labelPosition, $"({cell.RowIndex},{cell.ColumnIndex})");
         }
 
-        private static Color ResolveFaceColor(bool isEnabled, bool isCurrentCell)
+        private static Color ResolveFaceColor(bool isCurrentCell, bool isInactive, bool isNonInteractable)
         {
             if (isCurrentCell)
             {
                 return new Color(1f, 0.92f, 0.1f, 0.35f);
             }
 
-            return isEnabled
-                ? new Color(0f, 1f, 1f, 0.2f)
-                : new Color(0.5f, 0.5f, 0.5f, 0.2f);
+            if (isInactive)
+            {
+                return new Color(0.3f, 0.3f, 0.3f, 0.2f);
+            }
+
+            if (isNonInteractable)
+            {
+                return new Color(0.7f, 0.5f, 0.2f, 0.2f);
+            }
+
+            return new Color(0f, 1f, 1f, 0.2f);
         }
 
-        private static Color ResolveOutlineColor(bool isEnabled, bool isCurrentCell)
+        private static Color ResolveOutlineColor(bool isCurrentCell, bool isInactive, bool isNonInteractable)
         {
             if (isCurrentCell)
             {
                 return new Color(1f, 0.92f, 0.1f, 1f);
             }
 
-            return isEnabled
-                ? new Color(0f, 1f, 1f, 0.8f)
-                : new Color(0.5f, 0.5f, 0.5f, 0.6f);
+            if (isInactive)
+            {
+                return new Color(0.3f, 0.3f, 0.3f, 0.6f);
+            }
+
+            if (isNonInteractable)
+            {
+                return new Color(0.7f, 0.5f, 0.2f, 0.8f);
+            }
+
+            return new Color(0f, 1f, 1f, 0.8f);
         }
 
         private static void DrawResolvedDirectionLines(FocusNavigator focusNavigator, FocusGrid activeGrid, FocusCell currentCell)
@@ -168,7 +189,7 @@ namespace UniLab.UI.Focus.Editor
 
         private static void DrawResolvedDirectionLine(FocusNavigator focusNavigator, FocusGrid activeGrid, FocusCell currentCell, Vector3 currentCenter, FocusDirection direction)
         {
-            if (!activeGrid.TryResolve(currentCell, focusNavigator.DesiredColumnIndex, direction, out var nextCell))
+            if (!activeGrid.TryResolve(currentCell, focusNavigator.DesiredColumnIndex, direction, focusNavigator.FocusNonInteractable, out var nextCell))
             {
                 return;
             }

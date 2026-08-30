@@ -60,9 +60,9 @@ namespace UniLab.UI.Focus
         /// 指定セルが現時点で選択可能かを返す。呼び出しのたびに再計算する。
         /// 可視化・デバッグ用途で外部から位相を読むために公開する。
         /// </summary>
-        public bool IsEnabled(FocusCell cell)
+        public bool IsEnabled(FocusCell cell, bool includeNonInteractable)
         {
-            RefreshEnabledFlags();
+            RefreshEnabledFlags(includeNonInteractable);
             return _gridModel.IsEnabled(cell);
         }
 
@@ -87,9 +87,14 @@ namespace UniLab.UI.Focus
         }
 
         /// <summary>current から direction 方向へ移動した先の有効セルを解決する。</summary>
-        public bool TryResolve(FocusCell current, int desiredColumnIndex, FocusDirection direction, out FocusCell next)
+        public bool TryResolve(
+            FocusCell current,
+            int desiredColumnIndex,
+            FocusDirection direction,
+            bool includeNonInteractable,
+            out FocusCell next)
         {
-            RefreshEnabledFlags();
+            RefreshEnabledFlags(includeNonInteractable);
             return _gridModel.TryResolve(current, desiredColumnIndex, direction, out next);
         }
 
@@ -99,12 +104,15 @@ namespace UniLab.UI.Focus
             return _rows[cell.RowIndex][cell.ColumnIndex];
         }
 
-        /// <summary>先頭の有効セルに対応する Selectable を返す。見つからなければ false。</summary>
-        public bool TryGetFirstSelectable(out Selectable selectable)
+        /// <summary>
+        /// startRowIndex 行目以降で最初の有効セルに対応する Selectable を返す。見つからなければ false。
+        /// タブバー行を飛ばして中身の先頭へフォーカスする用途で開始行を指定する。
+        /// </summary>
+        public bool TryGetFirstSelectable(bool includeNonInteractable, int startRowIndex, out Selectable selectable)
         {
-            RefreshEnabledFlags();
+            RefreshEnabledFlags(includeNonInteractable);
 
-            if (_gridModel.TryGetFirstEnabledCell(out var cell))
+            if (_gridModel.TryGetFirstEnabledCell(startRowIndex, out var cell))
             {
                 selectable = GetSelectable(cell);
                 return true;
@@ -115,10 +123,13 @@ namespace UniLab.UI.Focus
         }
 
         /// <summary>
-        /// 全 Selectable の現在の有効状態（アクティブかつ操作可能か）を毎回再計算する。
+        /// 全 Selectable の現在の有効状態を毎回再計算する。
         /// 表示更新のたびに結線をやり直す必要がなくなる代わりに、方向解決の直前に必ず呼ぶ。
+        /// includeNonInteractable が true のときは interactable=false のセルもフォーカス対象に含める
+        /// （押せないボタンでも枠が乗ることで、そこに項目があること自体は伝わるため）。
+        /// 非アクティブ（SetActive(false)）なセルは見えていないので常に除外する。
         /// </summary>
-        private void RefreshEnabledFlags()
+        private void RefreshEnabledFlags(bool includeNonInteractable)
         {
             // perf: 行の要素数は固定なので既存配列を書き換えるだけにし、new を発生させない
             for (var rowIndex = 0; rowIndex < _rows.Count; rowIndex++)
@@ -129,7 +140,8 @@ namespace UniLab.UI.Focus
                 for (var columnIndex = 0; columnIndex < row.Count; columnIndex++)
                 {
                     var selectable = row[columnIndex];
-                    flags[columnIndex] = selectable.gameObject.activeInHierarchy && selectable.IsInteractable();
+                    flags[columnIndex] = selectable.gameObject.activeInHierarchy
+                        && (includeNonInteractable || selectable.IsInteractable());
                 }
             }
         }

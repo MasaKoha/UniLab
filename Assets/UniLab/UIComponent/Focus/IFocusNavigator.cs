@@ -18,16 +18,22 @@ namespace UniLab.UI.Focus
         /// <summary>指定 Selectable を選択状態にし、列記憶を同期する。</summary>
         void SetSelected(Selectable selectable);
 
-        /// <summary>アクティブグリッドの先頭有効セルへフォーカスする。</summary>
-        void FocusFirst();
-
-        /// <summary>方向入力ストリームを購読して方向解決を開始する。所有者が初期化時に一度だけ呼ぶ。</summary>
-        void Initialize(Observable<FocusDirection> moveStream);
+        /// <summary>
+        /// アクティブグリッドの startRowIndex 行目以降で最初の有効セルへフォーカスする。
+        /// タブバーのような共通行を先頭に持つ画面では、その行数を渡して中身の先頭へ移す。
+        /// </summary>
+        void FocusFirst(int startRowIndex);
 
         /// <summary>
-        /// 操作対象の EventSystem を差し替える。EventSystem はシーンごとに入れ替わるため、
-        /// 各シーンの初期化時に、そのシーンの EventSystem を渡して呼ぶ。
+        /// 方向入力ストリームと操作対象の EventSystem を受け取り、方向解決を開始する。
+        /// このシーンの Presenter が初期化時に一度だけ呼ぶ。
         /// </summary>
-        void SetEventSystem(EventSystem eventSystem);
+        void Initialize(Observable<FocusDirection> moveStream, EventSystem eventSystem, bool focusNonInteractable);
+
+        /// <summary>
+        /// 押せない項目（interactable=false）にもフォーカスを乗せるか。Initialize で決まる。
+        /// 可視化ツールが解決結果を再現するために公開する。
+        /// </summary>
+        bool FocusNonInteractable { get; }
     }
 }

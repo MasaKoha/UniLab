@@ -39,10 +39,14 @@ namespace UniLab.UI.Focus
             return _rows[cell.RowIndex][cell.ColumnIndex];
         }
 
-        /// <summary>先頭行から順に走査し、最初に見つかった有効セルを返す。</summary>
-        public bool TryGetFirstEnabledCell(out FocusCell cell)
+        /// <summary>
+        /// startRowIndex 行目から順に走査し、最初に見つかった有効セルを返す。
+        /// タブバーのような共通行を先頭に持つグリッドで、その行を飛ばして
+        /// 中身の先頭へフォーカスするために開始行を指定できるようにしている。
+        /// </summary>
+        public bool TryGetFirstEnabledCell(int startRowIndex, out FocusCell cell)
         {
-            for (var rowIndex = 0; rowIndex < RowCount; rowIndex++)
+            for (var rowIndex = startRowIndex; rowIndex < RowCount; rowIndex++)
             {
                 var columnCount = GetColumnCount(rowIndex);
                 for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
