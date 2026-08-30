@@ -7,14 +7,17 @@ using System.Text;
 using Cysharp.Threading.Tasks;
 using MessagePack;
 using R3;
-using UniLab.Common;
 using UniLab.Common.Utility;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace UniLab.MasterData
 {
-    public abstract class MasterManager<T> : SingletonPureClass<T> where T : MasterManager<T>, new()
+    /// <summary>
+    /// マスタの取得・復号・保持を担う基底。派生クラスが MasterList で対象型を列挙する。
+    /// 利用側の LifetimeScope で派生型を Singleton 登録する。
+    /// </summary>
+    public abstract class MasterManager
     {
         private const string MasterExtension = ".master";
         private const string CatalogExtension = ".catalog";

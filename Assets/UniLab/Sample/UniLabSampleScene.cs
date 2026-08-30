@@ -21,7 +21,7 @@ namespace UniLab.Sample
 /// Self-contained demo for every public UniLab API.
 /// Attach to any GameObject in an empty scene and press Play.
 ///
-/// Features marked [Prefab Required] need the corresponding Singleton prefab
+/// Features marked [Prefab Required] need the corresponding manager prefab
 /// placed in the scene with its Inspector fields wired:
 ///   - ToastManager          : _toastPrefab / _toastRoot
 ///   - LoadingOverlayManager : _overlayRoot
@@ -35,8 +35,13 @@ public sealed class UniLabSampleScene : MonoBehaviour
     [Header("Prefab-required features (toggle on after wiring the manager prefab)")]
     // シングルトン経由の取得をやめたため、サンプルシーンでも Inspector で結線する
     [SerializeField] private BackKeyInputManager _backKeyInputManager = null;
+    [SerializeField] private ToastManager _toastManager = null;
+    [SerializeField] private LoadingOverlayManager _loadingOverlayManager = null;
     [SerializeField] private bool _hasToastManager = false;
     [SerializeField] private bool _hasLoadingManager = false;
+
+    // 静的クラスをやめたため、サンプル内で1つ持ち回る
+    private readonly InputBlockManager _inputBlockManager = new();
 
     // ----- Screen state -----
 
@@ -128,8 +133,13 @@ public sealed class UniLabSampleScene : MonoBehaviour
                 .Subscribe(r => Log($"[Network] Reachability → {r}")));
 
         // Echo InputBlockManager events
-        _disposables.Add(InputBlockManager.OnShow.Subscribe(_ => Log("[InputBlock] Blocked")));
-        _disposables.Add(InputBlockManager.OnHide.Subscribe(_ => Log("[InputBlock] Unblocked")));
+        _disposables.Add(_inputBlockManager.OnShow.Subscribe(_ => Log("[InputBlock] Blocked")));
+        _disposables.Add(_inputBlockManager.OnHide.Subscribe(_ => Log("[InputBlock] Unblocked")));
+
+        if (_hasLoadingManager)
+        {
+            _loadingOverlayManager.Initialize(_inputBlockManager);
+        }
 
         // Echo back-key presses (Android only; Observable always available)
         _disposables.Add(
@@ -266,13 +276,13 @@ public sealed class UniLabSampleScene : MonoBehaviour
         {
             _inputBlockHandle.Dispose();
             _inputBlockHandle = null;
-            Log($"[InputBlock] Released. BlockedInput={InputBlockManager.BlockedInput}");
+            Log($"[InputBlock] Released. BlockedInput={_inputBlockManager.BlockedInput}");
             UpdateStatus("Input: Open", StatusColorSuccess);
         }
         else
         {
-            _inputBlockHandle = InputBlockManager.CreateInputBlock();
-            Log($"[InputBlock] Created. BlockedInput={InputBlockManager.BlockedInput}");
+            _inputBlockHandle = _inputBlockManager.CreateInputBlock();
+            Log($"[InputBlock] Created. BlockedInput={_inputBlockManager.BlockedInput}");
             UpdateStatus("Input: BLOCKED", StatusColorError);
         }
     }
@@ -429,7 +439,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
         try
         {
-            ToastManager.Instance.Show(message, type);
+            _toastManager.Show(message, type);
             Log($"[Toast] Shown ({type}): {message}");
             UpdateStatus($"Last: {type}\n\"{message}\"", StatusColorSuccess);
         }
@@ -457,7 +467,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
     {
         try
         {
-            using var handle = LoadingOverlayManager.Instance.Show();
+            using var handle = _loadingOverlayManager.Show();
             UpdateStatus("Overlay: Visible", StatusColorWarning);
             Log("[Loading] Overlay shown (1.5 s)...");
             await UniTask.Delay(1500, cancellationToken: destroyCancellationToken);

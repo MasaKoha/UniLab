@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UniLab.Common;
 using UnityEngine;
 using UnityEngine.Audio;
 
@@ -28,10 +27,10 @@ namespace UniLab.Audio
     }
 
     /// <summary>
-    /// Singleton manager for BGM, SE, and voice playback via AudioMixer channels.
-    /// Call Initialize() once with AudioCount and AudioSettings before playing audio.
+    /// <see cref="ISoundPlayManager"/> の実装。AudioMixer のチャンネル経由で BGM / SE / ボイスを鳴らす。
+    /// 常駐オブジェクトに載せ、利用側の LifetimeScope で登録する。再生前に Initialize() を呼ぶこと。
     /// </summary>
-    public class SoundPlayManager : SingletonMonoBehaviour<SoundPlayManager>
+    public class SoundPlayManager : MonoBehaviour, ISoundPlayManager
     {
         [SerializeField] private AudioMixer _audioMixer = null;
         [SerializeField] private AudioMixerGroup _seMixerGroup = null;
@@ -43,11 +42,7 @@ namespace UniLab.Audio
         private readonly List<AudioSource> _voiceSource = new();
         private bool _isInitialized = false;
 
-        protected override void OnAwake()
-        {
-            SetDontDestroyOnLoad();
-        }
-
+        /// <inheritdoc/>
         public void Initialize(AudioCount audioCount, AudioSettings audioSettings)
         {
             if (_isInitialized)

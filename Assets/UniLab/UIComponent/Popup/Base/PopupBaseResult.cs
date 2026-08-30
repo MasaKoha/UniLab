@@ -8,7 +8,13 @@ namespace UniLab.UI.Popup
     /// </summary>
     public abstract class PopupBase<TResult> : PopupBase
     {
-        private readonly UniTaskCompletionSource<TResult> _resultSource = new();
+        private UniTaskCompletionSource<TResult> _resultSource = new();
+
+        /// <summary>前回の結果を捨て、今回の表示用に結果待ちを作り直す。</summary>
+        protected override void OnPrepare()
+        {
+            _resultSource = new UniTaskCompletionSource<TResult>();
+        }
 
         /// <summary>結果を確定する。ボタン操作や OnClose から呼ぶ。</summary>
         protected void SetResult(TResult result)
