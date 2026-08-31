@@ -5,6 +5,7 @@ namespace UniLab.Input
     /// <summary>
     /// 「戻る」入力の契約。シーンマネージャが履歴を戻す判断に使う。
     /// 実装を DI で差し替えられるようにし、静的シングルトン経由の取得を不要にする。
+    /// 実装は Platform/ に置く（Android=<see cref="AndroidBackKeyInput"/> / それ以外=<see cref="NullBackKeyInput"/>）。
     /// </summary>
     public interface IBackKeyInput
     {

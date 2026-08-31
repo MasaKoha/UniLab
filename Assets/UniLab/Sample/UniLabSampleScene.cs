@@ -34,7 +34,7 @@ public sealed class UniLabSampleScene : MonoBehaviour
 
     [Header("Prefab-required features (toggle on after wiring the manager prefab)")]
     // シングルトン経由の取得をやめたため、サンプルシーンでも Inspector で結線する
-    [SerializeField] private BackKeyInputManager _backKeyInputManager = null;
+    [SerializeField] private AndroidBackKeyInput _backKeyInputManager = null;
     [SerializeField] private ToastManager _toastManager = null;
     [SerializeField] private LoadingOverlayManager _loadingOverlayManager = null;
     [SerializeField] private bool _hasToastManager = false;

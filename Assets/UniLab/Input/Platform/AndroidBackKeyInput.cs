@@ -7,11 +7,11 @@ using UnityEngine.InputSystem;
 namespace UniLab.Input
 {
     /// <summary>
-    /// <see cref="IBackKeyInput"/> の実装。Android の戻るキー（Input System では Escape として届く）を監視する。
+    /// Android の戻るキーを監視する <see cref="IBackKeyInput"/> 実装。
+    /// Input System では戻るキーが Escape として届くため、それを毎フレーム見る。
     /// 常駐オブジェクトに載せ、利用側の LifetimeScope で <see cref="IBackKeyInput"/> として登録する。
-    /// Android 以外では監視を行わず、Observable は一度も発火しない。
     /// </summary>
-    public sealed class BackKeyInputManager : MonoBehaviour, IBackKeyInput, IDisposable
+    public sealed class AndroidBackKeyInput : MonoBehaviour, IBackKeyInput, IDisposable
     {
         private readonly Subject<Unit> _onPressBackKey = new();
         private readonly CompositeDisposable _disposables = new();
@@ -25,13 +25,11 @@ namespace UniLab.Input
         /// <inheritdoc/>
         public void Initialize()
         {
-#if UNITY_ANDROID
             // Awake/Update に頼らず、所有者が明示的に呼ぶタイミングで監視を始める
             this.UpdateAsObservable()
                 .Where(_ => Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 .Subscribe(_ => GoBack())
                 .AddTo(_disposables);
-#endif
         }
 
         /// <inheritdoc/>

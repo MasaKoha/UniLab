@@ -122,6 +122,45 @@ Repository（純粋 C# クラス、VContainer 注入）
 
 ---
 
+## プラットフォーム対応
+
+**原則: モジュールはプラットフォーム非依存に書く。** 差異が出る箇所はインターフェースで抽象化し、
+実装だけを各モジュール配下の `Platform/` に置く（`Notification/Platform/` が基準となる形）。
+
+トップレベルを `Mobile/` `PC/` `Common/` のようにプラットフォームで割ることはしない。
+機能の凝集度を、プラットフォームという直交する軸で壊してしまうため。
+実際に差異があるのは全体のごく一部で、割る側のコストが見合わない。
+
+### モジュール別の対応状況
+
+| モジュール | PC | モバイル | 備考 |
+|---|---|---|---|
+| SceneManager | ○ | ○ | 「戻る」入力は `IBackKeyInput` で注入する |
+| UIComponent（Focus / Popup / Loading / Toast / Tween / Transition） | ○ | ○ | |
+| UIComponent（`UISafeArea`） | ○ | ○ | PC では `Screen.safeArea` が画面全体になり実質何もしない |
+| UIComponent（`SwipeDetector`） | ○ | ○ | PC はマウスドラッグ、モバイルはタッチ。`ISwipeInputReader` で分岐 |
+| Input（`IBackKeyInput`） | ○ | ○ | PC は何もしない実装を登録する（→ `NullBackKeyInput`） |
+| Notification | △ | ○ | PC は `StandaloneNotification`（ログ出力のみ）。実通知はモバイルのみ |
+| MasterData | ○ | ○ | StreamingAssets の読み方が Android だけ異なる（`IStreamingAssetsReader`） |
+| Persistence | ○ | ○ | |
+| AssetVault | ○ | ○ | |
+| Network / Auth / Localization / Audio / Banner / Indicator / Debug / Common | ○ | ○ | |
+
+○＝そのまま使える / △＝動くが機能が縮退する
+
+### プラットフォーム差異のある実装
+
+| 抽象 | PC 実装 | モバイル実装 |
+|---|---|---|
+| `ILocalMobileNotification` | `StandaloneNotification` | `AndroidMobileNotification` / `IOSMobileNotification` |
+| `ISwipeInputReader` | `MouseSwipeInputReader` | `TouchSwipeInputReader` |
+| `IBackKeyInput` | `NullBackKeyInput` | `AndroidBackKeyInput` |
+| `IStreamingAssetsReader` | `FileStreamingAssetsReader` | `WebRequestStreamingAssetsReader`（Android） |
+
+利用側は上の抽象だけを見て、実装の選択は LifetimeScope の登録で行う。
+
+---
+
 ### 拡張・新規追加予定
 
 #### UniLab.UI
