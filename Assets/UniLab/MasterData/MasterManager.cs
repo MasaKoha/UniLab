@@ -33,6 +33,17 @@ namespace UniLab.MasterData
         /// </summary>
         protected virtual string LocalMasterSourceDirectory => Path.Combine(Application.streamingAssetsPath, MasterDirectoryName);
 
+        /// <summary>
+        /// StreamingAssets の読み取り手段。Android だけ圧縮 APK 内のため UnityWebRequest を使う。
+        /// テストで差し替えたい場合は override する。
+        /// </summary>
+        protected virtual IStreamingAssetsReader StreamingAssetsReader { get; } =
+#if UNITY_ANDROID && !UNITY_EDITOR
+            new WebRequestStreamingAssetsReader();
+#else
+            new FileStreamingAssetsReader();
+#endif
+
         // Stores masters by type
         private readonly Dictionary<Type, object> _masters = new();
         private readonly Subject<string> _onError = new();
@@ -104,29 +115,21 @@ namespace UniLab.MasterData
             }
         }
 
-        // Reads a local master binary. StreamingAssets lives inside the compressed APK on Android, where direct file
-        // IO is unavailable, so that platform must go through UnityWebRequest; every other platform uses plain file IO.
+        /// <summary>
+        /// ローカルのマスタバイナリを読む。読み方はプラットフォームで変わるため
+        /// <see cref="IStreamingAssetsReader"/> に委譲する（Android は圧縮 APK 内のため UnityWebRequest 経由）。
+        /// </summary>
         private async UniTask<byte[]> ReadAllBytesFromLocalSourceAsync(string path)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            using var request = UnityWebRequest.Get(path);
-            await request.SendWebRequest();
-            if (request.result != UnityWebRequest.Result.Success)
+            try
             {
-                var message = $"Failed to read local master: {path} => {request.error}";
-                _onError.OnNext(message);
-                throw new IOException(message);
+                return await StreamingAssetsReader.ReadAllBytesAsync(path);
             }
-
-            return request.downloadHandler.data;
-#else
-            if (!File.Exists(path))
+            catch (IOException exception)
             {
-                return null;
+                _onError.OnNext(exception.Message);
+                throw;
             }
-
-            return await File.ReadAllBytesAsync(path);
-#endif
         }
 
         public TMaster GetMaster<TMaster>() where TMaster : MasterBase

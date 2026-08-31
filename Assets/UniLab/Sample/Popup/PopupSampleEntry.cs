@@ -25,7 +25,7 @@ namespace UniLab.UI.Popup.Sample
         [SerializeField] private Button _sequenceButton = null;
         [SerializeField] private Button _stackButton = null;
         [SerializeField] private CanvasGroup _buttonGroup = null;
-        [SerializeField] private BackKeyInputManager _backKeyInput = null;
+        [SerializeField] private AndroidBackKeyInput _backKeyInput = null;
 
         private IPopupService _popupService = null;
         private PopupBackKeyHandler _backKeyHandler = null;
