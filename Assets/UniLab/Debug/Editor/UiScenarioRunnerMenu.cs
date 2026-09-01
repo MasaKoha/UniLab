@@ -37,6 +37,21 @@ namespace UniLab.Diagnostics.Editor
                 return;
             }
 
+            RunScenarioFile(selectedScenarioPath);
+        }
+
+        /// <summary>
+        /// パス指定でシナリオを開始する。ファイル選択ダイアログを出せない外部自動化
+        /// （MCP ブリッジ等）から利用側プロジェクトの固定メニューが呼ぶ入口。
+        /// </summary>
+        public static void RunScenarioFile(string scenarioPath)
+        {
+            if (EditorApplication.isPlaying)
+            {
+                UnityEngine.Debug.LogError("[UiScenarioRunner] Play 中は開始できません。");
+                return;
+            }
+
             var buildScenes = EditorBuildSettings.scenes;
             if (buildScenes == null || buildScenes.Length == 0)
             {
@@ -44,7 +59,7 @@ namespace UniLab.Diagnostics.Editor
                 return;
             }
 
-            SessionState.SetString(SessionStatePathKey, selectedScenarioPath);
+            SessionState.SetString(SessionStatePathKey, scenarioPath);
             EditorSceneManager.OpenScene(buildScenes[0].path, OpenSceneMode.Single);
             EditorApplication.EnterPlaymode();
         }

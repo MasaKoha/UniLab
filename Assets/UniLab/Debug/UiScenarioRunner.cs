@@ -260,7 +260,7 @@ namespace UniLab.Diagnostics
         private static GameObject FindByPathSegment(string objectPath)
         {
             var pathSegments = objectPath.Split('/');
-            var candidateTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var candidateTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude);
             for (var candidateIndex = 0; candidateIndex < candidateTransforms.Length; candidateIndex++)
             {
                 var candidateTransform = candidateTransforms[candidateIndex];
