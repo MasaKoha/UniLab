@@ -93,3 +93,6 @@ crashlytics-build.properties
 
 # Development devlog（ローカル限定、履歴から削除済み）
 /docs/devlog/
+
+# AI デバッグツールの出力
+/DebugOutput/
