@@ -25,6 +25,7 @@ namespace UniLab.AI
         public const string FrameListFileName = "frames.txt";
 
         private const string FrameFileNameFormat = "frame-{0:D5}.jpg";
+        private const string AudioFileName = "audio.wav";
         private const int JpegQuality = 90;
         private const int DefaultFramesPerSecond = 30;
         private const int BufferPoolSize = 4;
@@ -50,6 +51,7 @@ namespace UniLab.AI
         private readonly object _bufferPoolLock = new object();
         private readonly object _encodingTaskLock = new object();
 
+        private AudioRecorder _audioRecorder;
         private NativeArray<byte>[] _buffers;
         private RenderTexture _renderTexture;
         private string _outputDirectory;
@@ -71,6 +73,7 @@ namespace UniLab.AI
         private double _durationSeconds;
         private bool _hasOverriddenFrameRate;
         private bool _isRecording;
+        private bool _hasAudio;
         private bool _hasReleasedResources;
 
         /// <summary>
@@ -87,13 +90,13 @@ namespace UniLab.AI
         /// <summary>
         /// 録画を開始します。
         /// </summary>
-        public static VideoRecorder StartRecording(string outputDirectory, string name, int framesPerSecond = DefaultFramesPerSecond)
+        public static VideoRecorder StartRecording(string outputDirectory, string name, int framesPerSecond = DefaultFramesPerSecond, bool recordAudio = false)
         {
             var recorderObject = new GameObject(nameof(VideoRecorder));
             DontDestroyOnLoad(recorderObject);
 
             var recorder = recorderObject.AddComponent<VideoRecorder>();
-            recorder.Initialize(outputDirectory, name, framesPerSecond);
+            recorder.Initialize(outputDirectory, name, framesPerSecond, recordAudio);
             return recorder;
         }
 
@@ -127,6 +130,7 @@ namespace UniLab.AI
 
             StopCaptureLoop();
             _durationSeconds = Time.realtimeSinceStartupAsDouble - _recordingStartRealtime;
+            StopAudioRecording();
             RestoreFrameRateSettings();
             WaitForPendingWorkAndReleaseResources();
 
@@ -144,10 +148,11 @@ namespace UniLab.AI
             }
 
             RestoreFrameRateSettings();
+            StopAudioRecording();
             WaitForPendingWorkAndReleaseResources();
         }
 
-        private void Initialize(string outputDirectory, string name, int framesPerSecond)
+        private void Initialize(string outputDirectory, string name, int framesPerSecond, bool recordAudio)
         {
             _outputDirectory = outputDirectory ?? string.Empty;
             _name = string.IsNullOrEmpty(name) ? nameof(VideoRecorder) : name;
@@ -162,10 +167,31 @@ namespace UniLab.AI
 
             Directory.CreateDirectory(_outputDirectory);
             CreateCaptureResources(_capturedWidth, _capturedHeight);
+            StartAudioRecordingIfNeeded(recordAudio);
             OverrideFrameRateSettings();
 
             _isRecording = true;
             _captureCoroutine = StartCoroutine(CaptureFramesCoroutine());
+        }
+
+        private void StartAudioRecordingIfNeeded(bool recordAudio)
+        {
+            if (!recordAudio)
+            {
+                return;
+            }
+
+            _audioRecorder = new AudioRecorder();
+            var audioFilePath = Path.Combine(_outputDirectory, AudioFileName);
+            _hasAudio = _audioRecorder.StartRecording(audioFilePath);
+            if (_hasAudio)
+            {
+                return;
+            }
+
+            _audioRecorder.Dispose();
+            _audioRecorder = null;
+            UnityEngine.Debug.LogWarning($"[VideoRecorder] 音声録音を開始できませんでした。 path={audioFilePath}");
         }
 
         private void CreateCaptureResources(int width, int height)
@@ -227,6 +253,8 @@ namespace UniLab.AI
             {
                 yield return WaitForEndOfFrameYieldInstruction;
 
+                PumpAudioFrame();
+
                 var now = Time.realtimeSinceStartupAsDouble;
                 if (now - _lastCaptureRealtime < _targetFrameInterval * CaptureIntervalTolerance)
                 {
@@ -236,6 +264,16 @@ namespace UniLab.AI
                 _lastCaptureRealtime = now;
                 CaptureFrame(now - _recordingStartRealtime);
             }
+        }
+
+        private void PumpAudioFrame()
+        {
+            if (_audioRecorder == null || !_audioRecorder.IsRecording)
+            {
+                return;
+            }
+
+            _audioRecorder.PumpFrame();
         }
 
         private void CaptureFrame(double elapsedSeconds)
@@ -424,6 +462,23 @@ namespace UniLab.AI
             }
         }
 
+        private void StopAudioRecording()
+        {
+            if (_audioRecorder == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _audioRecorder.StopRecording();
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning($"[VideoRecorder] 音声録音の停止に失敗しました。 {exception.GetType().Name}: {exception.Message}");
+            }
+        }
+
         private VideoRecordingResult WriteManifestAndBuildResult()
         {
             WriteFrameListFile();
@@ -431,7 +486,7 @@ namespace UniLab.AI
             var manifestFilePath = Path.Combine(_outputDirectory, ManifestFileName);
             var manifestJson = JsonUtility.ToJson(manifest, true);
             File.WriteAllText(manifestFilePath, manifestJson);
-            return new VideoRecordingResult(manifest.name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, manifest.ffmpegCommand);
+            return new VideoRecordingResult(manifest.name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, manifest.ffmpegCommand, _hasAudio);
         }
 
         /// <summary>
@@ -483,8 +538,8 @@ namespace UniLab.AI
         private VideoRecordingResult BuildResult()
         {
             var manifestFilePath = Path.Combine(_outputDirectory ?? string.Empty, ManifestFileName);
-            var ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, _outputDirectory ?? string.Empty, _name ?? string.Empty, _durationSeconds);
-            return new VideoRecordingResult(_name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, ffmpegCommand);
+            var ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, _outputDirectory ?? string.Empty, _name ?? string.Empty, _durationSeconds, _hasAudio);
+            return new VideoRecordingResult(_name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, ffmpegCommand, _hasAudio);
         }
 
         private VideoRecordingManifest CreateManifest(string name, string outputDirectory)
@@ -498,18 +553,27 @@ namespace UniLab.AI
                 durationSeconds = (float)_durationSeconds,
                 width = _capturedWidth,
                 height = _capturedHeight,
+                hasAudio = _hasAudio,
+                audioSampleRate = _audioRecorder != null && _hasAudio ? _audioRecorder.SampleRate : 0,
+                audioChannelCount = _audioRecorder != null && _hasAudio ? _audioRecorder.ChannelCount : 0,
                 startedAtRealtime = _startedAtRealtime,
-                ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, outputDirectory, name, _durationSeconds),
+                ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, outputDirectory, name, _durationSeconds, _hasAudio),
                 markers = _markers.ToArray(),
             };
         }
 
         /// <summary>連番 JPG を mp4 へ変換する ffmpeg コマンドを組み立てる。変換の実行は呼び出し側が行う。</summary>
-        public static string CreateFfmpegCommand(int framesPerSecond, string outputDirectory, string name, double durationSeconds)
+        public static string CreateFfmpegCommand(int framesPerSecond, string outputDirectory, string name, double durationSeconds, bool hasAudio = false)
         {
             var frameListFilePath = Path.Combine(outputDirectory, FrameListFileName);
             var outputFilePath = Path.Combine(outputDirectory, $"{name}.mp4");
             var durationArgument = durationSeconds.ToString("F6", CultureInfo.InvariantCulture);
+
+            if (hasAudio)
+            {
+                var audioFilePath = Path.Combine(outputDirectory, AudioFileName);
+                return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -i \"{audioFilePath}\" -r {framesPerSecond} -t {durationArgument} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:a aac -shortest \"{outputFilePath}\"";
+            }
 
             return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -r {framesPerSecond} -t {durationArgument} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" \"{outputFilePath}\"";
         }

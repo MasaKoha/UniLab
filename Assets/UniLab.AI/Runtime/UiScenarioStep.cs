@@ -37,6 +37,9 @@ namespace UniLab.AI
         /// <summary>録画のフレームレート。0 以下のとき既定値（30）を使う。recordStart と同じステップに書く。</summary>
         public int recordFps;
 
+        /// <summary>true のとき録画に音声を含める。recordStart と同じステップに書く。</summary>
+        public bool recordAudio;
+
         /// <summary>
         /// 空でないとき、このステップの完了時に録画を停止し、この名前で確定する。
         /// </summary>
