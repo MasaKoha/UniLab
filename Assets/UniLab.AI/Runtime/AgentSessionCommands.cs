@@ -76,7 +76,8 @@ namespace UniLab.AI
 
             var path = _currentSession.ExportAsScenario(name);
             var ok = !string.IsNullOrEmpty(path);
-            return ToJson(ok, _currentSession.SessionId, ok ? "scenario.json を書き出しました。" : "目標未達のため書き出しませんでした。", string.Empty, path);
+            var message = ok ? "scenario.json を書き出しました。" : _currentSession.StatusMessage;
+            return ToJson(ok, _currentSession.SessionId, message, string.Empty, path);
         }
 
         /// <summary>

@@ -103,6 +103,15 @@ namespace UniLab.AI
         }
 
         /// <summary>
+        /// 直近の状態メッセージです。
+        /// ExportAsScenario 拒否理由を外部コマンド応答へそのまま返すために公開します。
+        /// </summary>
+        public string StatusMessage
+        {
+            get { return _message ?? string.Empty; }
+        }
+
+        /// <summary>
         /// 現在の観測を AI 向け圧縮テキストで返します。
         /// 差分だけを選べるようにして、長いプレイのトークン消費を抑えます。
         /// </summary>
@@ -196,8 +205,7 @@ namespace UniLab.AI
         /// </summary>
         public bool IsGoalReached()
         {
-            var snapshot = UiSnapshot.Capture();
-            return IsGoalReached(snapshot, null);
+            return EvaluateGoalWithLatestObservation();
         }
 
         /// <summary>
@@ -205,9 +213,9 @@ namespace UniLab.AI
         /// </summary>
         public string ExportAsScenario(string name)
         {
-            if (!IsGoalReached())
+            if (!EvaluateGoalWithLatestObservation())
             {
-                _message = "目標未達のため scenario.json は書き出しません。";
+                _message = $"目標未達のため scenario.json は書き出しません。 {BuildGoalFailureSummary()}";
                 SaveAbnormalCapture("goal-failed");
                 SaveSessionReport();
                 return string.Empty;
@@ -292,6 +300,17 @@ namespace UniLab.AI
         private bool IsGoalReached(UiSnapshotDocument snapshot, UiSnapshotDiff diff)
         {
             return _evaluator.Evaluate(_goal.goal, snapshot, diff);
+        }
+
+        private bool EvaluateGoalWithLatestObservation()
+        {
+            var previousSnapshot = _lastSnapshot;
+            var latestSnapshot = UiSnapshot.Capture();
+            var diff = previousSnapshot == null ? null : UiSnapshot.Compare(previousSnapshot, latestSnapshot);
+            _lastSnapshot = latestSnapshot;
+            var isReached = IsGoalReached(latestSnapshot, diff);
+            SaveSessionReport();
+            return isReached;
         }
 
         private string RejectAction(AgentAction action, string observationKey, string actionKind, string target, string message)
@@ -600,6 +619,31 @@ namespace UniLab.AI
                 builder.Append(" message=");
                 builder.AppendLine(failure.message);
             }
+        }
+
+        private string BuildGoalFailureSummary()
+        {
+            if (_evaluator.Failures.Count == 0)
+            {
+                return "goalFailures: なし";
+            }
+
+            var builder = new StringBuilder();
+            builder.Append("goalFailures:");
+            for (var failureIndex = 0; failureIndex < _evaluator.Failures.Count; failureIndex++)
+            {
+                var failure = _evaluator.Failures[failureIndex];
+                builder.Append(" [");
+                builder.Append(failure.kind);
+                builder.Append("] target=");
+                builder.Append(failure.target);
+                builder.Append(" value=");
+                builder.Append(failure.value);
+                builder.Append(" message=");
+                builder.Append(failure.message);
+            }
+
+            return builder.ToString();
         }
 
         private void AppendActionLog(AgentAction action, string observationKey, string actionKind, string target, string status, string message, string diffText)

@@ -30,6 +30,8 @@ namespace UniLab.AI
         private const string TextKind = "Text";
         private const int SelectableLabelLength = 40;
         private const int TextLabelLength = 120;
+        private const int CompactTextCollapseThreshold = 5;
+        private const int CompactTextExpandedHeadCount = 3;
 
         /// <summary>
         /// 現在フレーム内で完結する UI 状態を収集します。
@@ -115,46 +117,26 @@ namespace UniLab.AI
                 for (var elementIndex = 0; elementIndex < document.elements.Length; elementIndex++)
                 {
                     var element = document.elements[elementIndex];
-                    if (element == null)
+                    if (ShouldSkipCompactElement(element))
                     {
                         continue;
                     }
 
-                    lineBuilder.Append("[");
-                    lineBuilder.Append(string.IsNullOrEmpty(element.kind) ? "-" : element.kind);
-                    lineBuilder.Append("] ");
-                    lineBuilder.Append(GetCompactElementName(element));
-
-                    if (!string.IsNullOrEmpty(element.label))
+                    var sequenceLength = CountCollapsibleSequenceLength(document.elements, elementIndex);
+                    if (sequenceLength >= CompactTextCollapseThreshold)
                     {
-                        lineBuilder.Append(" 「");
-                        lineBuilder.Append(element.label);
-                        lineBuilder.Append("」");
+                        var expandedCount = Math.Min(CompactTextExpandedHeadCount, sequenceLength);
+                        for (var expandedIndex = 0; expandedIndex < expandedCount; expandedIndex++)
+                        {
+                            AppendCompactElementLine(lineBuilder, document.elements[elementIndex + expandedIndex]);
+                        }
+
+                        AppendCollapsedSequenceSummary(lineBuilder, element, sequenceLength - expandedCount);
+                        elementIndex += sequenceLength - 1;
+                        continue;
                     }
 
-                    if (!element.interactable && element.kind != TextKind)
-                    {
-                        lineBuilder.Append(" !disabled");
-                    }
-
-                    if (!string.IsNullOrEmpty(element.blockedBy))
-                    {
-                        lineBuilder.Append(" blocked:");
-                        lineBuilder.Append(element.blockedBy);
-                    }
-
-                    if (element.focused)
-                    {
-                        lineBuilder.Append(" *focused");
-                    }
-
-                    if (!string.IsNullOrEmpty(element.value))
-                    {
-                        lineBuilder.Append(" value:");
-                        lineBuilder.Append(element.value);
-                    }
-
-                    lineBuilder.AppendLine();
+                    AppendCompactElementLine(lineBuilder, element);
                 }
             }
 
@@ -613,6 +595,122 @@ namespace UniLab.AI
             lineBuilder.Append(document.focusedPath);
         }
 
+        private static bool ShouldSkipCompactElement(UiSnapshotElement element)
+        {
+            if (element == null)
+            {
+                return true;
+            }
+
+            return element.kind == TextKind && string.IsNullOrWhiteSpace(element.label);
+        }
+
+        private static int CountCollapsibleSequenceLength(UiSnapshotElement[] elements, int startIndex)
+        {
+            var firstElement = elements[startIndex];
+            if (firstElement == null)
+            {
+                return 0;
+            }
+
+            var firstKind = firstElement.kind ?? string.Empty;
+            var firstParentPath = GetParentPath(firstElement.path);
+            var count = 1;
+            for (var elementIndex = startIndex + 1; elementIndex < elements.Length; elementIndex++)
+            {
+                var element = elements[elementIndex];
+                if (ShouldSkipCompactElement(element))
+                {
+                    break;
+                }
+
+                if (!string.Equals(firstKind, element.kind ?? string.Empty, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                if (!string.Equals(firstParentPath, GetParentPath(element.path), StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                count++;
+            }
+
+            return count;
+        }
+
+        private static void AppendCollapsedSequenceSummary(StringBuilder lineBuilder, UiSnapshotElement element, int collapsedCount)
+        {
+            if (collapsedCount <= 0)
+            {
+                return;
+            }
+
+            lineBuilder.Append("[");
+            lineBuilder.Append(string.IsNullOrEmpty(element.kind) ? "-" : element.kind);
+            lineBuilder.Append("] ");
+            lineBuilder.Append(GetCompactParentName(element.path));
+            lineBuilder.Append(" …他 ");
+            lineBuilder.Append(collapsedCount.ToString(CultureInfo.InvariantCulture));
+            lineBuilder.AppendLine(" 件");
+        }
+
+        private static void AppendCompactElementLine(StringBuilder lineBuilder, UiSnapshotElement element)
+        {
+            lineBuilder.Append("[");
+            lineBuilder.Append(string.IsNullOrEmpty(element.kind) ? "-" : element.kind);
+            lineBuilder.Append("] ");
+            lineBuilder.Append(GetCompactElementName(element));
+
+            if (!string.IsNullOrEmpty(element.label))
+            {
+                lineBuilder.Append(" 「");
+                lineBuilder.Append(element.label);
+                lineBuilder.Append("」");
+            }
+
+            if (!element.interactable && element.kind != TextKind)
+            {
+                lineBuilder.Append(" !disabled");
+            }
+
+            if (!string.IsNullOrEmpty(element.blockedBy))
+            {
+                lineBuilder.Append(" blocked:");
+                lineBuilder.Append(element.blockedBy);
+            }
+
+            if (element.focused)
+            {
+                lineBuilder.Append(" *focused");
+            }
+
+            if (!string.IsNullOrEmpty(element.value))
+            {
+                lineBuilder.Append(" value:");
+                lineBuilder.Append(element.value);
+            }
+
+            lineBuilder.AppendLine();
+        }
+
+        private static string GetParentPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            var separatorIndex = path.LastIndexOf('/');
+            if (separatorIndex <= 0)
+            {
+                return string.Empty;
+            }
+
+            return path.Substring(0, separatorIndex);
+        }
+
         private static string GetCompactElementName(UiSnapshotElement element)
         {
             if (element == null)
@@ -632,6 +730,23 @@ namespace UniLab.AI
             }
 
             return element.name ?? element.path;
+        }
+
+        private static string GetCompactParentName(string path)
+        {
+            var parentPath = GetParentPath(path);
+            if (string.IsNullOrEmpty(parentPath))
+            {
+                return "-";
+            }
+
+            var pathSegments = parentPath.Split('/');
+            if (pathSegments.Length >= 2)
+            {
+                return $"{pathSegments[pathSegments.Length - 2]}/{pathSegments[pathSegments.Length - 1]}";
+            }
+
+            return parentPath;
         }
     }
 }

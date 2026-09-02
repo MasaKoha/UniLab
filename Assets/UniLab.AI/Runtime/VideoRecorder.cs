@@ -65,18 +65,22 @@ namespace UniLab.AI
         private int _failedReadbackCount;
         private int _capturedWidth;
         private int _capturedHeight;
+        private int _sourceCaptureWidth;
+        private int _sourceCaptureHeight;
         private int _previousTargetFrameRate;
         private int _previousVSyncCount;
         private double _targetFrameInterval;
         private double _recordingStartRealtime;
         private double _lastCaptureRealtime;
         private double _durationSeconds;
+        private RectInt _captureCropRect;
         private bool _hasOverriddenFrameRate;
         private bool _isRecording;
         private bool _hasAudio;
         private bool _hasReleasedResources;
         private bool _shouldHideInputOverlayOnStop;
         private bool _inputOverlayEnabled = true;
+        private bool _hasLoggedCaptureRectChange;
 
         /// <summary>
         /// 録画中かどうかを取得します。
@@ -194,14 +198,15 @@ namespace UniLab.AI
             _startedAtRealtime = DateTime.Now.ToString("o");
             _inputOverlayEnabled = inputOverlayEnabled;
 
-            _capturedWidth = Screen.width;
-            _capturedHeight = Screen.height;
+            ResolveCaptureGeometry(out _sourceCaptureWidth, out _sourceCaptureHeight, out _captureCropRect);
+            _capturedWidth = _captureCropRect.width;
+            _capturedHeight = _captureCropRect.height;
             _targetFrameInterval = 1.0 / _framesPerSecond;
             _recordingStartRealtime = Time.realtimeSinceStartupAsDouble;
             _lastCaptureRealtime = double.NegativeInfinity;
 
             Directory.CreateDirectory(_outputDirectory);
-            CreateCaptureResources(_capturedWidth, _capturedHeight);
+            CreateCaptureResources(_sourceCaptureWidth, _sourceCaptureHeight);
             StartAudioRecordingIfNeeded(recordAudio);
             OverrideFrameRateSettings();
             ShowInputOverlayIfNeeded();
@@ -351,6 +356,8 @@ namespace UniLab.AI
 
         private void CaptureFrame(double elapsedSeconds)
         {
+            WarnIfCaptureGeometryChanged();
+
             if (!TryTakeAvailableBuffer(out var bufferIndex))
             {
                 _droppedFrameCount++;
@@ -405,10 +412,17 @@ namespace UniLab.AI
         private void EncodeAndWriteFrame(int bufferIndex, string frameFilePath, int frameIndex)
         {
             NativeArray<byte> encodedBytes = default;
+            NativeArray<byte> croppedBuffer = default;
             NativeArray<byte> flippedBuffer = default;
             try
             {
                 var sourceBuffer = _buffers[bufferIndex];
+                if (RequiresCropping())
+                {
+                    croppedBuffer = CreateCroppedBuffer(sourceBuffer, _sourceCaptureWidth, _captureCropRect);
+                    sourceBuffer = croppedBuffer;
+                }
+
                 if (FlipVerticallyBeforeEncode)
                 {
                     flippedBuffer = CreateVerticallyFlippedBuffer(sourceBuffer, _capturedWidth, _capturedHeight);
@@ -435,8 +449,55 @@ namespace UniLab.AI
                     flippedBuffer.Dispose();
                 }
 
+                if (croppedBuffer.IsCreated)
+                {
+                    croppedBuffer.Dispose();
+                }
+
                 ReturnBuffer(bufferIndex);
             }
+        }
+
+        private bool RequiresCropping()
+        {
+            return _captureCropRect.x != 0 ||
+                _captureCropRect.y != 0 ||
+                _captureCropRect.width != _sourceCaptureWidth ||
+                _captureCropRect.height != _sourceCaptureHeight;
+        }
+
+        private void WarnIfCaptureGeometryChanged()
+        {
+            if (_hasLoggedCaptureRectChange)
+            {
+                return;
+            }
+
+            ResolveCaptureGeometry(out var sourceCaptureWidth, out var sourceCaptureHeight, out var captureCropRect);
+            if (sourceCaptureWidth == _sourceCaptureWidth &&
+                sourceCaptureHeight == _sourceCaptureHeight &&
+                captureCropRect == _captureCropRect)
+            {
+                return;
+            }
+
+            _hasLoggedCaptureRectChange = true;
+            UnityEngine.Debug.LogWarning(
+                $"[VideoRecorder] 録画開始後に描画矩形が変化しました。開始時 raw={_sourceCaptureWidth}x{_sourceCaptureHeight} crop={FormatRect(_captureCropRect)} 現在 raw={sourceCaptureWidth}x{sourceCaptureHeight} crop={FormatRect(captureCropRect)}。録画サイズは開始時のまま維持します。");
+        }
+
+        private static NativeArray<byte> CreateCroppedBuffer(NativeArray<byte> sourceBuffer, int sourceWidth, RectInt cropRect)
+        {
+            var rowByteCount = cropRect.width * BytesPerPixel;
+            var croppedBuffer = new NativeArray<byte>(cropRect.width * cropRect.height * BytesPerPixel, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            for (var y = 0; y < cropRect.height; y++)
+            {
+                var sourceOffset = ((cropRect.y + y) * sourceWidth * BytesPerPixel) + (cropRect.x * BytesPerPixel);
+                var destinationOffset = y * rowByteCount;
+                NativeArray<byte>.Copy(sourceBuffer, sourceOffset, croppedBuffer, destinationOffset, rowByteCount);
+            }
+
+            return croppedBuffer;
         }
 
         private static NativeArray<byte> CreateVerticallyFlippedBuffer(NativeArray<byte> sourceBuffer, int width, int height)
@@ -626,6 +687,9 @@ namespace UniLab.AI
                 durationSeconds = (float)_durationSeconds,
                 width = _capturedWidth,
                 height = _capturedHeight,
+                capturedWidth = _sourceCaptureWidth,
+                capturedHeight = _sourceCaptureHeight,
+                cropRect = new[] { _captureCropRect.x, _captureCropRect.y, _captureCropRect.width, _captureCropRect.height },
                 hasAudio = _hasAudio,
                 audioSampleRate = _audioRecorder != null && _hasAudio ? _audioRecorder.SampleRate : 0,
                 audioChannelCount = _audioRecorder != null && _hasAudio ? _audioRecorder.ChannelCount : 0,
@@ -650,6 +714,76 @@ namespace UniLab.AI
             }
 
             return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -r {framesPerSecond} -t {durationArgument} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" \"{outputFilePath}\"";
+        }
+
+        private static void ResolveCaptureGeometry(out int sourceCaptureWidth, out int sourceCaptureHeight, out RectInt captureCropRect)
+        {
+            sourceCaptureWidth = Mathf.Max(1, Screen.width);
+            sourceCaptureHeight = Mathf.Max(1, Screen.height);
+            captureCropRect = new RectInt(0, 0, sourceCaptureWidth, sourceCaptureHeight);
+
+            if (!TryGetTargetCameraPixelRect(out var cameraPixelRect))
+            {
+                return;
+            }
+
+            captureCropRect = ClampPixelRect(cameraPixelRect, sourceCaptureWidth, sourceCaptureHeight);
+        }
+
+        private static bool TryGetTargetCameraPixelRect(out Rect pixelRect)
+        {
+            pixelRect = default;
+
+            var mainCamera = Camera.main;
+            if (IsCaptureTargetCamera(mainCamera))
+            {
+                pixelRect = mainCamera.pixelRect;
+                return true;
+            }
+
+            var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            for (var cameraIndex = 0; cameraIndex < cameras.Length; cameraIndex++)
+            {
+                var camera = cameras[cameraIndex];
+                if (!IsCaptureTargetCamera(camera))
+                {
+                    continue;
+                }
+
+                pixelRect = camera.pixelRect;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsCaptureTargetCamera(Camera camera)
+        {
+            if (camera == null)
+            {
+                return false;
+            }
+
+            if (!camera.enabled || !camera.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static RectInt ClampPixelRect(Rect pixelRect, int sourceCaptureWidth, int sourceCaptureHeight)
+        {
+            var minX = Mathf.Clamp(Mathf.FloorToInt(pixelRect.xMin), 0, Mathf.Max(0, sourceCaptureWidth - 1));
+            var minY = Mathf.Clamp(Mathf.FloorToInt(pixelRect.yMin), 0, Mathf.Max(0, sourceCaptureHeight - 1));
+            var maxX = Mathf.Clamp(Mathf.CeilToInt(pixelRect.xMax), minX + 1, sourceCaptureWidth);
+            var maxY = Mathf.Clamp(Mathf.CeilToInt(pixelRect.yMax), minY + 1, sourceCaptureHeight);
+            return new RectInt(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        private static string FormatRect(RectInt rect)
+        {
+            return $"({rect.x},{rect.y},{rect.width},{rect.height})";
         }
     }
 }

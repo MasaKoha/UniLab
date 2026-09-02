@@ -27,6 +27,10 @@ namespace UniLab.AI
         private const float TouchDiameter = 56f;
         private const float StickRange = 18f;
         private const float DefaultWidgetMargin = 24f;
+        private static readonly Color WidgetPanelColor = new Color(0f, 0f, 0f, 0.45f);
+        private static readonly Color KeyboardPanelColor = new Color(0f, 0f, 0f, 0.35f);
+        private static readonly Color StepLabelPanelColor = new Color(0.08f, 0.1f, 0.14f, 0.6f);
+        private static readonly Color StepLabelTextColor = new Color(0.96f, 0.97f, 1f, 1f);
         private const string WhiteColorHtml = "#FFFFFF";
         private const string YellowColorHtml = "#FFE16A";
         private const string BlueColorHtml = "#79C9FF";
@@ -136,11 +140,11 @@ namespace UniLab.AI
             _rootTransform.offsetMin = Vector2.zero;
             _rootTransform.offsetMax = Vector2.zero;
 
-            var gamepadPanelObject = CreatePanel("GamepadPanel", _rootTransform, new Vector2(340f, 190f), new Color(0f, 0f, 0f, 0.45f));
+            var gamepadPanelObject = CreatePanel("GamepadPanel", _rootTransform, new Vector2(340f, 190f), WidgetPanelColor);
             _gamepadPanel = gamepadPanelObject.rectTransform;
             BuildGamepadContents(_gamepadPanel);
 
-            var keyboardPanelObject = CreatePanel("KeyboardPanel", _rootTransform, new Vector2(720f, 50f), new Color(0f, 0f, 0f, 0.35f));
+            var keyboardPanelObject = CreatePanel("KeyboardPanel", _rootTransform, new Vector2(720f, 50f), KeyboardPanelColor);
             _keyboardPanel = keyboardPanelObject.rectTransform;
             BuildKeyboardContents(_keyboardPanel);
 
@@ -149,9 +153,10 @@ namespace UniLab.AI
 
             _touchLayer = CreateContainer("TouchLayer", _rootTransform);
 
-            var topLabelPanelObject = CreatePanel("TopLabelPanel", _rootTransform, new Vector2(860f, 46f), new Color(0f, 0f, 0f, 0.35f));
+            var topLabelPanelObject = CreatePanel("TopLabelPanel", _rootTransform, new Vector2(860f, 46f), StepLabelPanelColor);
             _topLabelPanel = topLabelPanelObject.rectTransform;
             _stepLabel = CreateText("StepLabel", _topLabelPanel, 22, TextAlignmentOptions.Center, FontStyles.Normal);
+            _stepLabel.color = StepLabelTextColor;
             Stretch(_stepLabel.rectTransform, new Vector2(10f, 6f), new Vector2(-10f, -6f));
         }
 
@@ -168,14 +173,12 @@ namespace UniLab.AI
             _keyboardPanel.gameObject.SetActive(_options.showKeyboard);
             _pointerLayer.gameObject.SetActive(_options.showPointer);
             _touchLayer.gameObject.SetActive(_options.showTouch);
-            _topLabelPanel.gameObject.SetActive(_options.showStepLabel);
+            _topLabelPanel.gameObject.SetActive(false);
+            _stepLabel.text = string.Empty;
 
             AnchorToCorner(_gamepadPanel, _options.gamepadCorner, DefaultWidgetMargin, DefaultWidgetMargin);
             AnchorToCorner(_keyboardPanel, OverlayCorner.BottomLeft, DefaultWidgetMargin, DefaultWidgetMargin);
-            AnchorToCorner(_topLabelPanel, OverlayCorner.TopLeft, DefaultWidgetMargin, DefaultWidgetMargin);
-            _topLabelPanel.anchorMax = new Vector2(1f, 1f);
-            _topLabelPanel.pivot = new Vector2(0.5f, 1f);
-            _topLabelPanel.anchoredPosition = new Vector2(0f, -DefaultWidgetMargin);
+            AnchorToCorner(_topLabelPanel, _options.labelCorner, DefaultWidgetMargin, DefaultWidgetMargin);
         }
 
         private void PollInput(float now)
@@ -332,16 +335,21 @@ namespace UniLab.AI
         {
             if (!_options.showStepLabel)
             {
+                _stepLabel.text = string.Empty;
+                _topLabelPanel.gameObject.SetActive(false);
                 return;
             }
 
             var labelText = _stepLabelProvider.TryGetCurrentLabel(now);
-            var hasLabel = !string.IsNullOrEmpty(labelText);
+            var hasLabel = !string.IsNullOrWhiteSpace(labelText);
             _topLabelPanel.gameObject.SetActive(hasLabel);
             if (hasLabel)
             {
                 _stepLabel.text = labelText;
+                return;
             }
+
+            _stepLabel.text = string.Empty;
         }
 
         /// <summary>
