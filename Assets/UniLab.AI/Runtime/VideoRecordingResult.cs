@@ -28,6 +28,9 @@ namespace UniLab.AI
         /// </summary>
         public int FramesPerSecond { get; }
 
+        /// <summary>録画した実時間の長さ（秒）。動画の再生時間はこれに一致する。</summary>
+        public double DurationSeconds { get; }
+
         /// <summary>
         /// manifest ファイルパスを取得します。
         /// </summary>
@@ -41,12 +44,13 @@ namespace UniLab.AI
         /// <summary>
         /// 新しい録画結果を初期化します。
         /// </summary>
-        public VideoRecordingResult(string name, string outputDirectory, int frameCount, int framesPerSecond, string manifestFilePath, string ffmpegCommand)
+        public VideoRecordingResult(string name, string outputDirectory, int frameCount, int framesPerSecond, double durationSeconds, string manifestFilePath, string ffmpegCommand)
         {
             Name = name ?? string.Empty;
             OutputDirectory = outputDirectory ?? string.Empty;
             FrameCount = frameCount;
             FramesPerSecond = framesPerSecond;
+            DurationSeconds = durationSeconds;
             ManifestFilePath = manifestFilePath ?? string.Empty;
             FfmpegCommand = ffmpegCommand ?? string.Empty;
         }

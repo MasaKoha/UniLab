@@ -48,7 +48,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `frames.txt`、`recording-manifest.json` が並ぶ。
 manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 
-**動画の尺は録画した実時間と一致する。** 7 秒録れば 7 秒の動画になる。
+**動画の尺は録画した実時間と一致する。** 7 秒録れば 7 秒の動画になる（実測誤差 1.35 ミリ秒）。
 そのために `Time.captureFramerate` は使わず、`Application.targetFrameRate` で描画レートを絞り、
 フレームごとの実時刻を `frames.txt` に持たせている。将来 音声を重ねられるようにするための土台でもある。
 

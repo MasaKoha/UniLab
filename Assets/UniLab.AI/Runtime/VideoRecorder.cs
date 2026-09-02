@@ -223,7 +223,7 @@ namespace UniLab.AI
             var manifestFilePath = Path.Combine(_outputDirectory, ManifestFileName);
             var manifestJson = JsonUtility.ToJson(manifest, true);
             File.WriteAllText(manifestFilePath, manifestJson);
-            return new VideoRecordingResult(manifest.name, _outputDirectory, _frameCount, _framesPerSecond, manifestFilePath, manifest.ffmpegCommand);
+            return new VideoRecordingResult(manifest.name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, manifest.ffmpegCommand);
         }
 
         /// <summary>
@@ -260,8 +260,8 @@ namespace UniLab.AI
         private VideoRecordingResult BuildResult()
         {
             var manifestFilePath = Path.Combine(_outputDirectory ?? string.Empty, ManifestFileName);
-            var ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, _outputDirectory ?? string.Empty, _name ?? string.Empty);
-            return new VideoRecordingResult(_name, _outputDirectory, _frameCount, _framesPerSecond, manifestFilePath, ffmpegCommand);
+            var ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, _outputDirectory ?? string.Empty, _name ?? string.Empty, _durationSeconds);
+            return new VideoRecordingResult(_name, _outputDirectory, _frameCount, _framesPerSecond, _durationSeconds, manifestFilePath, ffmpegCommand);
         }
 
         private VideoRecordingManifest CreateManifest(string name, string outputDirectory)
@@ -275,20 +275,22 @@ namespace UniLab.AI
                 width = _capturedWidth,
                 height = _capturedHeight,
                 startedAtRealtime = _startedAtRealtime,
-                ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, outputDirectory, name),
+                ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, outputDirectory, name, _durationSeconds),
                 markers = _markers.ToArray(),
             };
         }
 
         /// <summary>連番 JPG を mp4 へ変換する ffmpeg コマンドを組み立てる。変換の実行は呼び出し側が行う。</summary>
-        public static string CreateFfmpegCommand(int framesPerSecond, string outputDirectory, string name)
+        public static string CreateFfmpegCommand(int framesPerSecond, string outputDirectory, string name, double durationSeconds)
         {
             var frameListFilePath = Path.Combine(outputDirectory, FrameListFileName);
             var outputFilePath = Path.Combine(outputDirectory, $"{name}.mp4");
+            var durationArgument = durationSeconds.ToString("F6", CultureInfo.InvariantCulture);
 
             // concat デマルチプレクサでフレームごとの実測表示時間を反映し、-r で一定フレームレートへ均す。
-            // これにより動画の尺が録画した実時間と一致する
-            return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -r {framesPerSecond} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" \"{outputFilePath}\"";
+            // -t で尺を実測値に固定する。これが無いと concat の末尾処理と丸めで数フレーム伸び、
+            // 実測では 7.63 秒の録画が 7.70 秒の動画になった（-t 付きなら誤差 1 ミリ秒未満）
+            return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -r {framesPerSecond} -t {durationArgument} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" \"{outputFilePath}\"";
         }
     }
 }
