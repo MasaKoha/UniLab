@@ -19,6 +19,15 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 実際にフェード途中を撮影して UI バグと誤診した事故が起きている。動画にすれば撮影タイミングの
 問題そのものが消え、AI が視覚的に原因を特定して自律的に修正できる。
 
+## 呼び出し口
+
+主経路は **Unity 公式 CLI の `unity command ai_*`** とする。`com.unity.pipeline` が入っているプロジェクトでは、
+`Assets/UniLab.AI/Pipeline/` の `[CliCommand]` ラッパから `UiSnapshot` / `UiScenarioRunner` /
+`AgentSessionCommands` / `MonkeyTester` / `ExceptionForensics` へ到達する。
+
+MCP ブリッジ経由の `execute_code` は **fallback** とする。理由は、`execute_code` は毎回 C# 文字列を組み立てる必要があり、
+引数検証・コマンド一覧・CLI からの直接呼び出しでは Unity 公式 CLI の型付きコマンドのほうが扱いやすいためである。
+
 あわせて、これら AI 向けツールを**いつでも別リポジトリへ切り出せる形**に再編する。
 
 ---

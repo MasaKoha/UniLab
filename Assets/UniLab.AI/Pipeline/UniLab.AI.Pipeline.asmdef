@@ -1,0 +1,27 @@
+{
+    "name": "UniLab.AI.Pipeline",
+    "rootNamespace": "UniLab.AI.Pipeline",
+    "references": [
+        "UniLab.AI",
+        "Unity.Pipeline"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNILAB_AI_PIPELINE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.pipeline",
+            "expression": "0.2.0",
+            "define": "UNILAB_AI_PIPELINE"
+        }
+    ],
+    "noEngineReferences": false
+}
