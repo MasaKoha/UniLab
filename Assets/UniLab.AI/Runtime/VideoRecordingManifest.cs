@@ -50,6 +50,11 @@ namespace UniLab.AI
         public int audioChannelCount;
 
         /// <summary>
+        /// 録画へ入力オーバーレイが写っているかを後段が判別できるようにします。
+        /// </summary>
+        public bool inputOverlay;
+
+        /// <summary>
         /// 録画開始時刻です。
         /// </summary>
         public string startedAtRealtime;

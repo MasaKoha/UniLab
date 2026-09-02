@@ -75,6 +75,8 @@ namespace UniLab.AI
         private bool _isRecording;
         private bool _hasAudio;
         private bool _hasReleasedResources;
+        private bool _shouldHideInputOverlayOnStop;
+        private bool _inputOverlayEnabled = true;
 
         /// <summary>
         /// 録画中かどうかを取得します。
@@ -88,15 +90,45 @@ namespace UniLab.AI
         }
 
         /// <summary>
+        /// フォレンジックとシナリオ結果が動画上の位置へ辿れるよう、録画中の現在フレームを公開します。
+        /// </summary>
+        public int FrameCount
+        {
+            get
+            {
+                return _frameCount;
+            }
+        }
+
+        /// <summary>
+        /// 合否 JSON が録画負荷の破綻を画像確認なしで読めるようにします。
+        /// </summary>
+        public int DroppedFrameCount
+        {
+            get
+            {
+                return _droppedFrameCount;
+            }
+        }
+
+        /// <summary>
         /// 録画を開始します。
         /// </summary>
         public static VideoRecorder StartRecording(string outputDirectory, string name, int framesPerSecond = DefaultFramesPerSecond, bool recordAudio = false)
+        {
+            return StartRecording(outputDirectory, name, framesPerSecond, recordAudio, true);
+        }
+
+        /// <summary>
+        /// シナリオから録画中オーバーレイを抑制できるようにし、視覚回帰用の静止画汚染を避けます。
+        /// </summary>
+        public static VideoRecorder StartRecording(string outputDirectory, string name, int framesPerSecond, bool recordAudio, bool inputOverlayEnabled)
         {
             var recorderObject = new GameObject(nameof(VideoRecorder));
             DontDestroyOnLoad(recorderObject);
 
             var recorder = recorderObject.AddComponent<VideoRecorder>();
-            recorder.Initialize(outputDirectory, name, framesPerSecond, recordAudio);
+            recorder.Initialize(outputDirectory, name, framesPerSecond, recordAudio, inputOverlayEnabled);
             return recorder;
         }
 
@@ -133,6 +165,7 @@ namespace UniLab.AI
             StopAudioRecording();
             RestoreFrameRateSettings();
             WaitForPendingWorkAndReleaseResources();
+            HideInputOverlayIfNeeded();
 
             var result = WriteManifestAndBuildResult();
             UnityEngine.Debug.Log($"[VideoRecorder] 完了: frames={result.FrameCount} duration={_durationSeconds:F2}s dropped={_droppedFrameCount} failedReadback={_failedReadbackCount} output={result.OutputDirectory} ffmpeg={result.FfmpegCommand}");
@@ -150,14 +183,16 @@ namespace UniLab.AI
             RestoreFrameRateSettings();
             StopAudioRecording();
             WaitForPendingWorkAndReleaseResources();
+            HideInputOverlayIfNeeded();
         }
 
-        private void Initialize(string outputDirectory, string name, int framesPerSecond, bool recordAudio)
+        private void Initialize(string outputDirectory, string name, int framesPerSecond, bool recordAudio, bool inputOverlayEnabled)
         {
             _outputDirectory = outputDirectory ?? string.Empty;
             _name = string.IsNullOrEmpty(name) ? nameof(VideoRecorder) : name;
             _framesPerSecond = framesPerSecond > 0 ? framesPerSecond : DefaultFramesPerSecond;
             _startedAtRealtime = DateTime.Now.ToString("o");
+            _inputOverlayEnabled = inputOverlayEnabled;
 
             _capturedWidth = Screen.width;
             _capturedHeight = Screen.height;
@@ -169,9 +204,47 @@ namespace UniLab.AI
             CreateCaptureResources(_capturedWidth, _capturedHeight);
             StartAudioRecordingIfNeeded(recordAudio);
             OverrideFrameRateSettings();
+            ShowInputOverlayIfNeeded();
 
             _isRecording = true;
             _captureCoroutine = StartCoroutine(CaptureFramesCoroutine());
+        }
+
+        /// <summary>
+        /// 録画中だけ入力可視化を既定で有効にします。
+        /// 非録画時に常時出すと静止画系の観測結果を汚すためです。
+        /// </summary>
+        private void ShowInputOverlayIfNeeded()
+        {
+            if (!_inputOverlayEnabled)
+            {
+                _shouldHideInputOverlayOnStop = false;
+                return;
+            }
+
+            if (InputOverlay.IsVisible)
+            {
+                _shouldHideInputOverlayOnStop = false;
+                return;
+            }
+
+            InputOverlay.Show();
+            _shouldHideInputOverlayOnStop = true;
+        }
+
+        /// <summary>
+        /// 録画開始時に自動表示した分だけ停止時に戻します。
+        /// 手動表示まで巻き込んで消すと既存利用者の意図を壊すためです。
+        /// </summary>
+        private void HideInputOverlayIfNeeded()
+        {
+            if (!_shouldHideInputOverlayOnStop)
+            {
+                return;
+            }
+
+            _shouldHideInputOverlayOnStop = false;
+            InputOverlay.Hide();
         }
 
         private void StartAudioRecordingIfNeeded(bool recordAudio)
@@ -556,6 +629,7 @@ namespace UniLab.AI
                 hasAudio = _hasAudio,
                 audioSampleRate = _audioRecorder != null && _hasAudio ? _audioRecorder.SampleRate : 0,
                 audioChannelCount = _audioRecorder != null && _hasAudio ? _audioRecorder.ChannelCount : 0,
+                inputOverlay = _inputOverlayEnabled,
                 startedAtRealtime = _startedAtRealtime,
                 ffmpegCommand = CreateFfmpegCommand(_framesPerSecond, outputDirectory, name, _durationSeconds, _hasAudio),
                 markers = _markers.ToArray(),
