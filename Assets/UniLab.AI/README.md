@@ -9,7 +9,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 | 種別 | クラス | 役割 |
 |---|---|---|
 | 記録 | `FileLogSink` | Unity ログを全てファイルへ複写する |
-| 記録 | `VideoRecorder` | 画面を連番 JPG で録画し、時刻とステップを対応付ける manifest を出す |
+| 記録 | `VideoRecorder` | 画面を連番 JPG で実時間どおりに録画し、時刻とステップを対応付ける manifest を出す |
 | 観測 | `UiLayoutAuditor` | UI のはみ出し・重なりを検出して JSON で返す |
 | 観測 | `SceneHierarchyDumper` | シーン階層と SerializeField の結線状態をテキストで出す |
 | 運転 | `UiScenarioRunner` | JSON シナリオに従って UI を操作し、撮影・録画・監査を自動実行する |
@@ -45,8 +45,12 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 { "waitFrames": 600, "recordStop": "battle_first_fight" }
 ```
 
-出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `recording-manifest.json` が並ぶ。
+出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `frames.txt`、`recording-manifest.json` が並ぶ。
 manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
+
+**動画の尺は録画した実時間と一致する。** 7 秒録れば 7 秒の動画になる。
+そのために `Time.captureFramerate` は使わず、`Application.targetFrameRate` で描画レートを絞り、
+フレームごとの実時刻を `frames.txt` に持たせている。将来 音声を重ねられるようにするための土台でもある。
 
 `markers` が動画の時刻とシナリオのステップを対応付ける。
 「何秒で壊れているか」から「どのステップか」へ辿るための索引である。
@@ -55,5 +59,6 @@ manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 
 - エディタが非フォーカスだと Game View が再描画されず、同じ絵が録れる。
   利用側で `Application.runInBackground` を有効にすること
-- 録画中は `Time.captureFramerate` を固定するため、実時間よりゲームが遅くなる。目安は1回30秒以内
+- 録画中は描画レートを目標 fps へ絞るため、ゲームの動きが普段より遅く見えることがある。目安は1回30秒以内
+- エンコードが目標 fps に間に合わない分は素直にフレーム落ちとして記録される。3D 画面では影響が大きい
 - 音声は録らない

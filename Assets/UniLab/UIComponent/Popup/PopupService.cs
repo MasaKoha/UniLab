@@ -20,6 +20,7 @@ namespace UniLab.UI.Popup
         private readonly List<PopupRequest> _waiting = new();
         private readonly List<PopupBase> _stack = new();
         private readonly ReactiveProperty<bool> _hasActivePopup = new(false);
+        private bool _isDisposed;
         private readonly IDisposable _dimmerClickSubscription;
 
         /// <summary>パッド操作時のフォーカス積み先。未接続ならフォーカス制御を行わない。</summary>
@@ -131,6 +132,12 @@ namespace UniLab.UI.Popup
         /// <summary>暗幕タップ購読と HasActivePopup の購読リソースを破棄する。</summary>
         public void Dispose()
         {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
             _dimmerClickSubscription?.Dispose();
             _hasActivePopup.Dispose();
         }
@@ -244,6 +251,14 @@ namespace UniLab.UI.Popup
         // スタックの増減に応じて表示中フラグと暗幕位置を更新する
         private void RefreshState()
         {
+            // 表示中に Play 終了やスコープ破棄が起きると、中断された PresentAsync の finally が
+            // Dispose のあとに走る。破棄済みの ReactiveProperty へ書くと ObjectDisposedException に
+            // なるため、ここで打ち切る（暗幕もスタックも既に無効なので更新する意味が無い）
+            if (_isDisposed)
+            {
+                return;
+            }
+
             _hasActivePopup.Value = _stack.Count > 0;
             if (_dimmer == null)
             {
