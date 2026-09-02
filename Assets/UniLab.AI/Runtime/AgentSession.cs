@@ -217,6 +217,13 @@ namespace UniLab.AI
             if (steps.Length > 0)
             {
                 steps[steps.Length - 1].expect = _goal.goal ?? Array.Empty<ScenarioExpectation>();
+                // 目標がシーン到達なら、最終ステップの操作後にそのシーンを待ってから expect を評価させる。
+                // 待ちが無いと遷移フェード中（前のシーン）に評価されて必ず失敗する（2026-09-02 再生で実測）
+                var sceneGoal = Array.Find(steps[steps.Length - 1].expect, expectation => expectation != null && expectation.kind == "sceneIs");
+                if (sceneGoal != null && string.IsNullOrEmpty(steps[steps.Length - 1].waitScene))
+                {
+                    steps[steps.Length - 1].waitScene = sceneGoal.value;
+                }
             }
 
             var scenario = new UiScenario
@@ -228,7 +235,7 @@ namespace UniLab.AI
             };
 
             _scenarioFilePath = Path.Combine(_outputDirectory, ScenarioFileName);
-            File.WriteAllText(_scenarioFilePath, JsonUtility.ToJson(scenario, true));
+            File.WriteAllText(_scenarioFilePath, UiScenarioJsonPresence.StripDefaultMonkey(JsonUtility.ToJson(scenario, true)));
             SaveSessionReport();
             return _scenarioFilePath;
         }

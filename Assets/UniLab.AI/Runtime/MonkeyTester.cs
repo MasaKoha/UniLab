@@ -363,7 +363,7 @@ namespace UniLab.AI
                 name = "monkey-repro",
                 steps = steps,
             };
-            File.WriteAllText(Path.Combine(_outputDirectory, ReproFileName), JsonUtility.ToJson(scenario, true));
+            File.WriteAllText(Path.Combine(_outputDirectory, ReproFileName), UiScenarioJsonPresence.StripDefaultMonkey(JsonUtility.ToJson(scenario, true)));
         }
 
         private MonkeySummary BuildSummary(string stopReason)
