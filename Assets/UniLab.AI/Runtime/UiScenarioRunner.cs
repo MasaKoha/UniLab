@@ -213,7 +213,7 @@ namespace UniLab.AI
             var currentRecordingDirectory = Path.Combine(recordingRootDirectory, CurrentRecordingDirectoryName);
             PrepareCurrentRecordingDirectory(currentRecordingDirectory);
             var recordingFramesPerSecond = step.recordFps > 0 ? step.recordFps : RecordingFramesPerSecond;
-            _videoRecorder = VideoRecorder.StartRecording(currentRecordingDirectory, TemporaryRecordingName, recordingFramesPerSecond);
+            _videoRecorder = VideoRecorder.StartRecording(currentRecordingDirectory, TemporaryRecordingName, recordingFramesPerSecond, step.recordAudio);
         }
 
         private void AddRecordingMarkerIfNeeded(UiScenarioStep step)
@@ -287,10 +287,10 @@ namespace UniLab.AI
 
             Directory.Move(recordingResult.OutputDirectory, finalRecordingDirectory);
 
-            var ffmpegCommand = VideoRecorder.CreateFfmpegCommand(recordingResult.FramesPerSecond, finalRecordingDirectory, recordingName, recordingResult.DurationSeconds);
+            var ffmpegCommand = VideoRecorder.CreateFfmpegCommand(recordingResult.FramesPerSecond, finalRecordingDirectory, recordingName, recordingResult.DurationSeconds, recordingResult.HasAudio);
             var manifestFilePath = Path.Combine(finalRecordingDirectory, VideoRecorder.ManifestFileName);
             RewriteRecordingManifest(manifestFilePath, recordingName, ffmpegCommand);
-            return new VideoRecordingResult(recordingName, finalRecordingDirectory, recordingResult.FrameCount, recordingResult.FramesPerSecond, recordingResult.DurationSeconds, manifestFilePath, ffmpegCommand);
+            return new VideoRecordingResult(recordingName, finalRecordingDirectory, recordingResult.FrameCount, recordingResult.FramesPerSecond, recordingResult.DurationSeconds, manifestFilePath, ffmpegCommand, recordingResult.HasAudio);
         }
 
         private static void RewriteRecordingManifest(string manifestFilePath, string recordingName, string ffmpegCommand)

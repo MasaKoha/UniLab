@@ -10,6 +10,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 |---|---|---|
 | 記録 | `FileLogSink` | Unity ログを全てファイルへ複写する |
 | 記録 | `VideoRecorder` | 画面を連番 JPG で実時間どおりに録画し、時刻とステップを対応付ける manifest を出す |
+| 記録 | `AudioRecorder` | ミックス後の音声を WAV へ書き出す。動画と同じ時間軸なのでそのまま多重化できる |
 | 観測 | `UiLayoutAuditor` | UI のはみ出し・重なりを検出して JSON で返す |
 | 観測 | `SceneHierarchyDumper` | シーン階層と SerializeField の結線状態をテキストで出す |
 | 運転 | `UiScenarioRunner` | JSON シナリオに従って UI を操作し、撮影・録画・監査を自動実行する |
@@ -41,11 +42,12 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 シナリオから使う場合:
 
 ```json
-{ "submit": "RoomCard0", "recordStart": true, "recordFps": 60 },
+{ "submit": "RoomCard0", "recordStart": true, "recordFps": 60, "recordAudio": true },
 { "settleFrames": 600, "recordStop": "battle_first_fight" }
 ```
 
 `recordFps` を省略すると 30fps。**60fps でフレーム落ちなしを実測で確認済み。**
+`recordAudio` の既定は false。指定すると `audio.wav` を出し、ffmpeg コマンドが多重化まで行う。
 
 出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `frames.txt`、`recording-manifest.json` が並ぶ。
 manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
@@ -64,4 +66,5 @@ manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 - 録画中は描画レートを目標 fps へ絞るため、ゲームの動きが普段より遅く見えることがある。目安は1回30秒以内
 - エンコードが目標 fps に間に合わない分は素直にフレーム落ちとして記録される。
   捨てた数は manifest の `droppedFrameCount` に出る。3D の高解像度・高 fps では影響が大きくなる
-- 音声は録らない
+- **音声を録るにはシーンに `AudioListener` が要る。** 無いと Unity はミックスを生成せず、
+  正しい長さの無音 WAV ができるだけで気づきにくい

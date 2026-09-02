@@ -40,6 +40,15 @@ namespace UniLab.AI
         /// </summary>
         public int height;
 
+        /// <summary>音声を録音した場合は true。</summary>
+        public bool hasAudio;
+
+        /// <summary>音声のサンプリングレート。録音していない場合は 0。</summary>
+        public int audioSampleRate;
+
+        /// <summary>音声のチャンネル数。録音していない場合は 0。</summary>
+        public int audioChannelCount;
+
         /// <summary>
         /// 録画開始時刻です。
         /// </summary>

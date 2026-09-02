@@ -301,6 +301,7 @@ public sealed class VideoRecorder : MonoBehaviour
 |---|---|
 | `recordStart: true` | このステップの開始時に録画を開始する |
 | `recordFps: <数値>` | 録画のフレームレート。`recordStart` と同じステップに書く。0 以下なら既定の 30 |
+| `recordAudio: true` | 録画に音声を含める。`recordStart` と同じステップに書く。既定は false |
 | `recordStop: "<名前>"` | このステップの完了時に録画を停止し、`<名前>` で確定する |
 
 ```json
@@ -323,6 +324,7 @@ DebugOutput/
       frame-00001.jpg
       ...
       frames.txt
+      audio.wav          （recordAudio 指定時のみ）
       recording-manifest.json
 ```
 
@@ -341,27 +343,59 @@ DebugOutput/
   3D 画面ではこれより大きくなる
 - 音声は録らない。UI・見た目の検証が目的であり、音声は対象外
 
-## 8. 音声の録音（将来）
+## 8. 音声の録音
 
-本設計は音声を扱わないが、**実時間へ揃えたのは音声を重ねられるようにするため**である。
-動画の尺が実時間と一致していれば、後から録った音声をそのまま多重化できる。
+**実時間へ揃えたのは音声を重ねられるようにするためである。** 動画の尺が実時間と一致しているため、
+同じ時間軸で録った音声をそのまま多重化できる。ネイティブ録画に頼らずエンジン内で完結する。
 
-音声の取得も**ネイティブ録画に頼らずエンジン内で完結できる**。Unity は `AudioRenderer`
-（`AudioRenderer.Start` / `Render`）でミックス後の音声バッファを描画と同じ進行で取り出せる。
-これを WAV へ書き出せば、本設計の実時間の尺とそのまま噛み合う。
+### 方式
 
-ネイティブ録画（OBS / ScreenCaptureKit / Unity Recorder）を検討する動機は尺の正確さではなく
-**性能**である。本方式は CPU で JPG エンコードするため、負荷が上がるとフレームを落とす。
-ハードウェアエンコードが要るほど重くなったときに初めて選択肢に入る。
+`AudioRenderer`（`Start` / `GetSampleCountForCaptureFrame` / `Render` / `Stop`）で
+ミックス後の音声を描画と同じ進行で取り出し、**16bit PCM の WAV へ逐次書き出す**。
+全サンプルをメモリに溜めず、開始時に 44 バイトのヘッダを仮置きして停止時に書き戻す。
+
+**音声の取り出しは動画の間引き判定より前に、毎フレーム必ず行う。**
+動画は目標 fps へ間引くが、音声を間引くと途切れるためである。
+
+多重化は ffmpeg で行う（変換の実行は呼び出し側）。
 
 ```
-ffmpeg -i <name>.mp4 -i <name>.wav -c:v copy -c:a aac -shortest <name>-with-audio.mp4
+ffmpeg -y -f concat -safe 0 -i frames.txt -i audio.wav -r 30 -t <実時間> -c:v libx264 -pix_fmt yuv420p -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -c:a aac -shortest out.mp4
 ```
 
-音声側の取得（`AudioRenderer` もしくは `OnAudioFilterRead` による WAV 書き出し）は別途設計する。
+### 既定は無効
+
+シナリオの `recordAudio: true` で有効にする。既定は false で、
+指定しなければ WAV も音声入力も生成されない（従来と完全に同じ動作）。
+
+### 実測
+
+440Hz のテストトーンを鳴らしながら録画した結果。
+
+| 項目 | 値 |
+|---|---|
+| WAV 形式 | 44100 Hz / ステレオ / 16bit PCM |
+| 音声の長さ | 7.6161 秒（録画の実時間 7.6674 秒） |
+| ピーク振幅 | 8109 / 32767 |
+| 復元した周波数 | 440.0 Hz（投入したトーンと一致） |
+
+音声が動画より約 50 ミリ秒短いのは、最後の未満フレーム分が取り出されないため。
+`-shortest` で揃えるので破綻しない。
+
+### 利用側の前提: AudioListener が要る
+
+**シーンに `AudioListener` が1つも無いと、Unity はミックスを生成せず、録れるのは無音になる。**
+`AudioRenderer` 自体は成功し、正しい長さの WAV ができるため、**気づきにくい**。
+音が入らないときはまず `AudioListener` の有無を確認すること
+（2026-09-02: karakuri にリスナーが無く、無音の WAV が出て原因の特定に手間取った）。
+
+### ネイティブ録画との比較
+
+ネイティブ録画（OBS / ScreenCaptureKit / Unity Recorder）を検討する動機は
+尺の正確さでも音声でもなく**性能**である。本方式は CPU でエンコードするため、
+負荷が上がるとフレームを落とす。ハードウェアエンコードが要るほど重くなったときに初めて選択肢に入る。
 
 ## 9. スコープ外
 
-- 音声の録音（上記のとおり土台のみ用意し、実装は別途）
 - Unity エディタ画面そのものの録画（`docs/tasks/editor-capture-design.md` 側の主題）
 - 動画の差分比較・自動判定（まず人間と AI が目で見る段階を作る）

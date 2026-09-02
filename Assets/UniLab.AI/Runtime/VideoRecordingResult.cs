@@ -1,5 +1,3 @@
-using System;
-
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 namespace UniLab.AI
 {
@@ -42,9 +40,14 @@ namespace UniLab.AI
         public string FfmpegCommand { get; }
 
         /// <summary>
+        /// 音声を含む録画かどうかを取得します。
+        /// </summary>
+        public bool HasAudio { get; }
+
+        /// <summary>
         /// 新しい録画結果を初期化します。
         /// </summary>
-        public VideoRecordingResult(string name, string outputDirectory, int frameCount, int framesPerSecond, double durationSeconds, string manifestFilePath, string ffmpegCommand)
+        public VideoRecordingResult(string name, string outputDirectory, int frameCount, int framesPerSecond, double durationSeconds, string manifestFilePath, string ffmpegCommand, bool hasAudio = false)
         {
             Name = name ?? string.Empty;
             OutputDirectory = outputDirectory ?? string.Empty;
@@ -53,6 +56,7 @@ namespace UniLab.AI
             DurationSeconds = durationSeconds;
             ManifestFilePath = manifestFilePath ?? string.Empty;
             FfmpegCommand = ffmpegCommand ?? string.Empty;
+            HasAudio = hasAudio;
         }
     }
 }
