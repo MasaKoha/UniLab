@@ -286,10 +286,10 @@ namespace UniLab.AI
 
             Directory.Move(recordingResult.OutputDirectory, finalRecordingDirectory);
 
-            var ffmpegCommand = VideoRecorder.CreateFfmpegCommand(recordingResult.FramesPerSecond, finalRecordingDirectory, recordingName);
+            var ffmpegCommand = VideoRecorder.CreateFfmpegCommand(recordingResult.FramesPerSecond, finalRecordingDirectory, recordingName, recordingResult.DurationSeconds);
             var manifestFilePath = Path.Combine(finalRecordingDirectory, VideoRecorder.ManifestFileName);
             RewriteRecordingManifest(manifestFilePath, recordingName, ffmpegCommand);
-            return new VideoRecordingResult(recordingName, finalRecordingDirectory, recordingResult.FrameCount, recordingResult.FramesPerSecond, manifestFilePath, ffmpegCommand);
+            return new VideoRecordingResult(recordingName, finalRecordingDirectory, recordingResult.FrameCount, recordingResult.FramesPerSecond, recordingResult.DurationSeconds, manifestFilePath, ffmpegCommand);
         }
 
         private static void RewriteRecordingManifest(string manifestFilePath, string recordingName, string ffmpegCommand)
