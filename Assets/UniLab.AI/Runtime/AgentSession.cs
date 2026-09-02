@@ -30,6 +30,7 @@ namespace UniLab.AI
         private const int DefaultMaxSeconds = 600;
         private const int DefaultStuckRepeatLimit = 3;
         private const int DefaultSettleFrames = 1;
+        private const int RecommendedLabelLength = 20;
         private const float DefaultContinuousSeconds = 0.1f;
 
         private readonly AgentGoal _goal;
@@ -57,6 +58,7 @@ namespace UniLab.AI
         private int _sameObservationCount;
         private bool _ended;
         private bool _disposed;
+        private bool _sessionStateEntered;
 
         private AgentSession(AgentGoal goal, AgentOptions options)
         {
@@ -83,7 +85,9 @@ namespace UniLab.AI
         /// </summary>
         public static AgentSession Begin(AgentGoal goal, AgentOptions options)
         {
-            return new AgentSession(goal, options);
+            var session = new AgentSession(goal, options);
+            session.EnterSessionState();
+            return session;
         }
 
         /// <summary>
@@ -255,10 +259,12 @@ namespace UniLab.AI
         {
             if (_ended)
             {
+                ExitSessionStateIfNeeded();
                 return;
             }
 
             Finish("ended", "外部から終了されました。");
+            ExitSessionStateIfNeeded();
         }
 
         /// <summary>
@@ -272,6 +278,7 @@ namespace UniLab.AI
             }
 
             _disposed = true;
+            ExitSessionStateIfNeeded();
             if (_driver != null)
             {
                 UnityEngine.Object.Destroy(_driver.gameObject);
@@ -441,7 +448,7 @@ namespace UniLab.AI
 
         private string ExecuteSubmit(string targetName)
         {
-            var target = UiInputLocator.FindByPathSegment(targetName);
+            var target = UiInputLocator.FindTarget(targetName);
             if (target == null)
             {
                 return $"submit 対象が見つかりません。 target={targetName}";
@@ -520,6 +527,7 @@ namespace UniLab.AI
             builder.AppendLine("actions:");
             if (snapshot != null && snapshot.elements != null)
             {
+                var targetCounts = CountActionCandidateTargets(snapshot.elements);
                 for (var elementIndex = 0; elementIndex < snapshot.elements.Length; elementIndex++)
                 {
                     var element = snapshot.elements[elementIndex];
@@ -531,10 +539,23 @@ namespace UniLab.AI
                     var target = string.IsNullOrEmpty(element.path) ? element.name : element.path;
                     builder.Append(" - submit/click/tap target=");
                     builder.Append(target);
-                    if (!string.IsNullOrEmpty(element.label))
+                    var label = UiInputLocator.NormalizeLabelText(element.label);
+                    if (targetCounts.TryGetValue(target, out var duplicateCount) && duplicateCount > 1)
                     {
                         builder.Append(" label=");
-                        builder.Append(element.label);
+                        builder.Append(label);
+                        var recommendedSubmit = UiInputLocator.CreateLabelTargetSpec(label, RecommendedLabelLength);
+                        if (!string.IsNullOrEmpty(recommendedSubmit))
+                        {
+                            builder.Append(" → submit:\"");
+                            builder.Append(recommendedSubmit);
+                            builder.Append("\"");
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(label))
+                    {
+                        builder.Append(" label=");
+                        builder.Append(label);
                     }
 
                     builder.AppendLine();
@@ -697,6 +718,28 @@ namespace UniLab.AI
             _message = message;
             _ended = true;
             SaveSessionReport();
+        }
+
+        private void EnterSessionState()
+        {
+            if (_sessionStateEntered)
+            {
+                return;
+            }
+
+            _sessionStateEntered = true;
+            AiSessionState.Enter("agent");
+        }
+
+        private void ExitSessionStateIfNeeded()
+        {
+            if (!_sessionStateEntered)
+            {
+                return;
+            }
+
+            _sessionStateEntered = false;
+            AiSessionState.Exit("agent");
         }
 
         private bool IsStepBudgetExceeded()
@@ -876,6 +919,40 @@ namespace UniLab.AI
             builder.AppendLine(message ?? string.Empty);
             builder.Append(observation ?? string.Empty);
             return builder.ToString().TrimEnd();
+        }
+
+        private static Dictionary<string, int> CountActionCandidateTargets(UiSnapshotElement[] elements)
+        {
+            var targetCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (elements == null)
+            {
+                return targetCounts;
+            }
+
+            for (var elementIndex = 0; elementIndex < elements.Length; elementIndex++)
+            {
+                var element = elements[elementIndex];
+                if (!IsActionCandidate(element))
+                {
+                    continue;
+                }
+
+                var target = string.IsNullOrEmpty(element.path) ? element.name : element.path;
+                if (string.IsNullOrEmpty(target))
+                {
+                    continue;
+                }
+
+                if (targetCounts.TryGetValue(target, out var count))
+                {
+                    targetCounts[target] = count + 1;
+                    continue;
+                }
+
+                targetCounts.Add(target, 1);
+            }
+
+            return targetCounts;
         }
 
         private UiScenarioStep ToScenarioStep(AgentAction action)

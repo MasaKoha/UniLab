@@ -38,6 +38,7 @@ namespace UniLab.AI
         private double _startedAtRealtime;
         private string _startedAtText;
         private bool _completed;
+        private bool _sessionStateEntered;
         /// <summary>
         /// シナリオ完了時に通知する。
         /// </summary>
@@ -85,6 +86,8 @@ namespace UniLab.AI
             _recordingCoordinator = new ScenarioRecordingCoordinator(_scenario, _scenarioName);
             Directory.CreateDirectory(_outputDirectory);
             Directory.CreateDirectory(Path.GetDirectoryName(_resultFilePath));
+            AiSessionState.Enter("scenario");
+            _sessionStateEntered = true;
             ForensicsContext.BeginScenario(_scenarioName);
             InitializeForensics();
             _recordingCoordinator.InitializeInputOverlay();
@@ -95,6 +98,7 @@ namespace UniLab.AI
         }
         private void OnDestroy()
         {
+            ExitSessionStateIfNeeded();
             _recordingCoordinator?.StopRecordingIfActive();
             _recordingCoordinator?.StopInputRecordingIfNeeded();
             _recordingCoordinator?.StopPerformanceRecordingIfNeeded();
@@ -326,7 +330,7 @@ namespace UniLab.AI
             if (!string.IsNullOrEmpty(step.submit))
             {
                 InputOverlay.SetStepLabel($"決定 [{step.submit}]");
-                var target = UiInputLocator.FindByPathSegment(step.submit);
+                var target = UiInputLocator.FindTarget(step.submit);
                 if (target == null || !UiInputLocator.TrySubmit(target))
                 {
                     _warningCount++;
@@ -369,7 +373,7 @@ namespace UniLab.AI
                 failureMessage = string.Empty;
                 return true;
             }
-            var target = UiInputLocator.FindByPathSegment(primaryTarget);
+            var target = UiInputLocator.FindTarget(primaryTarget);
             if (target == null)
             {
                 failureMessage = $"操作対象が現れませんでした。 target={primaryTarget}";
@@ -442,6 +446,7 @@ namespace UniLab.AI
                 return;
             }
             _completed = true;
+            ExitSessionStateIfNeeded();
             _recordingCoordinator.StopRecordingIfActive();
             _recordingCoordinator.StopInputRecordingIfNeeded();
             _recordingCoordinator.StopPerformanceRecordingIfNeeded();
@@ -488,6 +493,17 @@ namespace UniLab.AI
         private void IncrementWarningCount()
         {
             _warningCount++;
+        }
+
+        private void ExitSessionStateIfNeeded()
+        {
+            if (!_sessionStateEntered)
+            {
+                return;
+            }
+
+            _sessionStateEntered = false;
+            AiSessionState.Exit("scenario");
         }
     }
 }

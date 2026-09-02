@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -13,6 +15,8 @@ namespace UniLab.AI
     /// </summary>
     public static class UiInputLocator
     {
+        private const string LabelTargetPrefix = "label:";
+
         /// <summary>
         /// パス末尾一致で GameObject を解決し、シナリオ JSON を短い名前で保つための入口です。
         /// </summary>
@@ -24,7 +28,7 @@ namespace UniLab.AI
             }
 
             var pathSegments = objectPath.Split('/');
-            var candidateTransforms = Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude);
+            var candidateTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude);
             for (var candidateIndex = 0; candidateIndex < candidateTransforms.Length; candidateIndex++)
             {
                 var candidateTransform = candidateTransforms[candidateIndex];
@@ -48,12 +52,82 @@ namespace UniLab.AI
         }
 
         /// <summary>
+        /// 表示ラベルの部分一致で Selectable を解決し、同名クローン行を人間可読な語彙で指定できるようにします。
+        /// </summary>
+        public static GameObject FindByLabel(string labelSubstring)
+        {
+            var normalizedSubstring = NormalizeLabelText(labelSubstring);
+            if (string.IsNullOrEmpty(normalizedSubstring))
+            {
+                return null;
+            }
+
+            var candidateSelectables = UnityEngine.Object.FindObjectsByType<Selectable>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var matchedObject = null as GameObject;
+            var matchedTop = float.NegativeInfinity;
+            var matchedLeft = float.PositiveInfinity;
+            var matchedPath = string.Empty;
+            for (var candidateIndex = 0; candidateIndex < candidateSelectables.Length; candidateIndex++)
+            {
+                var selectable = candidateSelectables[candidateIndex];
+                if (selectable == null || !selectable.gameObject.activeInHierarchy || !selectable.IsActive() || !selectable.IsInteractable())
+                {
+                    continue;
+                }
+
+                if (!HasMatchingSelectableLabel(selectable, normalizedSubstring))
+                {
+                    continue;
+                }
+
+                var rectTransform = selectable.transform as RectTransform;
+                if (rectTransform == null || !UiVisibilityUtility.TryGetScreenRect(rectTransform, out var rectValues))
+                {
+                    continue;
+                }
+
+                var top = rectValues[1] + rectValues[3];
+                var left = rectValues[0];
+                var path = UiVisibilityUtility.BuildPath(selectable.transform);
+                if (matchedObject != null && !IsHigherPriorityCandidate(top, left, path, matchedTop, matchedLeft, matchedPath))
+                {
+                    continue;
+                }
+
+                matchedObject = selectable.gameObject;
+                matchedTop = top;
+                matchedLeft = left;
+                matchedPath = path;
+            }
+
+            return matchedObject;
+        }
+
+        /// <summary>
+        /// `label:` 接頭辞付き指定と従来のパス指定を 1 つの入口へ統一します。
+        /// </summary>
+        public static GameObject FindTarget(string spec)
+        {
+            if (string.IsNullOrEmpty(spec))
+            {
+                return null;
+            }
+
+            if (spec.StartsWith(LabelTargetPrefix, StringComparison.Ordinal))
+            {
+                return FindByLabel(spec.Substring(LabelTargetPrefix.Length));
+            }
+
+            return FindByPathSegment(spec);
+        }
+
+        /// <summary>
         /// UI 要素名指定を座標指定と同じ扱いに落とし込み、ポインタ系 API を共通化するための中心座標です。
         /// </summary>
         public static bool TryGetElementCenter(string objectPath, out Vector2 screenPosition)
         {
             screenPosition = default;
-            var target = FindByPathSegment(objectPath);
+            var target = FindTarget(objectPath);
             if (target == null)
             {
                 return false;
@@ -150,7 +224,7 @@ namespace UniLab.AI
                 return false;
             }
 
-            var target = FindByPathSegment(objectPath);
+            var target = FindTarget(objectPath);
             return target != null && selectedObject == target;
         }
 
@@ -186,7 +260,7 @@ namespace UniLab.AI
                 return true;
             }
 
-            var texts = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Exclude);
+            var texts = UnityEngine.Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Exclude);
             for (var textIndex = 0; textIndex < texts.Length; textIndex++)
             {
                 var text = texts[textIndex];
@@ -239,7 +313,7 @@ namespace UniLab.AI
                 return true;
             }
 
-            var target = FindByPathSegment(anchor.waitForObject);
+            var target = FindTarget(anchor.waitForObject);
             if (target == null)
             {
                 return false;
@@ -285,6 +359,22 @@ namespace UniLab.AI
             return canvas.worldCamera;
         }
 
+        internal static string NormalizeLabelText(string text)
+        {
+            return StripRichTextTags(text).Trim();
+        }
+
+        internal static string CreateLabelTargetSpec(string label, int maximumLength)
+        {
+            var normalizedLabel = NormalizeLabelText(label);
+            if (string.IsNullOrEmpty(normalizedLabel))
+            {
+                return string.Empty;
+            }
+
+            return $"{LabelTargetPrefix}{UiVisibilityUtility.Truncate(normalizedLabel, maximumLength)}";
+        }
+
         private static bool DoesPathMatch(Transform targetTransform, string[] pathSegments)
         {
             var currentTransform = targetTransform;
@@ -304,6 +394,134 @@ namespace UniLab.AI
             }
 
             return true;
+        }
+
+        private static bool HasMatchingSelectableLabel(Selectable selectable, string labelSubstring)
+        {
+            if (selectable == null || string.IsNullOrEmpty(labelSubstring))
+            {
+                return false;
+            }
+
+            return HasMatchingTextLabel(selectable, labelSubstring);
+        }
+
+        private static bool HasMatchingTextLabel(Selectable selectable, string labelSubstring)
+        {
+            var tmpTexts = selectable.GetComponentsInChildren<TMP_Text>(false);
+            for (var textIndex = 0; textIndex < tmpTexts.Length; textIndex++)
+            {
+                if (DoesTextLabelMatch(selectable, tmpTexts[textIndex], labelSubstring))
+                {
+                    return true;
+                }
+            }
+
+            var legacyTexts = selectable.GetComponentsInChildren<Text>(false);
+            for (var textIndex = 0; textIndex < legacyTexts.Length; textIndex++)
+            {
+                if (DoesTextLabelMatch(selectable, legacyTexts[textIndex], labelSubstring))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool DoesTextLabelMatch<TText>(Selectable selectable, TText textComponent, string labelSubstring)
+            where TText : Graphic
+        {
+            if (textComponent == null || !textComponent.enabled || !textComponent.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            if (textComponent is TMP_Text tmpText)
+            {
+                return DoesCandidateLabelMatch(selectable, tmpText.text, tmpText.GetComponentInParent<Selectable>(), labelSubstring);
+            }
+
+            if (textComponent is Text legacyText)
+            {
+                return DoesCandidateLabelMatch(selectable, legacyText.text, legacyText.GetComponentInParent<Selectable>(), labelSubstring);
+            }
+
+            return false;
+        }
+
+        private static bool DoesCandidateLabelMatch(Selectable selectable, string rawText, Selectable closestSelectable, string labelSubstring)
+        {
+            if (closestSelectable == null || closestSelectable.gameObject != selectable.gameObject)
+            {
+                return false;
+            }
+
+            var normalizedLabel = NormalizeLabelText(rawText);
+            if (string.IsNullOrEmpty(normalizedLabel))
+            {
+                return false;
+            }
+
+            return normalizedLabel.IndexOf(labelSubstring, StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsHigherPriorityCandidate(float top, float left, string path, float matchedTop, float matchedLeft, string matchedPath)
+        {
+            if (top > matchedTop)
+            {
+                return true;
+            }
+
+            if (!Mathf.Approximately(top, matchedTop))
+            {
+                return false;
+            }
+
+            if (left < matchedLeft)
+            {
+                return true;
+            }
+
+            if (!Mathf.Approximately(left, matchedLeft))
+            {
+                return false;
+            }
+
+            return string.CompareOrdinal(path, matchedPath) < 0;
+        }
+
+        private static string StripRichTextTags(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(text.Length);
+            var isInsideTag = false;
+            for (var characterIndex = 0; characterIndex < text.Length; characterIndex++)
+            {
+                var character = text[characterIndex];
+                if (character == '<')
+                {
+                    isInsideTag = true;
+                    continue;
+                }
+
+                if (character == '>' && isInsideTag)
+                {
+                    isInsideTag = false;
+                    continue;
+                }
+
+                if (!isInsideTag)
+                {
+                    builder.Append(character);
+                }
+            }
+
+            return builder.ToString();
         }
 
         private static bool IsSelfOrDescendant(GameObject candidate, GameObject target)

@@ -42,6 +42,7 @@ namespace UniLab.AI
         private double _startedAt;
         private int _forensicsStartCount;
         private bool _completed;
+        private bool _sessionStateEntered;
 
         /// <summary>
         /// 探索完了時に summary を返し、シナリオランナーが合否へ反映できるようにします。
@@ -89,11 +90,14 @@ namespace UniLab.AI
             _forensicsStartCount = ExceptionForensics.Current == null ? 0 : ExceptionForensics.Current.CapturedCount;
             _outputDirectory = Path.Combine(DebugOutputPath.DirectoryPath, MonkeyDirectoryName, DateTime.Now.ToString(TimestampFormat, CultureInfo.InvariantCulture));
             Directory.CreateDirectory(_outputDirectory);
+            AiSessionState.Enter("monkey");
+            _sessionStateEntered = true;
             StartCoroutine(RunCoroutine());
         }
 
         private void OnDestroy()
         {
+            ExitSessionStateIfNeeded();
             _ownedForensics?.Dispose();
         }
 
@@ -310,6 +314,7 @@ namespace UniLab.AI
             }
 
             _completed = true;
+            ExitSessionStateIfNeeded();
             WriteOutputs(stopReason);
             var summary = BuildSummary(stopReason);
             Completed?.Invoke(summary);
@@ -448,6 +453,17 @@ namespace UniLab.AI
 
             list.Sort(StringComparer.Ordinal);
             return list.ToArray();
+        }
+
+        private void ExitSessionStateIfNeeded()
+        {
+            if (!_sessionStateEntered)
+            {
+                return;
+            }
+
+            _sessionStateEntered = false;
+            AiSessionState.Exit("monkey");
         }
     }
 }
