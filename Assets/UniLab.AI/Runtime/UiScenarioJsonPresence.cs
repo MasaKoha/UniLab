@@ -126,6 +126,23 @@ namespace UniLab.AI
             }
         }
 
+
+        /// <summary>
+        /// JsonUtility.ToJson が書き出す既定値の "monkey" オブジェクトを除去する。
+        /// JsonUtility は null のネストオブジェクトを出力できず既定値で埋めるため、書き出したシナリオを再生すると
+        /// 全ステップがモンキーテスト扱いになる。シナリオを書き出す側は必ずこれを通す。
+        /// </summary>
+        public static string StripDefaultMonkey(string scenarioJson)
+        {
+            if (string.IsNullOrEmpty(scenarioJson))
+            {
+                return scenarioJson;
+            }
+
+            // monkey の中身は配列と数値・真偽のみで { } を含まないため、非貪欲の単純一致で足りる
+            return Regex.Replace(scenarioJson, ",?\\s*\"monkey\"\\s*:\\s*\\{[^{}]*\\}", string.Empty);
+        }
+
         private static bool IsEscaped(string text, int quoteIndex)
         {
             var slashCount = 0;
