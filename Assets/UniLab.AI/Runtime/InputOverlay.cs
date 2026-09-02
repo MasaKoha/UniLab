@@ -40,6 +40,20 @@ namespace UniLab.AI
         }
 
         /// <summary>
+        /// 互換用の操作ラベル通知です。
+        /// 従来のラベル表示は廃止し、履歴帯の疑似操作項目として扱います。
+        /// </summary>
+        public static void SetStepLabel(string label)
+        {
+            if (_controller == null)
+            {
+                return;
+            }
+
+            _controller.AddSyntheticHistory(label, Time.realtimeSinceStartup);
+        }
+
+        /// <summary>
         /// オーバーレイを消します。
         /// 録画外では既定無効とする設計を保つため明示的に破棄します。
         /// </summary>

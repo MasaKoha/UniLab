@@ -325,6 +325,7 @@ namespace UniLab.AI
             _recordingCoordinator.AddRecordingMarkerIfNeeded(actionLabel);
             if (!string.IsNullOrEmpty(step.submit))
             {
+                InputOverlay.SetStepLabel($"決定 [{step.submit}]");
                 var target = UiInputLocator.FindByPathSegment(step.submit);
                 if (target == null || !UiInputLocator.TrySubmit(target))
                 {
