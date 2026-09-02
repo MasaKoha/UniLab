@@ -41,9 +41,11 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 シナリオから使う場合:
 
 ```json
-{ "submit": "RoomCard0", "recordStart": true },
-{ "waitFrames": 600, "recordStop": "battle_first_fight" }
+{ "submit": "RoomCard0", "recordStart": true, "recordFps": 60 },
+{ "settleFrames": 600, "recordStop": "battle_first_fight" }
 ```
+
+`recordFps` を省略すると 30fps。**60fps でフレーム落ちなしを実測で確認済み。**
 
 出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `frames.txt`、`recording-manifest.json` が並ぶ。
 manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
@@ -60,5 +62,6 @@ manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 - エディタが非フォーカスだと Game View が再描画されず、同じ絵が録れる。
   利用側で `Application.runInBackground` を有効にすること
 - 録画中は描画レートを目標 fps へ絞るため、ゲームの動きが普段より遅く見えることがある。目安は1回30秒以内
-- エンコードが目標 fps に間に合わない分は素直にフレーム落ちとして記録される。3D 画面では影響が大きい
+- エンコードが目標 fps に間に合わない分は素直にフレーム落ちとして記録される。
+  捨てた数は manifest の `droppedFrameCount` に出る。3D の高解像度・高 fps では影響が大きくなる
 - 音声は録らない

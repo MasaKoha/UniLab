@@ -1,6 +1,6 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 namespace UniLab.AI
 {
     /// <summary>
@@ -33,6 +33,9 @@ namespace UniLab.AI
         /// true のとき、このステップの開始時に録画を開始する。
         /// </summary>
         public bool recordStart;
+
+        /// <summary>録画のフレームレート。0 以下のとき既定値（30）を使う。recordStart と同じステップに書く。</summary>
+        public int recordFps;
 
         /// <summary>
         /// 空でないとき、このステップの完了時に録画を停止し、この名前で確定する。

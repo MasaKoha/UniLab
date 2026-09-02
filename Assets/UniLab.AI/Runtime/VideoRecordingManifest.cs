@@ -1,6 +1,6 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 namespace UniLab.AI
 {
     /// <summary>
@@ -23,6 +23,9 @@ namespace UniLab.AI
         /// 書き出した総フレーム数です。
         /// </summary>
         public int frameCount;
+
+        /// <summary>バッファ不足で撮影を見送ったフレーム数。0 でないなら録画負荷が高い。</summary>
+        public int droppedFrameCount;
 
         /// <summary>録画した実時間の長さ（秒）。動画の再生時間はこれに一致する。</summary>
         public float durationSeconds;
