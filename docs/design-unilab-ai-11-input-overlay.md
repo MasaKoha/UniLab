@@ -1,13 +1,18 @@
 # 11 入力可視化オーバーレイ 設計書
 
-ステータス: 設計。ロードマップ M3（04 と同時）
+ステータス: 設計。ロードマップ M1（録画機能の一部として最初に実装する）
 依存: なし（04 の注入入力も実機入力も同じ経路で拾う）。01・07 は本オーバーレイを除外する必要がある
+
+**本ツールの主用途は動画録画である。** 録画した動画を人間や AI が見るとき、
+「そのとき何を押したか」が写っていなければ、画面の変化が入力の結果なのか自発的な変化なのか判別できない。
+録画時は**既定で有効**にし、録画していないときは既定で無効にする。
 
 ---
 
 ## 目的
 
-動画や静止画を見たとき、**「そのとき何を押したか」が画面に写っている**ようにする。
+録画した動画を見たとき、**「そのとき何を押したか」が画面に写っている**ようにする。
+静止画でも使えるが、主戦場は動画である。
 
 - ゲームパッド: どのボタンを押したかを模式図で光らせる
 - キーボード: 押したキー名を表示する
@@ -71,10 +76,12 @@
 
 指ごとに半透明の円を描き、`touchId` を小さく添える。マルチタッチも各指が見える。
 
-### 操作ラベル（任意）
+### 操作ラベル
 
-シナリオランナーが実行中なら、画面上端に現在のステップ（`step8 submit=FacilityCard1/Select`）を 1 行出せる。
-動画の該当秒と manifest のマーカーの対応が、動画だけで読める。既定はオフ（画面を汚すため）。
+シナリオランナーが実行中なら、画面上端に現在のステップ（`step8 submit=FacilityCard1/Select  waited=0.03s`）を 1 行出す。
+動画の該当秒と manifest のマーカーの対応が、動画だけで読める。
+録画中は**既定で表示**する（AI がレビューする動画では、どの操作の結果かが画面に書いてあるほうが良い）。
+人に見せる動画で消したい場合は `showStepLabel: false`。
 
 ---
 
@@ -97,7 +104,7 @@ public sealed class InputOverlayOptions
     public bool showKeyboard = true;
     public bool showPointer = true;
     public bool showTouch = true;
-    public bool showStepLabel = false;
+    public bool showStepLabel = true;
     public OverlayCorner gamepadCorner = OverlayCorner.BottomRight;
     public float scale = 1f;
     public float opacity = 0.85f;
@@ -114,16 +121,27 @@ public static class InputOverlay
 }
 ```
 
-シナリオ直下に `"inputOverlay": true`（または options のオブジェクト）で有効化。録画と一緒に使う想定。
+### 有効化の既定
+
+| 状況 | 既定 |
+|---|---|
+| 録画中（`recordStart` 〜 `recordStop`、または `VideoRecorder.StartRecording` 中） | **有効** |
+| 録画していない | 無効 |
+
+`VideoRecorder.StartRecording` が録画開始時に `InputOverlay.Show()` を呼び、停止時に `Hide()` する。
+録画の外でも使いたい場合はシナリオ直下の `"inputOverlay": true` か `InputOverlay.Show()` で明示する。
+録画中に**消したい**場合は `"inputOverlay": false` を明示する（例: 07 の視覚回帰用に録画しながら静止画も撮るとき）。
+
+録画 manifest に `inputOverlay: true/false` を記録し、動画にオーバーレイが写っているかを後から判別できるようにする。
 
 ---
 
 ## 07 視覚回帰との関係
 
-オーバーレイは撮影に写るため、**ベースライン比較を汚す**。
-既定はオフとし、`recordStart` のある録画シナリオでだけ推奨する。
-静止画の回帰用シナリオでオンにした場合は、07 の無視領域にオーバーレイの矩形を自動追加する
-（`InputOverlay` が自分の占有矩形を公開し、07 がそれを読む）。
+オーバーレイは静止画の撮影にも写るため、**ベースライン比較を汚す**。
+録画していないときは既定で無効なので、静止画専用のシナリオには影響しない。
+録画と静止画撮影を同じシナリオで行う場合は、07 の無視領域にオーバーレイの矩形を自動追加する
+（`InputOverlay` が自分の占有矩形を公開し、07 がそれを読む）か、`"inputOverlay": false` で消す。
 
 ---
 
