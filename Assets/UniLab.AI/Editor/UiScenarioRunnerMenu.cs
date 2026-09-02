@@ -13,6 +13,7 @@ namespace UniLab.AI.Editor
     {
         private const string MenuPath = "UniLab/Debug/Run UI Scenario...";
         private const string SessionStatePathKey = "UniLab.AI.UiScenarioRunnerMenu.ScenarioPath";
+        private const string SessionStateResultPathKey = "UniLab.AI.UiScenarioRunnerMenu.ResultPath";
 
         static UiScenarioRunnerMenu()
         {
@@ -44,24 +45,28 @@ namespace UniLab.AI.Editor
         /// パス指定でシナリオを開始する。ファイル選択ダイアログを出せない外部自動化
         /// （MCP ブリッジ等）から利用側プロジェクトの固定メニューが呼ぶ入口。
         /// </summary>
-        public static void RunScenarioFile(string scenarioPath)
+        public static string RunScenarioFile(string scenarioPath)
         {
             if (EditorApplication.isPlaying)
             {
                 UnityEngine.Debug.LogError("[UiScenarioRunner] Play 中は開始できません。");
-                return;
+                return string.Empty;
             }
 
             var buildScenes = EditorBuildSettings.scenes;
             if (buildScenes == null || buildScenes.Length == 0)
             {
                 UnityEngine.Debug.LogError("[UiScenarioRunner] EditorBuildSettings にシーンがありません。");
-                return;
+                return string.Empty;
             }
 
+            var scenarioName = Path.GetFileNameWithoutExtension(scenarioPath);
+            var resultFilePath = UiScenarioRunner.CreateResultFilePath(scenarioName);
             SessionState.SetString(SessionStatePathKey, scenarioPath);
+            SessionState.SetString(SessionStateResultPathKey, resultFilePath);
             EditorSceneManager.OpenScene(buildScenes[0].path, OpenSceneMode.Single);
             EditorApplication.EnterPlaymode();
+            return resultFilePath;
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange playModeState)
@@ -72,12 +77,14 @@ namespace UniLab.AI.Editor
             }
 
             var scenarioPath = SessionState.GetString(SessionStatePathKey, string.Empty);
+            var resultFilePath = SessionState.GetString(SessionStateResultPathKey, string.Empty);
             if (string.IsNullOrEmpty(scenarioPath))
             {
                 return;
             }
 
             SessionState.SetString(SessionStatePathKey, string.Empty);
+            SessionState.SetString(SessionStateResultPathKey, string.Empty);
             if (!File.Exists(scenarioPath))
             {
                 UnityEngine.Debug.LogError($"[UiScenarioRunner] シナリオファイルが見つかりません。 path={scenarioPath}");
@@ -94,7 +101,8 @@ namespace UniLab.AI.Editor
                 return;
             }
 
-            var runner = UiScenarioRunner.Run(scenario);
+            UiScenarioJsonPresence.Apply(scenarioJson, scenario);
+            var runner = UiScenarioRunner.Run(scenario, Path.GetFileNameWithoutExtension(scenarioPath), resultFilePath);
             runner.Completed += HandleRunnerCompleted;
         }
 

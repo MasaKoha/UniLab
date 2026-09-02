@@ -53,6 +53,9 @@ Assets/
   移設で新たな依存を持ち込まないこと
 - R3 / UniTask / VContainer にも依存させない。**依存は UnityEngine・.NET 標準・`Unity.TextMeshPro` のみ**とする。
   TextMeshPro は UI 検査でテキスト要素を読むために必要で、Unity 標準パッケージのため切り出しの妨げにならない。
+- **`Unity.InputSystem` も許容する**（2026-09-02・ツール 04 で追加）。生入力の注入と記録に必要で、Unity 標準パッケージ。
+  利用側が旧 Input Manager のみの場合は `ENABLE_INPUT_SYSTEM` ガードで該当機能が黙って無効になる。
+  同時に asmdef の `allowUnsafeCode` を有効にしている（理由は `design-unilab-ai-04-input-vocabulary.md`「依存の追加」）
   切り出し先のリポジトリでパッケージ解決に悩まないことを優先する
 - この制約のため、毎フレーム処理は `UpdateAsObservable` ではなく `MonoBehaviour` の
   `Update` / コルーチンで書く。UniLab 本体のライフサイクル規約から意図的に外れる箇所であり、

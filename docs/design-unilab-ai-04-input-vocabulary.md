@@ -47,6 +47,11 @@ InputSystem.Update();
 ### 依存の追加
 
 UniLab.AI の asmdef に `Unity.InputSystem` を参照として足す。
+
+加えて **`allowUnsafeCode: true`** を asmdef に立てる（2026-09-02 実装時に決定）。
+`InputRecorder` がテキスト入力イベント（`TextEvent`）を `InputEventPtr` から読むためで、InputSystem の低レベル API はポインタ経由でしか触れない。
+このフラグは asmdef 単位で閉じ、利用側プロジェクトの設定には波及しない。UniLab.AI は `UNITY_EDITOR || DEVELOPMENT_BUILD` でしか
+コンパイルされず製品ビルドに入らないため、unsafe を許容するコストは無いと判断した。今後も InputSystem の低レベル API を使う箇所は unsafe でよい。
 Input System を導入していないプロジェクトでもコンパイルが通るよう、`#if ENABLE_INPUT_SYSTEM` で囲み、
 無効時は各コマンドが「未対応」を返す。TextMeshPro と同じく Unity 公式パッケージであり、切り出しの妨げにならない。
 
