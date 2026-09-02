@@ -1,7 +1,7 @@
 using System;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-namespace UniLab.Diagnostics
+namespace UniLab.AI
 {
     /// <summary>
     /// シナリオの 1 ステップ。指定されたフィールドだけが実行される。
@@ -28,6 +28,16 @@ namespace UniLab.Diagnostics
         /// true のとき UiLayoutAuditor を実行し JSON を保存する。
         /// </summary>
         public bool audit;
+
+        /// <summary>
+        /// true のとき、このステップの開始時に録画を開始する。
+        /// </summary>
+        public bool recordStart;
+
+        /// <summary>
+        /// 空でないとき、このステップの完了時に録画を停止し、この名前で確定する。
+        /// </summary>
+        public string recordStop;
 
         /// <summary>
         /// 整定待ちフレーム数。0 以下のとき既定値を使う。

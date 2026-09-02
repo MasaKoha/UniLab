@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-namespace UniLab.Diagnostics
+namespace UniLab.AI
 {
     /// <summary>
     /// UI レイアウトの破綻（はみ出し・重なり）を走査して報告する。

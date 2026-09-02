@@ -1,10 +1,12 @@
 {
-    "name": "UniLab.Debug.Editor",
-    "rootNamespace": "",
+    "name": "UniLab.AI.Editor",
+    "rootNamespace": "UniLab.AI.Editor",
     "references": [
-        "UniLab"
+        "UniLab.AI"
     ],
-    "includePlatforms": [ "Editor" ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

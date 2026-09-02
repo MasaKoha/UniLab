@@ -1,7 +1,7 @@
 using System;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-namespace UniLab.Diagnostics
+namespace UniLab.AI
 {
     /// <summary>
     /// 1シーン分の階層ダンプです。

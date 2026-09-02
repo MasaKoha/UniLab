@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace UniLab.Diagnostics.Editor
+namespace UniLab.AI.Editor
 {
     /// <summary>
     /// UI シナリオを選択して Play 中に自動実行するエディタメニューです。
@@ -12,7 +12,7 @@ namespace UniLab.Diagnostics.Editor
     public static class UiScenarioRunnerMenu
     {
         private const string MenuPath = "UniLab/Debug/Run UI Scenario...";
-        private const string SessionStatePathKey = "UniLab.Diagnostics.UiScenarioRunnerMenu.ScenarioPath";
+        private const string SessionStatePathKey = "UniLab.AI.UiScenarioRunnerMenu.ScenarioPath";
 
         static UiScenarioRunnerMenu()
         {

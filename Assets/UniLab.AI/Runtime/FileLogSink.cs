@@ -4,7 +4,7 @@ using System.Text;
 using UnityEngine;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-namespace UniLab.Diagnostics
+namespace UniLab.AI
 {
     /// <summary>
     /// Unity ログをファイルへ複写する。Boot 等で1回だけ生成して Initialize を呼ぶ。

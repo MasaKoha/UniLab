@@ -3,7 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace UniLab.Diagnostics.Editor
+namespace UniLab.AI.Editor
 {
     /// <summary>
     /// UI レイアウト監査を JSON へ保存するエディタメニューです。
