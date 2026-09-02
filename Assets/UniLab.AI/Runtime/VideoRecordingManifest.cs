@@ -40,6 +40,24 @@ namespace UniLab.AI
         /// </summary>
         public int height;
 
+        /// <summary>
+        /// スクリーンショット取得時の元フレーム幅です。
+        /// crop 前の生画像サイズを後段で復元するため保持します。
+        /// </summary>
+        public int capturedWidth;
+
+        /// <summary>
+        /// スクリーンショット取得時の元フレーム高さです。
+        /// crop 前の生画像サイズを後段で復元するため保持します。
+        /// </summary>
+        public int capturedHeight;
+
+        /// <summary>
+        /// 元フレームから切り出した矩形です。
+        /// 順序は x, y, width, height です。
+        /// </summary>
+        public int[] cropRect;
+
         /// <summary>音声を録音した場合は true。</summary>
         public bool hasAudio;
 

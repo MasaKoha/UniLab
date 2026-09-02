@@ -44,6 +44,12 @@ namespace UniLab.AI
         public OverlayCorner gamepadCorner = OverlayCorner.BottomRight;
 
         /// <summary>
+        /// ステップラベルを置く隅です。
+        /// 左上の常設 UI を隠しやすいため右上を既定にします。
+        /// </summary>
+        public OverlayCorner labelCorner = OverlayCorner.TopRight;
+
+        /// <summary>
         /// 全体スケールです。
         /// 解像度差や録画サイズ差で潰れないようにします。
         /// </summary>
