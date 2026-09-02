@@ -8,15 +8,17 @@ using UnityEngine;
 namespace UniLab.AI
 {
     /// <summary>
-    /// 連番 PNG による画面録画を行う使い捨てコンポーネントです。
+    /// 連番 JPG による画面録画を行う使い捨てコンポーネントです。
     /// </summary>
     public sealed class VideoRecorder : MonoBehaviour
     {
         /// <summary>録画結果に添える manifest のファイル名。呼び出し側が参照するために公開する。</summary>
         public const string ManifestFileName = "recording-manifest.json";
 
-        private const string FrameFileNameFormat = "frame-{0:D5}.png";
-        private const string FfmpegInputPattern = "frame-%05d.png";
+        private const string FrameFileNameFormat = "frame-{0:D5}.jpg";
+        private const string FfmpegInputPattern = "frame-%05d.jpg";
+        // 検証で UI のテキストを読む用途のため、圧縮ノイズで文字が潰れない範囲の品質を選ぶ。
+        private const int JpegQuality = 90;
         private const int DefaultFramesPerSecond = 30;
         private static readonly WaitForEndOfFrame WaitForEndOfFrameYieldInstruction = new WaitForEndOfFrame();
 
@@ -142,9 +144,9 @@ namespace UniLab.AI
                     _hasCapturedFrameSize = true;
                 }
 
-                var pngBytes = screenshotTexture.EncodeToPNG();
+                var frameBytes = screenshotTexture.EncodeToJPG(JpegQuality);
                 var frameFilePath = Path.Combine(_outputDirectory, string.Format(FrameFileNameFormat, _frameCount));
-                File.WriteAllBytes(frameFilePath, pngBytes);
+                File.WriteAllBytes(frameFilePath, frameBytes);
                 _frameCount++;
             }
             finally
@@ -188,7 +190,7 @@ namespace UniLab.AI
             };
         }
 
-        /// <summary>連番 PNG を mp4 へ変換する ffmpeg コマンドを組み立てる。変換の実行は呼び出し側が行う。</summary>
+        /// <summary>連番 JPG を mp4 へ変換する ffmpeg コマンドを組み立てる。変換の実行は呼び出し側が行う。</summary>
         public static string CreateFfmpegCommand(int framesPerSecond, string outputDirectory, string name)
         {
             var inputFilePath = Path.Combine(outputDirectory, FfmpegInputPattern);
