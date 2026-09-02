@@ -84,7 +84,7 @@ Assets/
 
 | 方式 | 長所 | 短所 | 判定 |
 |---|---|---|---|
-| **`ScreenCapture.CaptureScreenshotAsTexture` + 連番 PNG（採用）** | **合成後の最終画面が撮れる**。Overlay Canvas の UI が写る。同期実行でフレームの取りこぼしが無い | PNG エンコードが重い | **採用** |
+| **`ScreenCapture.CaptureScreenshotAsTexture` + 連番 JPG（採用）** | **合成後の最終画面が撮れる**。Overlay Canvas の UI も 3D も写る。同期実行でフレームの取りこぼしが無い | エンコードが重い | **採用** |
 | `ScreenCapture.CaptureScreenshot(path)` を毎フレーム | 手軽 | 非同期完了のため同一フレーム内で上書き・取りこぼしが起きうる | 不採用 |
 | Camera → RenderTexture → AsyncGPUReadback | 高速・低負荷 | **`ScreenSpaceOverlay` の UI が一切写らない** | **不採用** |
 | Unity Recorder パッケージ | 公式・mp4 直出力 | 依存増・エディタ専用 | 不採用 |
@@ -92,6 +92,9 @@ Assets/
 **カメラ経由を採らない理由が決定的である。** 利用側（karakuri）の Canvas は全て
 `RenderMode.ScreenSpaceOverlay` であり、Overlay はカメラのレンダーターゲットに描かれない。
 UI の見た目検証が主目的である以上、カメラ経由は要件を満たさない。
+
+採用方式は**合成後のバックバッファ**を読むため、3D ジオメトリ・スカイボックス・ポストプロセス・
+あらゆる Canvas の描画モードが同時に写る。将来 3D 空間を含む画面へ移行しても方式変更は不要である。
 
 ### 時間の扱い
 
@@ -106,13 +109,35 @@ UI の見た目検証が主目的である以上、カメラ経由は要件を�
 `CaptureScreenshotAsTexture` は**レンダリング完了後**に呼ぶ必要がある。
 `Update` ではなくコルーチンで `WaitForEndOfFrame` を待ってから撮る。
 
+### 保存形式
+
+フレームは **JPG（品質 90）** で書き出す。
+
+同一シーン（1397x786 の UI 画面・229 フレーム）での実測は以下のとおり。
+
+| 形式 | 1フレーム平均 | 合計 |
+|---|---|---|
+| PNG | 126.6 KB | 29.0 MB |
+| JPG 品質 90 | 103.1 KB | 23.1 MB |
+
+**平坦な UI 画面では差が小さい（約 19% 減）。** PNG はベタ塗りを極めて良く圧縮するためで、
+この条件だけを見れば JPG を選ぶ理由は薄い。
+
+採用の根拠は**3D 画面**にある。PNG は可逆圧縮のため、テクスチャやライティングで
+情報量が増えるほどフレームサイズが跳ね上がる。JPG は品質設定で上限が決まり、
+内容によらず概ね一定に収まる。**将来 3D を含む画面を録る前提では JPG のほうが破綻しない。**
+
+品質 90 を選ぶのは、検証で AI が**画面内のテキストを読む**ためである。
+品質を落とすと文字周りの圧縮ノイズで可読性が落ちる。実測では品質 90 で
+ピクセルフォントの小さな文字も潰れないことを目視確認した。
+
 ### mp4 への変換
 
 **Unity 内で ffmpeg を起動しない。** ゲームコードにプロセス起動を持ち込まない方針を維持する。
 録画結果に変換コマンド文字列を含めて返し、実行は Mac 側（検証を運転する AI / 人間）が行う。
 
 ```
-ffmpeg -y -framerate 30 -i frame-%05d.png -c:v libx264 -pix_fmt yuv420p -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" out.mp4
+ffmpeg -y -framerate 30 -i frame-%05d.jpg -c:v libx264 -pix_fmt yuv420p -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" out.mp4
 ```
 
 `pad` フィルタは H.264 が偶数解像度を要求するため。奇数幅の画面で変換が失敗する事故を防ぐ。
@@ -135,7 +160,7 @@ ffmpeg -y -framerate 30 -i frame-%05d.png -c:v libx264 -pix_fmt yuv420p -vf "pad
   "width": 1397,
   "height": 786,
   "startedAtRealtime": "2026-09-02T10:30:00+09:00",
-  "ffmpegCommand": "ffmpeg -y -framerate 30 -i frame-%05d.png ...",
+  "ffmpegCommand": "ffmpeg -y -framerate 30 -i frame-%05d.jpg ...",
   "markers": [
     { "frame": 0,   "timeSeconds": 0.0, "label": "step12 submit=RoomCard0" },
     { "frame": 150, "timeSeconds": 5.0, "label": "step13 capture=12_dungeon_battle" }
@@ -159,7 +184,7 @@ ffmpeg -y -framerate 30 -i frame-%05d.png -c:v libx264 -pix_fmt yuv420p -vf "pad
 ## 4. API
 
 ```csharp
-/// <summary>連番 PNG による画面録画。使い捨て GameObject として動く。</summary>
+/// <summary>連番 JPG による画面録画。使い捨て GameObject として動く。</summary>
 public sealed class VideoRecorder : MonoBehaviour
 {
     /// <summary>録画を開始する。出力先ディレクトリは呼び出し側が決める。</summary>
@@ -205,13 +230,13 @@ public sealed class VideoRecorder : MonoBehaviour
 DebugOutput/
   recordings/
     battle_first_fight/
-      frame-00000.png
-      frame-00001.png
+      frame-00000.jpg
+      frame-00001.jpg
       ...
       recording-manifest.json
 ```
 
-`DebugOutput/` は利用側で gitignore 済みであること。連番 PNG は容量が大きいため、
+`DebugOutput/` は利用側で gitignore 済みであること。連番 JPG も本数が増えれば容量を食うため、
 変換後にフレームを消すかどうかは利用側の運用に委ねる（ツール側では消さない）。
 
 ---
@@ -220,8 +245,10 @@ DebugOutput/
 
 - **エディタが非フォーカスだと Game View が再描画されず、同じ絵が録れる。**
   `Application.runInBackground` を有効にすること（利用側の設定）
-- 録画中は実時間が伸びる。長尺の録画には向かない。目安は1回30秒以内
-- 連番 PNG は容量を食う。1280x720 で概ね 300KB/frame、30fps で 9MB/秒
+- 録画中は実時間が伸びる。長尺の録画には向かない。目安は1回30秒以内。
+  **3D 画面ではエンコード負荷が上がるため、この目安はさらに短くなる**
+- 連番 JPG は容量を食う。1397x786 の UI 画面で実測 約103KB/frame（30fps で約3MB/秒）。
+  3D 画面ではこれより大きくなる
 - 音声は録らない。UI・見た目の検証が目的であり、音声は対象外
 
 ## 8. スコープ外

@@ -9,7 +9,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 | 種別 | クラス | 役割 |
 |---|---|---|
 | 記録 | `FileLogSink` | Unity ログを全てファイルへ複写する |
-| 記録 | `VideoRecorder` | 画面を連番 PNG で録画し、時刻とステップを対応付ける manifest を出す |
+| 記録 | `VideoRecorder` | 画面を連番 JPG で録画し、時刻とステップを対応付ける manifest を出す |
 | 観測 | `UiLayoutAuditor` | UI のはみ出し・重なりを検出して JSON で返す |
 | 観測 | `SceneHierarchyDumper` | シーン階層と SerializeField の結線状態をテキストで出す |
 | 運転 | `UiScenarioRunner` | JSON シナリオに従って UI を操作し、撮影・録画・監査を自動実行する |
@@ -35,7 +35,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 
 ## 動画録画の使い方
 
-録画は連番 PNG で出力し、mp4 への変換は**呼び出し側（Mac）が ffmpeg で行う**。
+録画は連番 JPG（品質 90）で出力し、mp4 への変換は**呼び出し側（Mac）が ffmpeg で行う**。
 ゲームコードにプロセス起動を持ち込まないため。
 
 シナリオから使う場合:
@@ -45,7 +45,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 { "waitFrames": 600, "recordStop": "battle_first_fight" }
 ```
 
-出力は `DebugOutput/recordings/<名前>/` に連番 PNG と `recording-manifest.json` が並ぶ。
+出力は `DebugOutput/recordings/<名前>/` に連番 JPG と `recording-manifest.json` が並ぶ。
 manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 
 `markers` が動画の時刻とシナリオのステップを対応付ける。
