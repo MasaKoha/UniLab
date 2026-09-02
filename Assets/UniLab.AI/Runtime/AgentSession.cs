@@ -458,6 +458,7 @@ namespace UniLab.AI
                 return $"submit 対象が操作可能ではありません。 target={targetName}";
             }
 
+            InputOverlay.SetStepLabel($"決定 [{targetName}]");
             return UiInputLocator.TrySubmit(target) ? "submit を送信しました。" : "submit を送れませんでした。";
         }
 

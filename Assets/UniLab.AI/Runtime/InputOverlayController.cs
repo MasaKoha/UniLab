@@ -11,7 +11,7 @@ namespace UniLab.AI
 {
     /// <summary>
     /// 入力状態を ScreenSpaceOverlay の UI として描画します。
-    /// 録画後合成ではなくゲーム画面そのものへ載せることで時刻ずれを避けます。
+    /// 録画へ自然に写るオーバーレイとして、常時シルエットと直前入力の両方を読める形に保ちます。
     /// </summary>
     public sealed class InputOverlayController : MonoBehaviour
     {
@@ -22,15 +22,43 @@ namespace UniLab.AI
         private const float DragTrailFadeSeconds = 0.5f;
         private const float ScrollIndicatorDurationSeconds = 0.2f;
         private const float PointerMoveThreshold = 2f;
-        private const float KeyboardChipWidth = 84f;
-        private const float KeyboardChipHeight = 34f;
+        private const float GamepadStickRange = 18f;
+        private const float DefaultWidgetMargin = 12f;
+        private const float DeviceSwitchDelaySeconds = 2f;
+        private const float HoldFadeSeconds = 0.2f;
+        private const float KeyboardChipWidth = 72f;
+        private const float KeyboardChipHeight = 32f;
+        private const float HistoryItemWidth = 164f;
+        private const float HistoryItemHeight = 56f;
+        private const float GamepadPanelWidth = 340f;
+        private const float GamepadPanelHeight = 190f;
+        private const float KeyboardPanelWidth = 340f;
+        private const float KeyboardPanelHeight = 168f;
+        private const float HistoryPanelHeight = 56f;
+        private const float HistoryPanelSpacing = 8f;
+        private const float HistoryPanelMaxWidthRatio = 0.4f;
+        private const float HistoryItemHorizontalPadding = 10f;
+        private const float HistoryItemVerticalPadding = 6f;
+        private const float HistoryItemMinimumWidth = 56f;
+        private const float HistorySeparatorWidth = 16f;
         private const float TouchDiameter = 56f;
-        private const float StickRange = 18f;
-        private const float DefaultWidgetMargin = 24f;
+        private const float StickCenterThreshold = 0.0001f;
         private static readonly Color WidgetPanelColor = new Color(0f, 0f, 0f, 0.45f);
-        private static readonly Color KeyboardPanelColor = new Color(0f, 0f, 0f, 0.35f);
-        private static readonly Color StepLabelPanelColor = new Color(0.08f, 0.1f, 0.14f, 0.6f);
-        private static readonly Color StepLabelTextColor = new Color(0.96f, 0.97f, 1f, 1f);
+        private static readonly Color KeyboardPanelColor = new Color(0f, 0f, 0f, 0.38f);
+        private static readonly Color HistoryPanelColor = new Color(0f, 0f, 0f, 0f);
+        private static readonly Color IdleChipColor = new Color(1f, 1f, 1f, 0.18f);
+        private static readonly Color ActiveChipColor = new Color(0.15f, 0.85f, 0.45f, 0.95f);
+        private static readonly Color FadingChipColor = new Color(0.15f, 0.85f, 0.45f, 0.5f);
+        private static readonly Color MouseActiveChipColor = new Color(0.95f, 0.95f, 0.95f, 0.95f);
+        private static readonly Color MouseFadingChipColor = new Color(0.95f, 0.95f, 0.95f, 0.5f);
+        private static readonly Color InactiveLabelColor = new Color(1f, 1f, 1f, 0.72f);
+        private static readonly Color GhostStickColor = new Color(0.2f, 0.95f, 0.6f, 0.35f);
+        private static readonly Color LiveStickColor = new Color(0.2f, 0.95f, 0.6f, 0.95f);
+        private static readonly Color PointerIdleColor = new Color(1f, 1f, 1f, 0.55f);
+        private static readonly Color PointerActiveColor = new Color(1f, 1f, 1f, 0.95f);
+        private static readonly Color HistoryTextColor = ParseHtmlColor("#F5F0E6");
+        private static readonly Color HistoryTimeColor = new Color(0.9607843f, 0.9411765f, 0.9019608f, 0.62f);
+        private static readonly Color HistoryItemBackgroundColor = ParseHtmlColor("#00000099");
         private const string WhiteColorHtml = "#FFFFFF";
         private const string YellowColorHtml = "#FFE16A";
         private const string BlueColorHtml = "#79C9FF";
@@ -39,19 +67,21 @@ namespace UniLab.AI
         private static Sprite s_whiteSprite;
         private static Sprite s_circleSprite;
 
-        private readonly Dictionary<string, float> _gamepadVisibleUntilByKey = new Dictionary<string, float>(StringComparer.Ordinal);
-        private readonly Dictionary<string, TextMeshProUGUI> _gamepadTextByKey = new Dictionary<string, TextMeshProUGUI>(StringComparer.Ordinal);
-        private readonly Dictionary<string, float> _keyboardVisibleUntilByKey = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ButtonVisualState> _gamepadButtonsByKey = new Dictionary<string, ButtonVisualState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, HeldInputState> _keyboardStatesByKey = new Dictionary<string, HeldInputState>(StringComparer.Ordinal);
         private readonly List<KeyboardChipView> _keyboardChipViews = new List<KeyboardChipView>();
+        private readonly List<HeldInputState> _visibleKeyboardStates = new List<HeldInputState>();
         private readonly List<PointerTrailPoint> _pointerTrailPoints = new List<PointerTrailPoint>();
         private readonly List<Image> _pointerTrailSegments = new List<Image>();
         private readonly List<PointerClickPulse> _pointerClickPulses = new List<PointerClickPulse>();
         private readonly List<Image> _pointerClickPulseViews = new List<Image>();
         private readonly Dictionary<int, TouchView> _touchViewsById = new Dictionary<int, TouchView>();
         private readonly List<int> _releasedTouchIds = new List<int>();
+        private readonly List<HistoryEntry> _historyEntries = new List<HistoryEntry>();
+        private readonly List<HistoryItemView> _historyItemViews = new List<HistoryItemView>();
+        private readonly List<TextMeshProUGUI> _historySeparatorViews = new List<TextMeshProUGUI>();
         private readonly LegacyInputProxy _legacyInputProxy = new LegacyInputProxy();
         private readonly InputSystemProxy _inputSystemProxy = new InputSystemProxy();
-        private readonly StepLabelProvider _stepLabelProvider = new StepLabelProvider();
 
         private InputOverlayOptions _options;
         private Canvas _canvas;
@@ -61,20 +91,35 @@ namespace UniLab.AI
         private RectTransform _keyboardPanel;
         private RectTransform _pointerLayer;
         private RectTransform _touchLayer;
-        private RectTransform _topLabelPanel;
-        private TextMeshProUGUI _stepLabel;
+        private RectTransform _historyPanel;
         private RectTransform _pointerRoot;
         private TextMeshProUGUI _scrollIndicator;
+        private TextMeshProUGUI _keyboardTitle;
+        private TextMeshProUGUI _mousePositionLabel;
         private Image _leftStickDot;
+        private Image _leftStickGhostDot;
         private Image _rightStickDot;
+        private Image _rightStickGhostDot;
+        private Image _pointerShaft;
+        private Image _pointerWingTop;
+        private Image _pointerWingBottom;
+        private HeldInputState _leftMouseButtonState;
+        private HeldInputState _rightMouseButtonState;
+        private HeldInputState _middleMouseButtonState;
         private bool _isInitialized;
-        private bool _wasLeftPointerPressed;
-        private bool _wasRightPointerPressed;
-        private bool _wasMiddlePointerPressed;
         private Vector2 _previousPointerPosition;
+        private Vector2 _pointerPosition;
         private Vector2 _leftStickValue;
         private Vector2 _rightStickValue;
+        private Vector2 _leftStickGhostValue;
+        private Vector2 _rightStickGhostValue;
+        private float _leftStickGhostReleasedAt;
+        private float _rightStickGhostReleasedAt;
         private float _scrollIndicatorVisibleUntil;
+        private DeviceMode _displayedDeviceMode;
+        private DeviceMode _pendingDeviceMode;
+        private float _displayedDeviceLastActivityAt;
+        private float _pendingDeviceLastActivityAt;
 
         /// <summary>
         /// 外部から明示初期化します。
@@ -92,6 +137,20 @@ namespace UniLab.AI
             ApplyOptions();
         }
 
+        /// <summary>
+        /// 疑似操作のラベルを履歴帯へ追加します。
+        /// submit のような実入力を伴わない操作も動画から読み返せるようにするためです。
+        /// </summary>
+        public void AddSyntheticHistory(string label, float now)
+        {
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                return;
+            }
+
+            AddHistoryEntry(label, now);
+        }
+
         private void Update()
         {
             if (!_isInitialized)
@@ -101,19 +160,24 @@ namespace UniLab.AI
 
             var now = Time.realtimeSinceStartup;
             PollInput(now);
+            UpdateDisplayedDevice(now);
             RefreshGamepad(now);
             RefreshKeyboard(now);
             RefreshPointer(now);
             RefreshTouches(now);
-            RefreshStepLabel(now);
+            RefreshHistory(now);
         }
 
         private void OnDestroy()
         {
             _keyboardChipViews.Clear();
+            _visibleKeyboardStates.Clear();
             _pointerTrailSegments.Clear();
             _pointerClickPulseViews.Clear();
             _touchViewsById.Clear();
+            _historyItemViews.Clear();
+            _historySeparatorViews.Clear();
+            _historyEntries.Clear();
         }
 
         private void BuildVisualTree()
@@ -140,45 +204,42 @@ namespace UniLab.AI
             _rootTransform.offsetMin = Vector2.zero;
             _rootTransform.offsetMax = Vector2.zero;
 
-            var gamepadPanelObject = CreatePanel("GamepadPanel", _rootTransform, new Vector2(340f, 190f), WidgetPanelColor);
+            _leftMouseButtonState = CreatePointerButtonState("L");
+            _rightMouseButtonState = CreatePointerButtonState("R");
+            _middleMouseButtonState = CreatePointerButtonState("M");
+
+            var gamepadPanelObject = CreatePanel("GamepadPanel", _rootTransform, new Vector2(GamepadPanelWidth, GamepadPanelHeight), WidgetPanelColor);
             _gamepadPanel = gamepadPanelObject.rectTransform;
             BuildGamepadContents(_gamepadPanel);
 
-            var keyboardPanelObject = CreatePanel("KeyboardPanel", _rootTransform, new Vector2(720f, 50f), KeyboardPanelColor);
+            var keyboardPanelObject = CreatePanel("KeyboardPanel", _rootTransform, new Vector2(KeyboardPanelWidth, KeyboardPanelHeight), KeyboardPanelColor);
             _keyboardPanel = keyboardPanelObject.rectTransform;
             BuildKeyboardContents(_keyboardPanel);
+
+            var historyPanelObject = CreatePanel("HistoryPanel", _rootTransform, new Vector2(0f, HistoryPanelHeight), HistoryPanelColor);
+            _historyPanel = historyPanelObject.rectTransform;
+            BuildHistoryContents(_historyPanel);
 
             _pointerLayer = CreateContainer("PointerLayer", _rootTransform);
             BuildPointerContents(_pointerLayer);
 
             _touchLayer = CreateContainer("TouchLayer", _rootTransform);
-
-            var topLabelPanelObject = CreatePanel("TopLabelPanel", _rootTransform, new Vector2(860f, 46f), StepLabelPanelColor);
-            _topLabelPanel = topLabelPanelObject.rectTransform;
-            _stepLabel = CreateText("StepLabel", _topLabelPanel, 22, TextAlignmentOptions.Center, FontStyles.Normal);
-            _stepLabel.color = StepLabelTextColor;
-            Stretch(_stepLabel.rectTransform, new Vector2(10f, 6f), new Vector2(-10f, -6f));
         }
 
         private void ApplyOptions()
         {
-            _canvasGroup.alpha = Mathf.Clamp01(_options.opacity);
-
             var scale = Mathf.Max(0.1f, _options.scale);
+            _canvasGroup.alpha = Mathf.Clamp01(_options.opacity);
             _gamepadPanel.localScale = Vector3.one * scale;
             _keyboardPanel.localScale = Vector3.one * scale;
-            _topLabelPanel.localScale = Vector3.one * scale;
-
-            _gamepadPanel.gameObject.SetActive(_options.showGamepad);
-            _keyboardPanel.gameObject.SetActive(_options.showKeyboard);
-            _pointerLayer.gameObject.SetActive(_options.showPointer);
-            _touchLayer.gameObject.SetActive(_options.showTouch);
-            _topLabelPanel.gameObject.SetActive(false);
-            _stepLabel.text = string.Empty;
+            _historyPanel.localScale = Vector3.one * scale;
 
             AnchorToCorner(_gamepadPanel, _options.gamepadCorner, DefaultWidgetMargin, DefaultWidgetMargin);
-            AnchorToCorner(_keyboardPanel, OverlayCorner.BottomLeft, DefaultWidgetMargin, DefaultWidgetMargin);
-            AnchorToCorner(_topLabelPanel, _options.labelCorner, DefaultWidgetMargin, DefaultWidgetMargin);
+            AnchorToCorner(_keyboardPanel, _options.gamepadCorner, DefaultWidgetMargin, DefaultWidgetMargin);
+            AnchorHistoryPanel(_historyPanel, _options.historyCorner);
+
+            EnsureDisplayedDeviceFallback();
+            RefreshStaticSilhouetteVisibility();
         }
 
         private void PollInput(float now)
@@ -191,73 +252,111 @@ namespace UniLab.AI
             _legacyInputProxy.Poll(this, now);
         }
 
-        private void RefreshGamepad(float now)
+        private void UpdateDisplayedDevice(float now)
         {
-            if (!_options.showGamepad)
+            if (_pendingDeviceMode == DeviceMode.None || _pendingDeviceMode == _displayedDeviceMode)
             {
                 return;
             }
 
-            var hasAnyVisibleButton = false;
-            foreach (var pair in _gamepadTextByKey)
+            if (_displayedDeviceMode == DeviceMode.None)
             {
-                var isVisible = _gamepadVisibleUntilByKey.TryGetValue(pair.Key, out var visibleUntil) && visibleUntil >= now;
-                hasAnyVisibleButton |= isVisible;
-                SetChipActive(pair.Value, isVisible, isVisible ? new Color(0.15f, 0.85f, 0.45f, 0.95f) : new Color(1f, 1f, 1f, 0.25f));
+                _displayedDeviceMode = _pendingDeviceMode;
+                _displayedDeviceLastActivityAt = _pendingDeviceLastActivityAt;
+                RefreshStaticSilhouetteVisibility();
+                return;
             }
 
-            _leftStickDot.rectTransform.anchoredPosition = _leftStickValue * StickRange;
-            _rightStickDot.rectTransform.anchoredPosition = _rightStickValue * StickRange;
-            _gamepadPanel.gameObject.SetActive(_options.showGamepad && (hasAnyVisibleButton || _leftStickValue.sqrMagnitude > 0.0001f || _rightStickValue.sqrMagnitude > 0.0001f));
+            if (now - _displayedDeviceLastActivityAt < DeviceSwitchDelaySeconds)
+            {
+                return;
+            }
+
+            _displayedDeviceMode = _pendingDeviceMode;
+            _displayedDeviceLastActivityAt = _pendingDeviceLastActivityAt;
+            RefreshStaticSilhouetteVisibility();
+        }
+
+        private void RefreshGamepad(float now)
+        {
+            var shouldShow = _options.showGamepad && IsGamepadDisplayed();
+            _gamepadPanel.gameObject.SetActive(shouldShow);
+            if (!shouldShow)
+            {
+                return;
+            }
+
+            foreach (var pair in _gamepadButtonsByKey)
+            {
+                var visualState = pair.Value;
+                UpdateButtonVisual(visualState.text, visualState.background, visualState.state, ActiveChipColor, FadingChipColor, now, _options.holdSeconds);
+            }
+
+            RefreshStick(_leftStickDot, _leftStickGhostDot, _leftStickValue, _leftStickGhostValue, _leftStickGhostReleasedAt, GamepadStickRange, now);
+            RefreshStick(_rightStickDot, _rightStickGhostDot, _rightStickValue, _rightStickGhostValue, _rightStickGhostReleasedAt, GamepadStickRange, now);
         }
 
         private void RefreshKeyboard(float now)
         {
-            if (!_options.showKeyboard)
+            var shouldShow = (_options.showKeyboard || _options.showPointer) && IsKeyboardMouseDisplayed();
+            _keyboardPanel.gameObject.SetActive(shouldShow);
+            if (!shouldShow)
             {
                 return;
             }
 
-            var visibleKeys = new List<string>();
-            foreach (var pair in _keyboardVisibleUntilByKey)
+            _keyboardTitle.text = _options.showKeyboard ? "Keyboard" : "Mouse";
+            _visibleKeyboardStates.Clear();
+            if (_options.showKeyboard)
             {
-                if (pair.Value >= now)
+                foreach (var pair in _keyboardStatesByKey)
                 {
-                    visibleKeys.Add(pair.Key);
+                    if (pair.Value.IsVisible(now, _options.holdSeconds))
+                    {
+                        _visibleKeyboardStates.Add(pair.Value);
+                    }
                 }
             }
 
-            visibleKeys.Sort(StringComparer.Ordinal);
+            _visibleKeyboardStates.Sort(HeldInputStateComparer.Instance);
             for (var chipIndex = 0; chipIndex < _keyboardChipViews.Count; chipIndex++)
             {
                 var chipView = _keyboardChipViews[chipIndex];
-                var isActive = chipIndex < visibleKeys.Count;
+                var isActive = chipIndex < _visibleKeyboardStates.Count;
                 chipView.root.gameObject.SetActive(isActive);
                 if (!isActive)
                 {
                     continue;
                 }
 
-                chipView.label.text = visibleKeys[chipIndex];
+                var state = _visibleKeyboardStates[chipIndex];
+                chipView.label.text = state.GetDisplayText();
+                UpdateButtonVisual(chipView.label, chipView.background, state, ActiveChipColor, FadingChipColor, now, _options.holdSeconds);
             }
 
-            _keyboardPanel.gameObject.SetActive(_options.showKeyboard && visibleKeys.Count > 0);
+            RefreshMouseButtonVisual(_leftMouseButtonState, now);
+            RefreshMouseButtonVisual(_rightMouseButtonState, now);
+            RefreshMouseButtonVisual(_middleMouseButtonState, now);
+            _mousePositionLabel.text = $"x {_pointerPosition.x:0}  y {_pointerPosition.y:0}";
         }
 
         private void RefreshPointer(float now)
         {
-            if (!_options.showPointer)
+            var shouldShow = _options.showPointer && IsKeyboardMouseDisplayed();
+            _pointerRoot.gameObject.SetActive(shouldShow);
+            if (shouldShow)
             {
-                return;
+                var pointerColor = IsAnyPointerButtonActive(now) ? PointerActiveColor : PointerIdleColor;
+                _pointerShaft.color = pointerColor;
+                _pointerWingTop.color = pointerColor;
+                _pointerWingBottom.color = pointerColor;
             }
-
-            _pointerRoot.gameObject.SetActive(true);
 
             for (var pulseIndex = _pointerClickPulses.Count - 1; pulseIndex >= 0; pulseIndex--)
             {
                 var pulse = _pointerClickPulses[pulseIndex];
                 var elapsed = now - pulse.startedAt;
-                if (elapsed > PointerRingDurationSeconds)
+                if (elapsed > PointerRingDurationSeconds || !shouldShow)
                 {
                     _pointerClickPulseViews[pulseIndex].gameObject.SetActive(false);
                     _pointerClickPulses.RemoveAt(pulseIndex);
@@ -278,6 +377,13 @@ namespace UniLab.AI
             for (var segmentIndex = _pointerTrailSegments.Count - 1; segmentIndex >= 0; segmentIndex--)
             {
                 _pointerTrailSegments[segmentIndex].gameObject.SetActive(false);
+            }
+
+            if (!shouldShow)
+            {
+                _pointerTrailPoints.Clear();
+                _scrollIndicator.gameObject.SetActive(false);
+                return;
             }
 
             var visibleSegmentCount = 0;
@@ -331,108 +437,223 @@ namespace UniLab.AI
             _releasedTouchIds.Clear();
         }
 
-        private void RefreshStepLabel(float now)
+        private void RefreshHistory(float now)
         {
-            if (!_options.showStepLabel)
+            var visibleCount = Mathf.Min(Mathf.Max(0, _options.historyCount), Mathf.Min(_historyEntries.Count, _historyItemViews.Count));
+            _historyPanel.gameObject.SetActive(visibleCount > 0);
+            if (visibleCount <= 0)
             {
-                _stepLabel.text = string.Empty;
-                _topLabelPanel.gameObject.SetActive(false);
+                HideAllHistoryViews();
                 return;
             }
 
-            var labelText = _stepLabelProvider.TryGetCurrentLabel(now);
-            var hasLabel = !string.IsNullOrWhiteSpace(labelText);
-            _topLabelPanel.gameObject.SetActive(hasLabel);
-            if (hasLabel)
+            var historyScale = Mathf.Max(0.1f, _options.scale);
+            var maxPanelWidth = (Screen.width * HistoryPanelMaxWidthRatio) / historyScale;
+            var visibleHistoryStartIndex = _historyEntries.Count - visibleCount;
+            var itemWidths = new float[visibleCount];
+            var preferredItemWidthTotal = 0f;
+            for (var visibleIndex = 0; visibleIndex < visibleCount; visibleIndex++)
             {
-                _stepLabel.text = labelText;
-                return;
+                var itemView = _historyItemViews[visibleIndex];
+                var historyEntry = _historyEntries[visibleHistoryStartIndex + visibleIndex];
+                EnsureHistoryTextStyle(itemView.label, HistoryTextColor);
+                EnsureHistoryTextStyle(itemView.elapsed, HistoryTimeColor);
+                itemView.label.text = historyEntry.label;
+                itemView.label.ForceMeshUpdate();
+                itemView.elapsed.text = historyEntry.cachedElapsedText;
+                itemView.elapsed.ForceMeshUpdate();
+
+                var preferredWidth = Mathf.Max(itemView.label.preferredWidth, itemView.elapsed.preferredWidth) + (HistoryItemHorizontalPadding * 2f);
+                itemWidths[visibleIndex] = Mathf.Max(HistoryItemMinimumWidth, preferredWidth);
+                preferredItemWidthTotal += itemWidths[visibleIndex];
             }
 
-            _stepLabel.text = string.Empty;
+            var separatorCount = Mathf.Max(0, visibleCount - 1);
+            var separatorWidthTotal = separatorCount * HistorySeparatorWidth;
+            var allowedItemWidthTotal = Mathf.Max(HistoryItemMinimumWidth, maxPanelWidth - separatorWidthTotal);
+            if (preferredItemWidthTotal > allowedItemWidthTotal)
+            {
+                var shrinkRatio = allowedItemWidthTotal / preferredItemWidthTotal;
+                for (var visibleIndex = 0; visibleIndex < visibleCount; visibleIndex++)
+                {
+                    itemWidths[visibleIndex] = Mathf.Max(HistoryItemMinimumWidth, itemWidths[visibleIndex] * shrinkRatio);
+                }
+            }
+
+            var contentWidth = separatorWidthTotal;
+            for (var visibleIndex = 0; visibleIndex < visibleCount; visibleIndex++)
+            {
+                contentWidth += itemWidths[visibleIndex];
+            }
+
+            _historyPanel.sizeDelta = new Vector2(Mathf.Min(maxPanelWidth, contentWidth), HistoryPanelHeight);
+            AnchorHistoryPanel(_historyPanel, _options.historyCorner);
+            var currentX = 0f;
+
+            for (var viewIndex = 0; viewIndex < _historyItemViews.Count; viewIndex++)
+            {
+                var itemView = _historyItemViews[viewIndex];
+                var historyIndex = visibleHistoryStartIndex + viewIndex;
+                var isVisible = viewIndex < visibleCount && historyIndex >= 0;
+                itemView.root.gameObject.SetActive(isVisible);
+                if (!isVisible)
+                {
+                    continue;
+                }
+
+                var entry = _historyEntries[historyIndex];
+                itemView.label.text = entry.label;
+
+                var elapsedSeconds = Mathf.Max(0f, now - entry.startedAt);
+                var elapsedTenths = Mathf.FloorToInt(elapsedSeconds * 10f);
+                if (entry.elapsedTenths != elapsedTenths)
+                {
+                    // perf: 0.1 秒刻みだけ文字列を更新し、毎フレームの GC を避けます。
+                    entry.elapsedTenths = elapsedTenths;
+                    entry.cachedElapsedText = $"{elapsedTenths * 0.1f:0.0}s";
+                    _historyEntries[historyIndex] = entry;
+                }
+
+                itemView.elapsed.text = entry.cachedElapsedText;
+                ApplyHistoryItemLayout(itemView, itemWidths[viewIndex], currentX);
+                currentX += itemWidths[viewIndex];
+
+                if (viewIndex >= _historySeparatorViews.Count)
+                {
+                    continue;
+                }
+
+                var separator = _historySeparatorViews[viewIndex];
+                var shouldShowSeparator = viewIndex < visibleCount - 1;
+                separator.gameObject.SetActive(shouldShowSeparator);
+                if (shouldShowSeparator)
+                {
+                    EnsureHistoryTextStyle(separator, HistoryTextColor);
+                    separator.rectTransform.anchoredPosition = new Vector2(currentX, 0f);
+                    separator.rectTransform.sizeDelta = new Vector2(HistorySeparatorWidth, HistoryPanelHeight);
+                    currentX += HistorySeparatorWidth;
+                }
+            }
+
+            for (var separatorIndex = visibleCount - 1; separatorIndex < _historySeparatorViews.Count; separatorIndex++)
+            {
+                if (separatorIndex < 0)
+                {
+                    continue;
+                }
+
+                _historySeparatorViews[separatorIndex].gameObject.SetActive(false);
+            }
         }
 
         /// <summary>
-        /// パッドボタン押下を一定時間可視にします。
-        /// 1 フレーム押下でも録画中に読める長さを保証するためです。
+        /// パッドボタン状態を更新します。
+        /// 押下と解放の境界をここで持ち、保持表示と履歴追加を同じ判定で扱うためです。
         /// </summary>
-        public void MarkGamepadButtonPressed(string buttonKey, float now)
+        public void UpdateGamepadButtonState(string buttonKey, bool isPressed, float now)
         {
             if (string.IsNullOrEmpty(buttonKey))
             {
                 return;
             }
 
-            _gamepadVisibleUntilByKey[buttonKey] = now + Mathf.Max(0.01f, _options.minimumVisibleSeconds);
-        }
-
-        /// <summary>
-        /// パッドスティック位置を更新します。
-        /// ボタンだけでは移動入力の方向を判断できないため座標も保持します。
-        /// </summary>
-        public void SetGamepadSticks(Vector2 leftStick, Vector2 rightStick)
-        {
-            _leftStickValue = Vector2.ClampMagnitude(leftStick, 1f);
-            _rightStickValue = Vector2.ClampMagnitude(rightStick, 1f);
-        }
-
-        /// <summary>
-        /// キー押下を一定時間可視にします。
-        /// 録画上で見落としやすい短い入力も読めるようにするためです。
-        /// </summary>
-        public void MarkKeyboardKeyPressed(string keyName, float now)
-        {
-            if (string.IsNullOrEmpty(keyName))
+            if (!_gamepadButtonsByKey.TryGetValue(buttonKey, out var visualState))
             {
                 return;
             }
 
-            _keyboardVisibleUntilByKey[keyName] = now + Mathf.Max(0.01f, _options.minimumVisibleSeconds);
+            if (isPressed || visualState.state.isPressed)
+            {
+                RegisterDeviceActivity(DeviceMode.Gamepad, now);
+            }
+
+            UpdateHeldState(visualState.state, isPressed, now, GetGamepadHistoryLabel(buttonKey), true);
         }
 
         /// <summary>
-        /// 現在押されているキーボード集合を更新します。
-        /// 押しっぱなし維持と押下開始検出の両方を polling だけで再現するためです。
+        /// パッドスティック位置を更新します。
+        /// スティックは方向と倒し量が主体のため、ボタンと別の保持ロジックで扱います。
+        /// </summary>
+        public void SetGamepadSticks(Vector2 leftStick, Vector2 rightStick, float now)
+        {
+            if (leftStick.sqrMagnitude > StickCenterThreshold || rightStick.sqrMagnitude > StickCenterThreshold)
+            {
+                RegisterDeviceActivity(DeviceMode.Gamepad, now);
+            }
+
+            UpdateStickState(ref _leftStickValue, ref _leftStickGhostValue, ref _leftStickGhostReleasedAt, leftStick, now);
+            UpdateStickState(ref _rightStickValue, ref _rightStickGhostValue, ref _rightStickGhostReleasedAt, rightStick, now);
+        }
+
+        /// <summary>
+        /// キー押下集合を更新します。
+        /// キーごとの立ち上がりを保持して、再押下回数と履歴追加を polling でも再現するためです。
         /// </summary>
         public void ReplacePressedKeyboardKeys(List<string> pressedKeys, float now)
         {
+            if (pressedKeys.Count > 0)
+            {
+                RegisterDeviceActivity(DeviceMode.KeyboardMouse, now);
+            }
+
             for (var keyIndex = 0; keyIndex < pressedKeys.Count; keyIndex++)
             {
                 var keyName = pressedKeys[keyIndex];
-                _keyboardVisibleUntilByKey[keyName] = now + Mathf.Max(0.01f, _options.minimumVisibleSeconds);
+                if (string.IsNullOrEmpty(keyName))
+                {
+                    continue;
+                }
+
+                if (!_keyboardStatesByKey.TryGetValue(keyName, out var state))
+                {
+                    state = new HeldInputState(keyName);
+                    _keyboardStatesByKey.Add(keyName, state);
+                }
+
+                UpdateHeldState(state, true, now, keyName, true);
+            }
+
+            foreach (var pair in _keyboardStatesByKey)
+            {
+                if (pressedKeys.Contains(pair.Key))
+                {
+                    continue;
+                }
+
+                UpdateHeldState(pair.Value, false, now, string.Empty, false);
             }
         }
 
         /// <summary>
         /// ポインタ位置を更新します。
-        /// OS カーソルが録画へ写らない環境でも操作点を失わないためです。
+        /// キーボード＋マウス模式図の利用機器判定と画面上カーソル描画の両方で使うためです。
         /// </summary>
-        public void SetPointerPosition(Vector2 screenPosition)
+        public void SetPointerPosition(Vector2 screenPosition, float now)
         {
+            if (Vector2.Distance(_pointerPosition, screenPosition) >= PointerMoveThreshold)
+            {
+                RegisterDeviceActivity(DeviceMode.KeyboardMouse, now);
+            }
+
+            _pointerPosition = screenPosition;
             _pointerRoot.anchoredPosition = screenPosition;
             _scrollIndicator.rectTransform.anchoredPosition = screenPosition + new Vector2(18f, 24f);
         }
 
         /// <summary>
         /// ポインタボタン状態を更新します。
-        /// クリック波紋とドラッグ軌跡を区別して残すため前フレーム状態もここで管理します。
+        /// クリック波紋、押下保持、履歴追加、ドラッグ軌跡を同じ立ち上がり判定に束ねます。
         /// </summary>
         public void SetPointerButtons(bool isLeftPressed, bool isRightPressed, bool isMiddlePressed, float now)
         {
-            if (isLeftPressed && !_wasLeftPointerPressed)
+            if (isLeftPressed || isRightPressed || isMiddlePressed || _leftMouseButtonState.isPressed || _rightMouseButtonState.isPressed || _middleMouseButtonState.isPressed)
             {
-                AddPointerPulse(_pointerRoot.anchoredPosition, ParseHtmlColor(WhiteColorHtml), now);
+                RegisterDeviceActivity(DeviceMode.KeyboardMouse, now);
             }
 
-            if (isRightPressed && !_wasRightPointerPressed)
-            {
-                AddPointerPulse(_pointerRoot.anchoredPosition, ParseHtmlColor(YellowColorHtml), now);
-            }
-
-            if (isMiddlePressed && !_wasMiddlePointerPressed)
-            {
-                AddPointerPulse(_pointerRoot.anchoredPosition, ParseHtmlColor(BlueColorHtml), now);
-            }
+            UpdatePointerButtonState(_leftMouseButtonState, isLeftPressed, now, ParseHtmlColor(WhiteColorHtml), "LeftClick");
+            UpdatePointerButtonState(_rightMouseButtonState, isRightPressed, now, ParseHtmlColor(YellowColorHtml), "RightClick");
+            UpdatePointerButtonState(_middleMouseButtonState, isMiddlePressed, now, ParseHtmlColor(BlueColorHtml), "MiddleClick");
 
             var isAnyPressed = isLeftPressed || isRightPressed || isMiddlePressed;
             var hasMoved = Vector2.Distance(_previousPointerPosition, _pointerRoot.anchoredPosition) >= PointerMoveThreshold;
@@ -459,15 +680,12 @@ namespace UniLab.AI
                 }
             }
 
-            _wasLeftPointerPressed = isLeftPressed;
-            _wasRightPointerPressed = isRightPressed;
-            _wasMiddlePointerPressed = isMiddlePressed;
             _previousPointerPosition = _pointerRoot.anchoredPosition;
         }
 
         /// <summary>
         /// スクロール表示を短時間だけ残します。
-        /// 動画上でホイール操作を座標変化なしに読めるようにするためです。
+        /// マウス移動と違って矢印が無いと録画上で操作を読み取りにくいためです。
         /// </summary>
         public void ShowScroll(Vector2 delta, float now)
         {
@@ -476,15 +694,16 @@ namespace UniLab.AI
                 return;
             }
 
+            RegisterDeviceActivity(DeviceMode.KeyboardMouse, now);
             _scrollIndicator.text = delta.y > 0f ? "^" : "v";
             _scrollIndicatorVisibleUntil = now + ScrollIndicatorDurationSeconds;
         }
 
         /// <summary>
         /// アクティブなタッチ一覧を反映します。
-        /// マルチタッチを個別に可視化するため指 ID ごとに UI を分けて管理します。
+        /// タップ開始だけ履歴へ残しつつ、描画そのものは接触中の指に限定します。
         /// </summary>
-        public void ReplaceTouches(List<TouchSnapshot> touches)
+        public void ReplaceTouches(List<TouchSnapshot> touches, float now)
         {
             _releasedTouchIds.Clear();
             foreach (var pair in _touchViewsById)
@@ -499,6 +718,7 @@ namespace UniLab.AI
                 {
                     touchView = CreateTouchView(touch.touchId);
                     _touchViewsById.Add(touch.touchId, touchView);
+                    AddHistoryEntry("Tap", now);
                 }
 
                 touchView.root.anchoredPosition = touch.position;
@@ -510,41 +730,119 @@ namespace UniLab.AI
 
         private void BuildGamepadContents(RectTransform panel)
         {
-            CreateChip("LB", panel, new Vector2(54f, -28f), new Vector2(52f, 28f));
-            CreateChip("RB", panel, new Vector2(286f, -28f), new Vector2(52f, 28f));
-            CreateChip("Up", panel, new Vector2(60f, -68f), new Vector2(36f, 36f), "^");
-            CreateChip("Left", panel, new Vector2(34f, -94f), new Vector2(36f, 36f), "<");
-            CreateChip("Right", panel, new Vector2(86f, -94f), new Vector2(36f, 36f), ">");
-            CreateChip("Down", panel, new Vector2(60f, -120f), new Vector2(36f, 36f), "v");
-            CreateChip("X", panel, new Vector2(236f, -84f), new Vector2(40f, 40f));
-            CreateChip("Y", panel, new Vector2(262f, -58f), new Vector2(40f, 40f));
-            CreateChip("A", panel, new Vector2(262f, -110f), new Vector2(40f, 40f));
-            CreateChip("B", panel, new Vector2(288f, -84f), new Vector2(40f, 40f));
-            CreateChip("Select", panel, new Vector2(146f, -118f), new Vector2(68f, 28f), "SEL");
-            CreateChip("Start", panel, new Vector2(218f, -118f), new Vector2(68f, 28f), "START");
+            CreateGamepadChip("LB", panel, new Vector2(54f, -28f), new Vector2(52f, 28f));
+            CreateGamepadChip("RB", panel, new Vector2(286f, -28f), new Vector2(52f, 28f));
+            CreateGamepadChip("Up", panel, new Vector2(60f, -68f), new Vector2(36f, 36f), "^");
+            CreateGamepadChip("Left", panel, new Vector2(34f, -94f), new Vector2(36f, 36f), "<");
+            CreateGamepadChip("Right", panel, new Vector2(86f, -94f), new Vector2(36f, 36f), ">");
+            CreateGamepadChip("Down", panel, new Vector2(60f, -120f), new Vector2(36f, 36f), "v");
+            CreateGamepadChip("X", panel, new Vector2(236f, -84f), new Vector2(40f, 40f));
+            CreateGamepadChip("Y", panel, new Vector2(262f, -58f), new Vector2(40f, 40f));
+            CreateGamepadChip("A", panel, new Vector2(262f, -110f), new Vector2(40f, 40f));
+            CreateGamepadChip("B", panel, new Vector2(288f, -84f), new Vector2(40f, 40f));
+            CreateGamepadChip("Select", panel, new Vector2(146f, -118f), new Vector2(68f, 28f), "SEL");
+            CreateGamepadChip("Start", panel, new Vector2(218f, -118f), new Vector2(68f, 28f), "START");
 
-            CreateStickDisplay("LS", panel, new Vector2(100f, -150f), out _leftStickDot);
-            CreateStickDisplay("RS", panel, new Vector2(240f, -150f), out _rightStickDot);
+            CreateStickDisplay("LS", panel, new Vector2(100f, -150f), GamepadStickRange, out _leftStickDot, out _leftStickGhostDot);
+            CreateStickDisplay("RS", panel, new Vector2(240f, -150f), GamepadStickRange, out _rightStickDot, out _rightStickGhostDot);
         }
 
         private void BuildKeyboardContents(RectTransform panel)
         {
+            _keyboardTitle = CreateText("KeyboardTitle", panel, 18, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            _keyboardTitle.rectTransform.anchorMin = new Vector2(0f, 1f);
+            _keyboardTitle.rectTransform.anchorMax = new Vector2(0f, 1f);
+            _keyboardTitle.rectTransform.pivot = new Vector2(0f, 1f);
+            _keyboardTitle.rectTransform.sizeDelta = new Vector2(140f, 24f);
+            _keyboardTitle.rectTransform.anchoredPosition = new Vector2(14f, -10f);
+            _keyboardTitle.text = "Keyboard";
+
             for (var chipIndex = 0; chipIndex < KeyboardChipLimit; chipIndex++)
             {
-                var chipObject = CreatePanel($"KeyChip{chipIndex}", panel, new Vector2(KeyboardChipWidth, KeyboardChipHeight), new Color(0f, 0f, 0f, 0.55f));
-                chipObject.rectTransform.anchorMin = new Vector2(0f, 0.5f);
-                chipObject.rectTransform.anchorMax = new Vector2(0f, 0.5f);
-                chipObject.rectTransform.pivot = new Vector2(0f, 0.5f);
-                chipObject.rectTransform.anchoredPosition = new Vector2(12f + (chipIndex * (KeyboardChipWidth + 8f)), 0f);
-                var label = CreateText($"KeyChipLabel{chipIndex}", chipObject.rectTransform, 20, TextAlignmentOptions.Center, FontStyles.Bold);
+                var chipObject = CreatePanel($"KeyChip{chipIndex}", panel, new Vector2(KeyboardChipWidth, KeyboardChipHeight), IdleChipColor);
+                chipObject.rectTransform.anchorMin = new Vector2(0f, 1f);
+                chipObject.rectTransform.anchorMax = new Vector2(0f, 1f);
+                chipObject.rectTransform.pivot = new Vector2(0f, 1f);
+                var rowIndex = chipIndex / 4;
+                var columnIndex = chipIndex % 4;
+                chipObject.rectTransform.anchoredPosition = new Vector2(14f + (columnIndex * (KeyboardChipWidth + 8f)), -38f - (rowIndex * (KeyboardChipHeight + 8f)));
+                var label = CreateText($"KeyChipLabel{chipIndex}", chipObject.rectTransform, 18, TextAlignmentOptions.Center, FontStyles.Bold);
+                label.overflowMode = TextOverflowModes.Ellipsis;
                 Stretch(label.rectTransform, new Vector2(6f, 4f), new Vector2(-6f, -4f));
                 chipObject.gameObject.SetActive(false);
 
                 _keyboardChipViews.Add(new KeyboardChipView
                 {
                     root = chipObject.rectTransform,
+                    background = chipObject,
                     label = label,
                 });
+            }
+
+            var mouseLabel = CreateText("MouseTitle", panel, 18, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+            mouseLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
+            mouseLabel.rectTransform.anchorMax = new Vector2(0f, 1f);
+            mouseLabel.rectTransform.pivot = new Vector2(0f, 1f);
+            mouseLabel.rectTransform.sizeDelta = new Vector2(120f, 24f);
+            mouseLabel.rectTransform.anchoredPosition = new Vector2(14f, -116f);
+            mouseLabel.text = "Mouse";
+
+            CreatePointerButtonChip(_leftMouseButtonState, panel, "MouseLeftChip", "L", new Vector2(14f, -144f));
+            CreatePointerButtonChip(_rightMouseButtonState, panel, "MouseRightChip", "R", new Vector2(70f, -144f));
+            CreatePointerButtonChip(_middleMouseButtonState, panel, "MouseMiddleChip", "M", new Vector2(126f, -144f));
+
+            _mousePositionLabel = CreateText("MousePosition", panel, 16, TextAlignmentOptions.MidlineLeft, FontStyles.Normal);
+            _mousePositionLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
+            _mousePositionLabel.rectTransform.anchorMax = new Vector2(0f, 1f);
+            _mousePositionLabel.rectTransform.pivot = new Vector2(0f, 1f);
+            _mousePositionLabel.rectTransform.sizeDelta = new Vector2(170f, 22f);
+            _mousePositionLabel.rectTransform.anchoredPosition = new Vector2(190f, -145f);
+            _mousePositionLabel.text = "x 0  y 0";
+        }
+
+        private void BuildHistoryContents(RectTransform panel)
+        {
+            for (var itemIndex = 0; itemIndex < KeyboardChipLimit; itemIndex++)
+            {
+                var itemRoot = CreatePanel($"HistoryItem{itemIndex}", panel, new Vector2(HistoryItemWidth, HistoryItemHeight), HistoryItemBackgroundColor);
+                itemRoot.rectTransform.anchorMin = new Vector2(0f, 0f);
+                itemRoot.rectTransform.anchorMax = new Vector2(0f, 0f);
+                itemRoot.rectTransform.pivot = new Vector2(0f, 0f);
+
+                var label = CreateText($"HistoryLabel{itemIndex}", itemRoot.rectTransform, 18, TextAlignmentOptions.TopLeft, FontStyles.Bold);
+                EnsureHistoryTextStyle(label, HistoryTextColor);
+                label.overflowMode = TextOverflowModes.Ellipsis;
+                label.rectTransform.anchorMin = new Vector2(0f, 1f);
+                label.rectTransform.anchorMax = new Vector2(0f, 1f);
+                label.rectTransform.pivot = new Vector2(0f, 1f);
+
+                var elapsed = CreateText($"HistoryElapsed{itemIndex}", itemRoot.rectTransform, 12, TextAlignmentOptions.BottomLeft, FontStyles.Normal);
+                EnsureHistoryTextStyle(elapsed, HistoryTimeColor);
+                elapsed.rectTransform.anchorMin = new Vector2(0f, 0f);
+                elapsed.rectTransform.anchorMax = new Vector2(0f, 0f);
+                elapsed.rectTransform.pivot = new Vector2(0f, 0f);
+
+                itemRoot.gameObject.SetActive(false);
+                _historyItemViews.Add(new HistoryItemView
+                {
+                    root = itemRoot.rectTransform,
+                    label = label,
+                    elapsed = elapsed,
+                });
+
+                if (itemIndex >= KeyboardChipLimit - 1)
+                {
+                    continue;
+                }
+
+                var separator = CreateText($"HistorySeparator{itemIndex}", panel, 18f, TextAlignmentOptions.Center, FontStyles.Bold);
+                EnsureHistoryTextStyle(separator, HistoryTextColor);
+                separator.text = "→";
+                separator.rectTransform.anchorMin = new Vector2(0f, 0f);
+                separator.rectTransform.anchorMax = new Vector2(0f, 0f);
+                separator.rectTransform.pivot = new Vector2(0f, 0f);
+                separator.gameObject.SetActive(false);
+                _historySeparatorViews.Add(separator);
             }
         }
 
@@ -553,23 +851,23 @@ namespace UniLab.AI
             _pointerRoot = CreateContainer("PointerRoot", layer);
             SetBottomLeftAnchor(_pointerRoot, new Vector2(0.5f, 0.5f));
 
-            var shaft = CreateImage("PointerShaft", _pointerRoot, Texture2D.whiteTexture, new Color(1f, 1f, 1f, 0.95f));
-            shaft.rectTransform.sizeDelta = new Vector2(18f, 3f);
-            shaft.rectTransform.pivot = new Vector2(0f, 0.5f);
-            shaft.rectTransform.anchoredPosition = new Vector2(0f, 0f);
-            shaft.rectTransform.localEulerAngles = new Vector3(0f, 0f, -35f);
+            _pointerShaft = CreateImage("PointerShaft", _pointerRoot, Texture2D.whiteTexture, PointerIdleColor);
+            _pointerShaft.rectTransform.sizeDelta = new Vector2(18f, 3f);
+            _pointerShaft.rectTransform.pivot = new Vector2(0f, 0.5f);
+            _pointerShaft.rectTransform.anchoredPosition = new Vector2(0f, 0f);
+            _pointerShaft.rectTransform.localEulerAngles = new Vector3(0f, 0f, -35f);
 
-            var wingTop = CreateImage("PointerWingTop", _pointerRoot, Texture2D.whiteTexture, new Color(1f, 1f, 1f, 0.95f));
-            wingTop.rectTransform.sizeDelta = new Vector2(10f, 3f);
-            wingTop.rectTransform.pivot = new Vector2(0f, 0.5f);
-            wingTop.rectTransform.anchoredPosition = new Vector2(0f, 0f);
-            wingTop.rectTransform.localEulerAngles = new Vector3(0f, 0f, 30f);
+            _pointerWingTop = CreateImage("PointerWingTop", _pointerRoot, Texture2D.whiteTexture, PointerIdleColor);
+            _pointerWingTop.rectTransform.sizeDelta = new Vector2(10f, 3f);
+            _pointerWingTop.rectTransform.pivot = new Vector2(0f, 0.5f);
+            _pointerWingTop.rectTransform.anchoredPosition = new Vector2(0f, 0f);
+            _pointerWingTop.rectTransform.localEulerAngles = new Vector3(0f, 0f, 30f);
 
-            var wingBottom = CreateImage("PointerWingBottom", _pointerRoot, Texture2D.whiteTexture, new Color(1f, 1f, 1f, 0.95f));
-            wingBottom.rectTransform.sizeDelta = new Vector2(10f, 3f);
-            wingBottom.rectTransform.pivot = new Vector2(0f, 0.5f);
-            wingBottom.rectTransform.anchoredPosition = new Vector2(0f, 0f);
-            wingBottom.rectTransform.localEulerAngles = new Vector3(0f, 0f, -75f);
+            _pointerWingBottom = CreateImage("PointerWingBottom", _pointerRoot, Texture2D.whiteTexture, PointerIdleColor);
+            _pointerWingBottom.rectTransform.sizeDelta = new Vector2(10f, 3f);
+            _pointerWingBottom.rectTransform.pivot = new Vector2(0f, 0.5f);
+            _pointerWingBottom.rectTransform.anchoredPosition = new Vector2(0f, 0f);
+            _pointerWingBottom.rectTransform.localEulerAngles = new Vector3(0f, 0f, -75f);
 
             _scrollIndicator = CreateText("ScrollIndicator", layer, 22, TextAlignmentOptions.Center, FontStyles.Bold);
             SetBottomLeftAnchor(_scrollIndicator.rectTransform, new Vector2(0.5f, 0.5f));
@@ -642,7 +940,7 @@ namespace UniLab.AI
             _pointerClickPulseViews.Add(pulseView);
         }
 
-        private void CreateStickDisplay(string label, RectTransform parent, Vector2 position, out Image dot)
+        private void CreateStickDisplay(string label, RectTransform parent, Vector2 position, float range, out Image dot, out Image ghostDot)
         {
             var stickRoot = CreateContainer($"{label}Root", parent);
             stickRoot.anchorMin = new Vector2(0f, 1f);
@@ -651,9 +949,13 @@ namespace UniLab.AI
             stickRoot.anchoredPosition = position;
 
             var ring = CreateImage($"{label}Ring", stickRoot, GetCircleTexture(), new Color(1f, 1f, 1f, 0.2f));
-            ring.rectTransform.sizeDelta = new Vector2(50f, 50f);
+            ring.rectTransform.sizeDelta = new Vector2((range * 2f) + 14f, (range * 2f) + 14f);
 
-            dot = CreateImage($"{label}Dot", stickRoot, GetCircleTexture(), new Color(0.2f, 0.95f, 0.6f, 0.95f));
+            ghostDot = CreateImage($"{label}GhostDot", stickRoot, GetCircleTexture(), GhostStickColor);
+            ghostDot.rectTransform.sizeDelta = new Vector2(12f, 12f);
+            ghostDot.gameObject.SetActive(false);
+
+            dot = CreateImage($"{label}Dot", stickRoot, GetCircleTexture(), LiveStickColor);
             dot.rectTransform.sizeDelta = new Vector2(12f, 12f);
 
             var text = CreateText($"{label}Text", stickRoot, 16, TextAlignmentOptions.Center, FontStyles.Bold);
@@ -662,14 +964,14 @@ namespace UniLab.AI
             text.rectTransform.sizeDelta = new Vector2(60f, 20f);
         }
 
-        private TextMeshProUGUI CreateChip(string key, RectTransform parent, Vector2 position, Vector2 size)
+        private void CreateGamepadChip(string key, RectTransform parent, Vector2 position, Vector2 size)
         {
-            return CreateChip(key, parent, position, size, key);
+            CreateGamepadChip(key, parent, position, size, key);
         }
 
-        private TextMeshProUGUI CreateChip(string key, RectTransform parent, Vector2 position, Vector2 size, string label)
+        private void CreateGamepadChip(string key, RectTransform parent, Vector2 position, Vector2 size, string label)
         {
-            var chip = CreatePanel($"{key}Chip", parent, size, new Color(1f, 1f, 1f, 0.18f));
+            var chip = CreatePanel($"{key}Chip", parent, size, IdleChipColor);
             chip.rectTransform.anchorMin = new Vector2(0f, 1f);
             chip.rectTransform.anchorMax = new Vector2(0f, 1f);
             chip.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -677,8 +979,20 @@ namespace UniLab.AI
             var text = CreateText($"{key}Label", chip.rectTransform, 18, TextAlignmentOptions.Center, FontStyles.Bold);
             text.text = label;
             Stretch(text.rectTransform, new Vector2(4f, 2f), new Vector2(-4f, -2f));
-            _gamepadTextByKey[key] = text;
-            return text;
+            _gamepadButtonsByKey[key] = new ButtonVisualState(chip, text, new HeldInputState(label));
+        }
+
+        private void CreatePointerButtonChip(HeldInputState state, RectTransform parent, string name, string label, Vector2 position)
+        {
+            var chip = CreatePanel(name, parent, new Vector2(48f, 28f), IdleChipColor);
+            chip.rectTransform.anchorMin = new Vector2(0f, 1f);
+            chip.rectTransform.anchorMax = new Vector2(0f, 1f);
+            chip.rectTransform.pivot = new Vector2(0f, 1f);
+            chip.rectTransform.anchoredPosition = position;
+            var text = CreateText($"{name}Label", chip.rectTransform, 16, TextAlignmentOptions.Center, FontStyles.Bold);
+            text.text = label;
+            Stretch(text.rectTransform, new Vector2(4f, 2f), new Vector2(-4f, -2f));
+            state.BindVisual(chip, text);
         }
 
         private static RectTransform CreateContainer(string name, RectTransform parent)
@@ -722,6 +1036,12 @@ namespace UniLab.AI
             text.color = Color.white;
             text.enableWordWrapping = false;
             return text;
+        }
+
+        private static void EnsureHistoryTextStyle(TextMeshProUGUI text, Color color)
+        {
+            text.font = TMP_Settings.defaultFontAsset;
+            text.color = color;
         }
 
         private static void Stretch(RectTransform rectTransform, Vector2 offsetMin, Vector2 offsetMax)
@@ -770,20 +1090,48 @@ namespace UniLab.AI
             }
         }
 
-        private static void SetChipActive(TextMeshProUGUI label, bool isActive, Color backgroundColor)
+        private void AnchorHistoryPanel(RectTransform rectTransform, OverlayCorner corner)
         {
-            if (label == null)
+            var silhouetteHeight = Mathf.Max(GamepadPanelHeight, KeyboardPanelHeight);
+            switch (corner)
             {
-                return;
+                case OverlayCorner.TopLeft:
+                    AnchorToCorner(rectTransform, corner, DefaultWidgetMargin, DefaultWidgetMargin + HistoryPanelSpacing);
+                    break;
+                case OverlayCorner.TopRight:
+                    AnchorToCorner(rectTransform, corner, DefaultWidgetMargin, DefaultWidgetMargin + HistoryPanelSpacing);
+                    break;
+                case OverlayCorner.BottomLeft:
+                    AnchorToCorner(rectTransform, corner, DefaultWidgetMargin, DefaultWidgetMargin + silhouetteHeight + HistoryPanelSpacing);
+                    break;
+                default:
+                    AnchorToCorner(rectTransform, corner, DefaultWidgetMargin, DefaultWidgetMargin + silhouetteHeight + HistoryPanelSpacing);
+                    break;
+            }
+        }
+
+        private void HideAllHistoryViews()
+        {
+            for (var viewIndex = 0; viewIndex < _historyItemViews.Count; viewIndex++)
+            {
+                _historyItemViews[viewIndex].root.gameObject.SetActive(false);
             }
 
-            var background = label.GetComponentInParent<Image>();
-            if (background != null)
+            for (var separatorIndex = 0; separatorIndex < _historySeparatorViews.Count; separatorIndex++)
             {
-                background.color = backgroundColor;
+                _historySeparatorViews[separatorIndex].gameObject.SetActive(false);
             }
+        }
 
-            label.color = isActive ? Color.white : new Color(1f, 1f, 1f, 0.7f);
+        private static void ApplyHistoryItemLayout(HistoryItemView itemView, float width, float anchoredPositionX)
+        {
+            itemView.root.anchoredPosition = new Vector2(anchoredPositionX, 0f);
+            itemView.root.sizeDelta = new Vector2(width, HistoryItemHeight);
+            itemView.label.rectTransform.anchoredPosition = new Vector2(HistoryItemHorizontalPadding, -HistoryItemVerticalPadding);
+            // 18pt Bold の行高（約 24px）より低い矩形だと Ellipsis が「1 行も入らない」と判定して全文を消す。行高＋余裕で確保する
+            itemView.label.rectTransform.sizeDelta = new Vector2(Mathf.Max(0f, width - (HistoryItemHorizontalPadding * 2f)), 28f);
+            itemView.elapsed.rectTransform.anchoredPosition = new Vector2(HistoryItemHorizontalPadding, HistoryItemVerticalPadding);
+            itemView.elapsed.rectTransform.sizeDelta = new Vector2(Mathf.Max(0f, width - (HistoryItemHorizontalPadding * 2f)), 16f);
         }
 
         private static Texture2D GetCircleTexture()
@@ -848,9 +1196,440 @@ namespace UniLab.AI
             return Color.white;
         }
 
+        private static void UpdateButtonVisual(TextMeshProUGUI label, Image background, HeldInputState state, Color activeColor, Color fadingColor, float now, float holdSeconds)
+        {
+            if (label == null || background == null || state == null)
+            {
+                return;
+            }
+
+            var alpha = state.GetAlpha(now, holdSeconds);
+            if (state.isPressed)
+            {
+                background.color = activeColor;
+                label.color = Color.white;
+                return;
+            }
+
+            if (alpha > 0f)
+            {
+                background.color = Color.Lerp(IdleChipColor, fadingColor, alpha);
+                label.color = Color.Lerp(InactiveLabelColor, Color.white, alpha);
+                return;
+            }
+
+            background.color = IdleChipColor;
+            label.color = InactiveLabelColor;
+        }
+
+        private void RefreshMouseButtonVisual(HeldInputState state, float now)
+        {
+            if (state.label == null || state.background == null)
+            {
+                return;
+            }
+
+            state.label.text = state.GetDisplayText();
+            UpdateButtonVisual(state.label, state.background, state, MouseActiveChipColor, MouseFadingChipColor, now, _options.holdSeconds);
+        }
+
+        private void RefreshStick(Image liveDot, Image ghostDot, Vector2 liveValue, Vector2 ghostValue, float ghostReleasedAt, float range, float now)
+        {
+            liveDot.rectTransform.anchoredPosition = liveValue * range;
+            var hasLiveValue = liveValue.sqrMagnitude > StickCenterThreshold;
+            liveDot.color = hasLiveValue ? LiveStickColor : new Color(LiveStickColor.r, LiveStickColor.g, LiveStickColor.b, 0.25f);
+            if (hasLiveValue)
+            {
+                ghostDot.gameObject.SetActive(false);
+                return;
+            }
+
+            var ghostAlpha = GetGhostAlpha(ghostReleasedAt, now);
+            if (ghostAlpha <= 0f || ghostValue.sqrMagnitude <= StickCenterThreshold)
+            {
+                ghostDot.gameObject.SetActive(false);
+                return;
+            }
+
+            ghostDot.gameObject.SetActive(true);
+            ghostDot.rectTransform.anchoredPosition = ghostValue * range;
+            ghostDot.color = new Color(GhostStickColor.r, GhostStickColor.g, GhostStickColor.b, ghostAlpha);
+        }
+
+        private float GetGhostAlpha(float releasedAt, float now)
+        {
+            if (releasedAt <= 0f)
+            {
+                return 0f;
+            }
+
+            var holdSeconds = Mathf.Max(0.01f, _options.holdSeconds);
+            var elapsed = now - releasedAt;
+            if (elapsed <= holdSeconds)
+            {
+                return 1f;
+            }
+
+            var fadeElapsed = elapsed - holdSeconds;
+            if (fadeElapsed >= HoldFadeSeconds)
+            {
+                return 0f;
+            }
+
+            return 1f - (fadeElapsed / HoldFadeSeconds);
+        }
+
+        private void UpdateStickState(ref Vector2 liveValue, ref Vector2 ghostValue, ref float ghostReleasedAt, Vector2 newValue, float now)
+        {
+            var clampedValue = Vector2.ClampMagnitude(newValue, 1f);
+            liveValue = clampedValue;
+            if (clampedValue.sqrMagnitude > StickCenterThreshold)
+            {
+                ghostValue = clampedValue;
+                ghostReleasedAt = now;
+                return;
+            }
+
+            if (ghostValue.sqrMagnitude > StickCenterThreshold)
+            {
+                ghostReleasedAt = now;
+            }
+        }
+
+        private void UpdatePointerButtonState(HeldInputState state, bool isPressed, float now, Color pulseColor, string historyLabel)
+        {
+            var wasPressed = state.isPressed;
+            UpdateHeldState(state, isPressed, now, historyLabel, true);
+            if (isPressed && !wasPressed)
+            {
+                AddPointerPulse(_pointerRoot.anchoredPosition, pulseColor, now);
+            }
+        }
+
+        private void UpdateHeldState(HeldInputState state, bool isPressed, float now, string historyLabel, bool addHistoryOnPressed)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            if (isPressed)
+            {
+                var isNewPress = !state.isPressed;
+                if (isNewPress)
+                {
+                    state.repeatCount = state.IsVisible(now, _options.holdSeconds) ? state.repeatCount + 1 : 1;
+                    state.lastPressedAt = now;
+                    state.lastReleasedAt = -1f;
+                    state.lastVisibleAt = now;
+                    if (addHistoryOnPressed && !string.IsNullOrEmpty(historyLabel))
+                    {
+                        AddHistoryEntry(historyLabel, now);
+                    }
+                }
+                else
+                {
+                    state.lastVisibleAt = now;
+                }
+
+                state.isPressed = true;
+                return;
+            }
+
+            if (!state.isPressed)
+            {
+                return;
+            }
+
+            state.isPressed = false;
+            state.lastReleasedAt = now;
+            state.lastVisibleAt = now;
+        }
+
+        private void AddHistoryEntry(string label, float now)
+        {
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                return;
+            }
+
+            _historyEntries.Add(new HistoryEntry
+            {
+                label = label,
+                startedAt = now,
+                elapsedTenths = -1,
+                cachedElapsedText = "0.0s",
+            });
+
+            var historyCount = Mathf.Max(0, _options.historyCount);
+            while (_historyEntries.Count > historyCount)
+            {
+                _historyEntries.RemoveAt(0);
+            }
+        }
+
+        private void RegisterDeviceActivity(DeviceMode deviceMode, float now)
+        {
+            if (deviceMode == DeviceMode.None)
+            {
+                return;
+            }
+
+            if (_displayedDeviceMode == deviceMode)
+            {
+                _displayedDeviceLastActivityAt = now;
+                _pendingDeviceMode = DeviceMode.None;
+                _pendingDeviceLastActivityAt = 0f;
+                return;
+            }
+
+            _pendingDeviceMode = deviceMode;
+            _pendingDeviceLastActivityAt = now;
+        }
+
+        private void EnsureDisplayedDeviceFallback()
+        {
+            if (_displayedDeviceMode == DeviceMode.Gamepad && !_options.showGamepad)
+            {
+                _displayedDeviceMode = DeviceMode.None;
+            }
+
+            if (_displayedDeviceMode == DeviceMode.KeyboardMouse && !_options.showKeyboard && !_options.showPointer)
+            {
+                _displayedDeviceMode = DeviceMode.None;
+            }
+
+            if (_displayedDeviceMode != DeviceMode.None)
+            {
+                return;
+            }
+
+            if (_options.showGamepad)
+            {
+                _displayedDeviceMode = DeviceMode.Gamepad;
+                return;
+            }
+
+            if (_options.showKeyboard || _options.showPointer)
+            {
+                _displayedDeviceMode = DeviceMode.KeyboardMouse;
+            }
+        }
+
+        private void RefreshStaticSilhouetteVisibility()
+        {
+            _gamepadPanel.gameObject.SetActive(_options.showGamepad && IsGamepadDisplayed());
+            _keyboardPanel.gameObject.SetActive((_options.showKeyboard || _options.showPointer) && IsKeyboardMouseDisplayed());
+        }
+
+        private bool IsGamepadDisplayed()
+        {
+            if (!_options.alwaysShowSilhouette)
+            {
+                return HasAnyGamepadHighlight(Time.realtimeSinceStartup);
+            }
+
+            return _displayedDeviceMode == DeviceMode.Gamepad;
+        }
+
+        private bool IsKeyboardMouseDisplayed()
+        {
+            if (!_options.alwaysShowSilhouette)
+            {
+                return HasAnyKeyboardMouseHighlight(Time.realtimeSinceStartup);
+            }
+
+            return _displayedDeviceMode == DeviceMode.KeyboardMouse;
+        }
+
+        private bool HasAnyGamepadHighlight(float now)
+        {
+            foreach (var pair in _gamepadButtonsByKey)
+            {
+                if (pair.Value.state.IsVisible(now, _options.holdSeconds))
+                {
+                    return true;
+                }
+            }
+
+            return _leftStickValue.sqrMagnitude > StickCenterThreshold
+                || _rightStickValue.sqrMagnitude > StickCenterThreshold
+                || GetGhostAlpha(_leftStickGhostReleasedAt, now) > 0f
+                || GetGhostAlpha(_rightStickGhostReleasedAt, now) > 0f;
+        }
+
+        private bool HasAnyKeyboardMouseHighlight(float now)
+        {
+            foreach (var pair in _keyboardStatesByKey)
+            {
+                if (pair.Value.IsVisible(now, _options.holdSeconds))
+                {
+                    return true;
+                }
+            }
+
+            return _leftMouseButtonState.IsVisible(now, _options.holdSeconds)
+                || _rightMouseButtonState.IsVisible(now, _options.holdSeconds)
+                || _middleMouseButtonState.IsVisible(now, _options.holdSeconds);
+        }
+
+        private bool IsAnyPointerButtonActive(float now)
+        {
+            return _leftMouseButtonState.IsVisible(now, _options.holdSeconds)
+                || _rightMouseButtonState.IsVisible(now, _options.holdSeconds)
+                || _middleMouseButtonState.IsVisible(now, _options.holdSeconds);
+        }
+
+        private static string GetGamepadHistoryLabel(string buttonKey)
+        {
+            switch (buttonKey)
+            {
+                case "Up":
+                    return "↑";
+                case "Down":
+                    return "↓";
+                case "Left":
+                    return "←";
+                case "Right":
+                    return "→";
+                default:
+                    return buttonKey;
+            }
+        }
+
+        private static HeldInputState CreatePointerButtonState(string label)
+        {
+            return new HeldInputState(label);
+        }
+
+        private enum DeviceMode
+        {
+            None = 0,
+            Gamepad = 1,
+            KeyboardMouse = 2,
+        }
+
+        private sealed class ButtonVisualState
+        {
+            public ButtonVisualState(Image background, TextMeshProUGUI text, HeldInputState state)
+            {
+                this.background = background;
+                this.text = text;
+                this.state = state;
+            }
+
+            public readonly Image background;
+            public readonly TextMeshProUGUI text;
+            public readonly HeldInputState state;
+        }
+
+        private sealed class HeldInputState
+        {
+            public HeldInputState(string baseLabel)
+            {
+                this.baseLabel = baseLabel;
+                repeatCount = 1;
+                lastReleasedAt = -1f;
+            }
+
+            public readonly string baseLabel;
+            public Image background;
+            public TextMeshProUGUI label;
+            public bool isPressed;
+            public int repeatCount;
+            public float lastPressedAt;
+            public float lastReleasedAt;
+            public float lastVisibleAt;
+
+            public void BindVisual(Image backgroundImage, TextMeshProUGUI labelText)
+            {
+                background = backgroundImage;
+                label = labelText;
+            }
+
+            public bool IsVisible(float now, float holdSeconds)
+            {
+                if (isPressed)
+                {
+                    return true;
+                }
+
+                if (lastReleasedAt < 0f)
+                {
+                    return false;
+                }
+
+                return now - lastReleasedAt < holdSeconds + HoldFadeSeconds;
+            }
+
+            public float GetAlpha(float now, float holdSeconds)
+            {
+                if (isPressed)
+                {
+                    return 1f;
+                }
+
+                if (lastReleasedAt < 0f)
+                {
+                    return 0f;
+                }
+
+                var clampedHoldSeconds = Mathf.Max(0.01f, holdSeconds);
+                var elapsed = now - lastReleasedAt;
+                if (elapsed <= clampedHoldSeconds)
+                {
+                    return 1f;
+                }
+
+                var fadeElapsed = elapsed - clampedHoldSeconds;
+                if (fadeElapsed >= HoldFadeSeconds)
+                {
+                    return 0f;
+                }
+
+                return 1f - (fadeElapsed / HoldFadeSeconds);
+            }
+
+            public string GetDisplayText()
+            {
+                if (repeatCount <= 1)
+                {
+                    return baseLabel;
+                }
+
+                return $"{baseLabel} ×{repeatCount}";
+            }
+        }
+
+        private sealed class HeldInputStateComparer : IComparer<HeldInputState>
+        {
+            public static readonly HeldInputStateComparer Instance = new HeldInputStateComparer();
+
+            public int Compare(HeldInputState x, HeldInputState y)
+            {
+                if (ReferenceEquals(x, y))
+                {
+                    return 0;
+                }
+
+                if (x == null)
+                {
+                    return 1;
+                }
+
+                if (y == null)
+                {
+                    return -1;
+                }
+
+                return y.lastVisibleAt.CompareTo(x.lastVisibleAt);
+            }
+        }
+
         private struct KeyboardChipView
         {
             public RectTransform root;
+            public Image background;
             public TextMeshProUGUI label;
         }
 
@@ -871,6 +1650,21 @@ namespace UniLab.AI
         {
             public RectTransform root;
             public TextMeshProUGUI label;
+        }
+
+        private struct HistoryEntry
+        {
+            public string label;
+            public float startedAt;
+            public int elapsedTenths;
+            public string cachedElapsedText;
+        }
+
+        private struct HistoryItemView
+        {
+            public RectTransform root;
+            public TextMeshProUGUI label;
+            public TextMeshProUGUI elapsed;
         }
 
         /// <summary>
@@ -937,7 +1731,7 @@ namespace UniLab.AI
                 }
 
                 controller.ReplacePressedKeyboardKeys(_pressedKeys, now);
-                controller.SetPointerPosition(Input.mousePosition);
+                controller.SetPointerPosition(Input.mousePosition, now);
                 controller.SetPointerButtons(Input.GetMouseButton(0), Input.GetMouseButton(1), Input.GetMouseButton(2), now);
                 controller.ShowScroll(Input.mouseScrollDelta, now);
 
@@ -952,32 +1746,20 @@ namespace UniLab.AI
                     });
                 }
 
-                controller.ReplaceTouches(_touches);
-
-                if (Input.GetKey(KeyCode.JoystickButton0))
-                {
-                    controller.MarkGamepadButtonPressed("A", now);
-                }
-
-                if (Input.GetKey(KeyCode.JoystickButton1))
-                {
-                    controller.MarkGamepadButtonPressed("B", now);
-                }
-
-                if (Input.GetKey(KeyCode.JoystickButton2))
-                {
-                    controller.MarkGamepadButtonPressed("X", now);
-                }
-
-                if (Input.GetKey(KeyCode.JoystickButton3))
-                {
-                    controller.MarkGamepadButtonPressed("Y", now);
-                }
+                controller.ReplaceTouches(_touches, now);
+                controller.UpdateGamepadButtonState("A", Input.GetKey(KeyCode.JoystickButton0), now);
+                controller.UpdateGamepadButtonState("B", Input.GetKey(KeyCode.JoystickButton1), now);
+                controller.UpdateGamepadButtonState("X", Input.GetKey(KeyCode.JoystickButton2), now);
+                controller.UpdateGamepadButtonState("Y", Input.GetKey(KeyCode.JoystickButton3), now);
+                controller.UpdateGamepadButtonState("LB", Input.GetKey(KeyCode.JoystickButton4), now);
+                controller.UpdateGamepadButtonState("RB", Input.GetKey(KeyCode.JoystickButton5), now);
+                controller.UpdateGamepadButtonState("Select", Input.GetKey(KeyCode.JoystickButton6), now);
+                controller.UpdateGamepadButtonState("Start", Input.GetKey(KeyCode.JoystickButton7), now);
+                controller.SetGamepadSticks(Vector2.zero, Vector2.zero, now);
             }
 
             private static string NormalizeLegacyKeyName(KeyCode keyCode)
             {
-                var keyName = keyCode.ToString();
                 switch (keyCode)
                 {
                     case KeyCode.Return:
@@ -987,6 +1769,7 @@ namespace UniLab.AI
                     case KeyCode.Space:
                         return "Space";
                     default:
+                        var keyName = keyCode.ToString();
                         return keyName.Length == 1 ? keyName.ToUpperInvariant() : keyName;
                 }
             }
@@ -1018,7 +1801,7 @@ namespace UniLab.AI
                 PollKeyboard(controller, now);
                 PollMouse(controller, now);
                 PollGamepad(controller, now);
-                PollTouches(controller);
+                PollTouches(controller, now);
                 return true;
             }
 
@@ -1083,7 +1866,7 @@ namespace UniLab.AI
                     return;
                 }
 
-                controller.SetPointerPosition(ReadVector2Control(mouse, "position"));
+                controller.SetPointerPosition(ReadVector2Control(mouse, "position"), now);
                 controller.SetPointerButtons(
                     ReadButtonControl(mouse, "leftButton"),
                     ReadButtonControl(mouse, "rightButton"),
@@ -1097,42 +1880,56 @@ namespace UniLab.AI
                 var gamepad = GetCurrentDevice(_gamepadType);
                 if (gamepad == null)
                 {
-                    controller.SetGamepadSticks(Vector2.zero, Vector2.zero);
+                    controller.UpdateGamepadButtonState("A", false, now);
+                    controller.UpdateGamepadButtonState("B", false, now);
+                    controller.UpdateGamepadButtonState("X", false, now);
+                    controller.UpdateGamepadButtonState("Y", false, now);
+                    controller.UpdateGamepadButtonState("LB", false, now);
+                    controller.UpdateGamepadButtonState("RB", false, now);
+                    controller.UpdateGamepadButtonState("Start", false, now);
+                    controller.UpdateGamepadButtonState("Select", false, now);
+                    controller.UpdateGamepadButtonState("Up", false, now);
+                    controller.UpdateGamepadButtonState("Down", false, now);
+                    controller.UpdateGamepadButtonState("Left", false, now);
+                    controller.UpdateGamepadButtonState("Right", false, now);
+                    controller.SetGamepadSticks(Vector2.zero, Vector2.zero, now);
                     return;
                 }
 
-                MarkButtonIfPressed(controller, gamepad, "buttonSouth", "A", now);
-                MarkButtonIfPressed(controller, gamepad, "buttonEast", "B", now);
-                MarkButtonIfPressed(controller, gamepad, "buttonWest", "X", now);
-                MarkButtonIfPressed(controller, gamepad, "buttonNorth", "Y", now);
-                MarkButtonIfPressed(controller, gamepad, "leftShoulder", "LB", now);
-                MarkButtonIfPressed(controller, gamepad, "rightShoulder", "RB", now);
-                MarkButtonIfPressed(controller, gamepad, "startButton", "Start", now);
-                MarkButtonIfPressed(controller, gamepad, "selectButton", "Select", now);
-                MarkButtonIfPressed(controller, GetMemberValue(gamepad, "dpad"), "up", "Up", now);
-                MarkButtonIfPressed(controller, GetMemberValue(gamepad, "dpad"), "down", "Down", now);
-                MarkButtonIfPressed(controller, GetMemberValue(gamepad, "dpad"), "left", "Left", now);
-                MarkButtonIfPressed(controller, GetMemberValue(gamepad, "dpad"), "right", "Right", now);
+                UpdateButton(controller, gamepad, "buttonSouth", "A", now);
+                UpdateButton(controller, gamepad, "buttonEast", "B", now);
+                UpdateButton(controller, gamepad, "buttonWest", "X", now);
+                UpdateButton(controller, gamepad, "buttonNorth", "Y", now);
+                UpdateButton(controller, gamepad, "leftShoulder", "LB", now);
+                UpdateButton(controller, gamepad, "rightShoulder", "RB", now);
+                UpdateButton(controller, gamepad, "startButton", "Start", now);
+                UpdateButton(controller, gamepad, "selectButton", "Select", now);
+                var dpad = GetMemberValue(gamepad, "dpad");
+                UpdateButton(controller, dpad, "up", "Up", now);
+                UpdateButton(controller, dpad, "down", "Down", now);
+                UpdateButton(controller, dpad, "left", "Left", now);
+                UpdateButton(controller, dpad, "right", "Right", now);
 
                 controller.SetGamepadSticks(
                     ReadVector2Control(gamepad, "leftStick"),
-                    ReadVector2Control(gamepad, "rightStick"));
+                    ReadVector2Control(gamepad, "rightStick"),
+                    now);
             }
 
-            private void PollTouches(InputOverlayController controller)
+            private void PollTouches(InputOverlayController controller, float now)
             {
                 _touches.Clear();
                 var touchscreen = GetCurrentDevice(_touchscreenType);
                 if (touchscreen == null)
                 {
-                    controller.ReplaceTouches(_touches);
+                    controller.ReplaceTouches(_touches, now);
                     return;
                 }
 
                 var touches = GetMemberValue(touchscreen, "touches");
                 if (touches == null)
                 {
-                    controller.ReplaceTouches(_touches);
+                    controller.ReplaceTouches(_touches, now);
                     return;
                 }
 
@@ -1140,7 +1937,7 @@ namespace UniLab.AI
                 var itemProperty = touches.GetType().GetProperty("Item");
                 if (countProperty == null || itemProperty == null)
                 {
-                    controller.ReplaceTouches(_touches);
+                    controller.ReplaceTouches(_touches, now);
                     return;
                 }
 
@@ -1161,7 +1958,7 @@ namespace UniLab.AI
                     });
                 }
 
-                controller.ReplaceTouches(_touches);
+                controller.ReplaceTouches(_touches, now);
             }
 
             private static object GetCurrentDevice(Type deviceType)
@@ -1175,19 +1972,9 @@ namespace UniLab.AI
                 return currentProperty == null ? null : currentProperty.GetValue(null, null);
             }
 
-            private static void MarkButtonIfPressed(InputOverlayController controller, object deviceOrControl, string memberName, string overlayKey, float now)
+            private static void UpdateButton(InputOverlayController controller, object deviceOrControl, string memberName, string overlayKey, float now)
             {
-                if (deviceOrControl == null)
-                {
-                    return;
-                }
-
-                if (!ReadButtonControl(deviceOrControl, memberName))
-                {
-                    return;
-                }
-
-                controller.MarkGamepadButtonPressed(overlayKey, now);
+                controller.UpdateGamepadButtonState(overlayKey, ReadButtonControl(deviceOrControl, memberName), now);
             }
 
             private static bool ReadButtonControl(object deviceOrControl, string memberName)
@@ -1302,69 +2089,6 @@ namespace UniLab.AI
                     default:
                         return rawName.Length == 1 ? rawName.ToUpperInvariant() : rawName;
                 }
-            }
-        }
-
-        private sealed class StepLabelProvider
-        {
-            private FieldInfo _currentStepField;
-            private FieldInfo _stepStartRealtimeField;
-            private MethodInfo _createStepMarkerLabelMethod;
-            private UiScenarioRunner _cachedRunner;
-
-            /// <summary>
-            /// UiScenarioRunner を直接変更せず現在ステップ文字列を取り出します。
-            /// このバッチの編集境界を守りつつ録画ラベル要件を満たすためです。
-            /// </summary>
-            public string TryGetCurrentLabel(float now)
-            {
-                var runner = GetRunner();
-                if (runner == null)
-                {
-                    return string.Empty;
-                }
-
-                EnsureMembers();
-                if (_currentStepField == null || _stepStartRealtimeField == null || _createStepMarkerLabelMethod == null)
-                {
-                    return string.Empty;
-                }
-
-                var currentStep = _currentStepField.GetValue(runner);
-                if (currentStep == null)
-                {
-                    return string.Empty;
-                }
-
-                var stepStartRealtime = Convert.ToDouble(_stepStartRealtimeField.GetValue(runner));
-                var waitedSeconds = now - (float)stepStartRealtime;
-                var label = _createStepMarkerLabelMethod.Invoke(runner, new[] { currentStep, (object)(double)Mathf.Max(0f, waitedSeconds) }) as string;
-                return label ?? string.Empty;
-            }
-
-            private UiScenarioRunner GetRunner()
-            {
-                if (_cachedRunner != null)
-                {
-                    return _cachedRunner;
-                }
-
-                var runners = UnityEngine.Object.FindObjectsByType<UiScenarioRunner>(FindObjectsSortMode.None);
-                _cachedRunner = runners.Length > 0 ? runners[0] : null;
-                return _cachedRunner;
-            }
-
-            private void EnsureMembers()
-            {
-                if (_currentStepField != null)
-                {
-                    return;
-                }
-
-                var runnerType = typeof(UiScenarioRunner);
-                _currentStepField = runnerType.GetField("_currentStep", BindingFlags.NonPublic | BindingFlags.Instance);
-                _stepStartRealtimeField = runnerType.GetField("_stepStartRealtime", BindingFlags.NonPublic | BindingFlags.Instance);
-                _createStepMarkerLabelMethod = runnerType.GetMethod("CreateStepMarkerLabel", BindingFlags.NonPublic | BindingFlags.Instance);
             }
         }
     }

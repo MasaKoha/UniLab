@@ -243,8 +243,8 @@ namespace UniLab.AI
 
         private static bool CompareGameState(string actual, string operation, string expected)
         {
-            var resolvedOperation = string.IsNullOrEmpty(operation) ? "eq" : operation;
-            switch (resolvedOperation)
+            var normalizedOperation = NormalizeComparisonOperation(operation);
+            switch (normalizedOperation)
             {
                 case "eq": return string.Equals(actual, expected, StringComparison.Ordinal);
                 case "ne": return !string.Equals(actual, expected, StringComparison.Ordinal);
@@ -253,7 +253,7 @@ namespace UniLab.AI
                 case "le":
                 case "gt":
                 case "ge":
-                    return CompareNumber(actual, resolvedOperation, expected);
+                    return CompareNumber(actual, normalizedOperation, expected);
                 default:
                     return false;
             }
@@ -261,23 +261,51 @@ namespace UniLab.AI
 
         private static bool CompareNumber(string actual, string operation, string expected)
         {
-            if (!double.TryParse(actual, NumberStyles.Float, CultureInfo.InvariantCulture, out var actualNumber))
+            var normalizedOperation = NormalizeComparisonOperation(operation);
+            var actualIsNumber = double.TryParse(actual, NumberStyles.Float, CultureInfo.InvariantCulture, out var actualNumber);
+            var expectedIsNumber = double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out var expectedNumber);
+            if (!actualIsNumber || !expectedIsNumber)
             {
-                return false;
+                switch (normalizedOperation)
+                {
+                    case "eq": return string.Equals(actual, expected, StringComparison.Ordinal);
+                    case "ne": return !string.Equals(actual, expected, StringComparison.Ordinal);
+                    default: return false;
+                }
             }
 
-            if (!double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out var expectedNumber))
+            switch (normalizedOperation)
             {
-                return false;
-            }
-
-            switch (operation)
-            {
+                case "eq": return actualNumber.Equals(expectedNumber);
+                case "ne": return !actualNumber.Equals(expectedNumber);
                 case "lt": return actualNumber < expectedNumber;
                 case "le": return actualNumber <= expectedNumber;
                 case "gt": return actualNumber > expectedNumber;
                 case "ge": return actualNumber >= expectedNumber;
                 default: return false;
+            }
+        }
+
+        private static string NormalizeComparisonOperation(string operation)
+        {
+            switch (string.IsNullOrEmpty(operation) ? "eq" : operation)
+            {
+                case "==":
+                    return "eq";
+                case "!=":
+                    return "ne";
+                case "<":
+                    return "lt";
+                case "<=":
+                case "lte":
+                    return "le";
+                case ">":
+                    return "gt";
+                case ">=":
+                case "gte":
+                    return "ge";
+                default:
+                    return string.IsNullOrEmpty(operation) ? "eq" : operation;
             }
         }
 

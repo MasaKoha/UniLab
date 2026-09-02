@@ -1,4 +1,6 @@
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+using System;
+
 namespace UniLab.AI
 {
     /// <summary>
@@ -32,9 +34,16 @@ namespace UniLab.AI
         public bool showTouch = true;
 
         /// <summary>
-        /// シナリオ実行中のステップラベルを表示するかどうかです。
-        /// 動画の時刻と実行中操作の対応を人間と AI の両方が追えるようにします。
+        /// 常時シルエットを表示するかどうかです。
+        /// 何も押していない状態自体を録画へ残すため既定で有効にします。
         /// </summary>
+        public bool alwaysShowSilhouette = true;
+
+        /// <summary>
+        /// 互換維持のため残す旧オプションです。
+        /// 操作ラベルは履歴帯へ統合したため無視します。
+        /// </summary>
+        [Obsolete("showStepLabel は廃止されました。操作ラベルは履歴帯へ統合され、この設定は無視されます。")]
         public bool showStepLabel = true;
 
         /// <summary>
@@ -44,16 +53,23 @@ namespace UniLab.AI
         public OverlayCorner gamepadCorner = OverlayCorner.BottomRight;
 
         /// <summary>
-        /// ステップラベルを置く隅です。
-        /// 左上の常設 UI を隠しやすいため右上を既定にします。
+        /// 入力履歴帯を置く隅です。
+        /// 既定は模式図の直上に相当する右下です。
         /// </summary>
+        public OverlayCorner historyCorner = OverlayCorner.BottomRight;
+
+        /// <summary>
+        /// 互換維持のため残す旧オプションです。
+        /// 操作ラベルは履歴帯へ統合したため無視します。
+        /// </summary>
+        [Obsolete("labelCorner は廃止されました。操作ラベルは履歴帯へ統合され、この設定は無視されます。")]
         public OverlayCorner labelCorner = OverlayCorner.TopRight;
 
         /// <summary>
         /// 全体スケールです。
         /// 解像度差や録画サイズ差で潰れないようにします。
         /// </summary>
-        public float scale = 1f;
+        public float scale = 0.7f;
 
         /// <summary>
         /// 全体不透明度です。
@@ -62,9 +78,22 @@ namespace UniLab.AI
         public float opacity = 0.85f;
 
         /// <summary>
-        /// 短い押下を動画上で視認可能にする最低表示秒数です。
-        /// 1 フレーム押下が 1 コマで消えると診断価値を失うためです。
+        /// 離した後も押下ハイライトを保持する秒数です。
+        /// 短い入力でも静止フレームで直前操作を判読できるようにします。
         /// </summary>
+        public float holdSeconds = 0.6f;
+
+        /// <summary>
+        /// 履歴帯へ残す入力件数です。
+        /// 直前の操作列を 1 フレームからでも読み返せる件数を既定値にします。
+        /// </summary>
+        public int historyCount = 6;
+
+        /// <summary>
+        /// 旧オプションです。
+        /// 保持挙動は holdSeconds へ置き換えたため無視します。
+        /// </summary>
+        [Obsolete("minimumVisibleSeconds は廃止されました。保持時間は holdSeconds を使用し、この設定は無視されます。")]
         public float minimumVisibleSeconds = 0.3f;
     }
 }
