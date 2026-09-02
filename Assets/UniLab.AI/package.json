@@ -1,0 +1,10 @@
+{
+  "name": "com.unilab.ai",
+  "version": "0.1.0",
+  "displayName": "UniLab.AI",
+  "description": "AI エージェントがゲームを実行し、見て、検証するためのツール群。UniLab 本体には依存しない。",
+  "unity": "6000.0",
+  "author": {
+    "name": "MasaKoha"
+  }
+}
