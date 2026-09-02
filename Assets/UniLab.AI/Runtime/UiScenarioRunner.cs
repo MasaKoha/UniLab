@@ -5,6 +5,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace UniLab.AI
 {
@@ -17,7 +18,8 @@ namespace UniLab.AI
         private const string AuditFileNameSuffix = "-audit.json";
         private const string CaptureFileExtension = ".png";
         private const int DefaultSettleFrames = 30;
-        private const int StepTimeoutFrames = 900;
+        // 準備待ちの上限。フレーム数だと非録画時（高fps）に短すぎるため実時間で持つ
+        private const double StepTimeoutSeconds = 30.0;
         private const string RecordingDirectoryName = "recordings";
         private const string CurrentRecordingDirectoryName = "_current";
         private const string TemporaryRecordingName = "recording";
@@ -30,6 +32,7 @@ namespace UniLab.AI
         private string _outputDirectory;
         private StepPhase _phase;
         private int _phaseStartFrame;
+        private double _stepStartRealtime;
         private int _currentStepIndex;
         private int _captureCount;
         private int _auditCount;
@@ -46,7 +49,8 @@ namespace UniLab.AI
         {
             None = 0,
             WaitingScene = 1,
-            Settling = 2,
+            WaitingReady = 2,
+            Settling = 3,
         }
 
         /// <summary>
@@ -102,28 +106,19 @@ namespace UniLab.AI
                 return;
             }
 
-            if (Time.frameCount - _phaseStartFrame > StepTimeoutFrames)
-            {
-                _warningCount++;
-                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] ステップがタイムアウトしました。 index={_currentStepIndex} capture={GetCaptureLabel(_currentStep)} waitScene={GetWaitSceneLabel(_currentStep)}");
-                CompleteCurrentStep();
-                return;
-            }
-
             if (_phase == StepPhase.WaitingScene)
             {
-                if (!IsSceneLoaded(_currentStep.waitScene))
-                {
-                    return;
-                }
-
-                _phase = StepPhase.Settling;
-                _phaseStartFrame = Time.frameCount;
+                DriveWaitingScene();
                 return;
             }
 
-            var settleFrameCount = GetSettleFrameCount(_currentStep);
-            if (Time.frameCount - _phaseStartFrame < settleFrameCount)
+            if (_phase == StepPhase.WaitingReady)
+            {
+                DriveWaitingReady();
+                return;
+            }
+
+            if (Time.frameCount - _phaseStartFrame < GetSettleFrameCount(_currentStep))
             {
                 return;
             }
@@ -131,20 +126,104 @@ namespace UniLab.AI
             CompleteCurrentStep();
         }
 
+        private void DriveWaitingScene()
+        {
+            if (IsSceneLoaded(_currentStep.waitScene))
+            {
+                EnterPhase(StepPhase.Settling);
+                return;
+            }
+
+            if (HasStepTimedOut())
+            {
+                _warningCount++;
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] シーンのロード待ちがタイムアウトしました。 index={_currentStepIndex} waitScene={GetWaitSceneLabel(_currentStep)}");
+                EnterPhase(StepPhase.Settling);
+            }
+        }
+
+        /// <summary>
+        /// 対象が「プレイヤーが押せる状態」になった瞬間に送出する。
+        /// フレーム数で待たないことで、動画に写る間がゲーム本来の応答時間そのものになる
+        /// （観測器がゲームの見え方を変えない）。遮蔽中は送出しないため、モーダル越しに押す事故も起きない。
+        /// </summary>
+        private void DriveWaitingReady()
+        {
+            if (string.IsNullOrEmpty(_currentStep.submit))
+            {
+                EnterPhase(string.IsNullOrEmpty(_currentStep.waitScene) ? StepPhase.Settling : StepPhase.WaitingScene);
+                return;
+            }
+
+            var target = FindByPathSegment(_currentStep.submit);
+            var blockingObject = target == null ? null : FindBlockingObject(target);
+            // 最前面にあっても、開くアニメーション中は CanvasGroup が interactable=false で押せない。
+            // Button.OnSubmit はその状態を黙って捨てるため、押せる状態になるまで待つ
+            var isInteractable = target != null && IsInteractable(target);
+            var isReady = target != null && blockingObject == null && isInteractable;
+            if (isReady)
+            {
+                var waitedSeconds = Time.realtimeSinceStartupAsDouble - _stepStartRealtime;
+                AddRecordingMarkerIfNeeded(_currentStep, waitedSeconds);
+                if (!TrySubmit(target))
+                {
+                    _warningCount++;
+                    UnityEngine.Debug.LogWarning($"[UiScenarioRunner] submit を受け取る要素がありません。 path={_currentStep.submit}");
+                }
+
+                EnterPhase(string.IsNullOrEmpty(_currentStep.waitScene) ? StepPhase.Settling : StepPhase.WaitingScene);
+                return;
+            }
+
+            if (!HasStepTimedOut())
+            {
+                return;
+            }
+
+            _warningCount++;
+            if (target == null)
+            {
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 操作対象が現れませんでした。 index={_currentStepIndex} path={_currentStep.submit}");
+            }
+            else if (blockingObject != null)
+            {
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 対象が遮られたままでした。送出を見送ります。 index={_currentStepIndex} path={_currentStep.submit} blockedBy={blockingObject.name}");
+            }
+            else
+            {
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 対象が操作可能になりませんでした。送出を見送ります。 index={_currentStepIndex} path={_currentStep.submit}");
+            }
+
+            EnterPhase(StepPhase.Settling);
+        }
+
+        private void EnterPhase(StepPhase phase)
+        {
+            _phase = phase;
+            _phaseStartFrame = Time.frameCount;
+        }
+
+        private bool HasStepTimedOut()
+        {
+            return Time.realtimeSinceStartupAsDouble - _stepStartRealtime > StepTimeoutSeconds;
+        }
+
         private void BeginNextStep()
         {
             _currentStep = _remainingSteps.Dequeue();
             _currentStepIndex++;
-            _phaseStartFrame = Time.frameCount;
+            _stepStartRealtime = Time.realtimeSinceStartupAsDouble;
             BeginRecordingIfNeeded(_currentStep);
-            AddRecordingMarkerIfNeeded(_currentStep);
 
-            if (!string.IsNullOrEmpty(_currentStep.submit))
+            if (string.IsNullOrEmpty(_currentStep.submit))
             {
-                SubmitCurrentStepTarget(_currentStep.submit);
+                // 操作の無いステップはマーカーだけ打つ（撮影・録画停止・待機の位置が動画から辿れるように）
+                AddRecordingMarkerIfNeeded(_currentStep, 0.0);
             }
 
-            _phase = string.IsNullOrEmpty(_currentStep.waitScene) ? StepPhase.Settling : StepPhase.WaitingScene;
+            // waitScene は「操作した結果のシーン到着」を待つ条件。操作の前に待つと、
+            // 操作しないと始まらない遷移を永遠に待ってしまう
+            EnterPhase(StepPhase.WaitingReady);
         }
 
         private void CompleteCurrentStep()
@@ -216,14 +295,14 @@ namespace UniLab.AI
             _videoRecorder = VideoRecorder.StartRecording(currentRecordingDirectory, TemporaryRecordingName, recordingFramesPerSecond, step.recordAudio);
         }
 
-        private void AddRecordingMarkerIfNeeded(UiScenarioStep step)
+        private void AddRecordingMarkerIfNeeded(UiScenarioStep step, double waitedSeconds)
         {
             if (_videoRecorder == null || !_videoRecorder.IsRecording)
             {
                 return;
             }
 
-            _videoRecorder.AddMarker(CreateStepMarkerLabel(step));
+            _videoRecorder.AddMarker(CreateStepMarkerLabel(step, waitedSeconds));
         }
 
         private void StopRecordingIfNeeded(UiScenarioStep step)
@@ -312,9 +391,10 @@ namespace UniLab.AI
             File.WriteAllText(manifestFilePath, JsonUtility.ToJson(manifest, true));
         }
 
-        private string CreateStepMarkerLabel(UiScenarioStep step)
+        /// <summary>waited は「対象が押せる状態になるまで待った実時間」。ゲームの応答時間の計測値になる。</summary>
+        private string CreateStepMarkerLabel(UiScenarioStep step, double waitedSeconds)
         {
-            return $"step{_currentStepIndex} submit={GetSubmitLabel(step)} capture={GetCaptureLabel(step)}";
+            return $"step{_currentStepIndex} submit={GetSubmitLabel(step)} capture={GetCaptureLabel(step)} waited={waitedSeconds:F2}s";
         }
 
         private static string GetSubmitLabel(UiScenarioStep step)
@@ -337,14 +417,19 @@ namespace UniLab.AI
             return Path.Combine(DebugOutputPath.DirectoryPath, DefaultOutputDirectoryName);
         }
 
+        /// <summary>
+        /// 操作後に待つフレーム数。撮影・監査を行うステップだけ既定で待つ（動きが収まった絵を残すため）。
+        /// それ以外は 0 で、次ステップの準備待ちがゲーム本来の間を作る。
+        /// </summary>
         private static int GetSettleFrameCount(UiScenarioStep step)
         {
-            if (step == null || step.settleFrames <= 0)
+            if (step.settleFrames > 0)
             {
-                return DefaultSettleFrames;
+                return step.settleFrames;
             }
 
-            return step.settleFrames;
+            var needsSettledFrame = !string.IsNullOrEmpty(step.capture) || step.audit;
+            return needsSettledFrame ? DefaultSettleFrames : 0;
         }
 
         private static string GetCaptureLabel(UiScenarioStep step)
@@ -381,35 +466,6 @@ namespace UniLab.AI
             return false;
         }
 
-        /// <summary>
-        /// 対象を探して submit を送る。見つからない場合と、手前の要素に遮られている場合を
-        /// それぞれ警告する。遮られていても送出自体は行う（既存シナリオの挙動を変えないため）。
-        /// </summary>
-        private void SubmitCurrentStepTarget(string objectPath)
-        {
-            var target = FindByPathSegment(objectPath);
-            if (target == null)
-            {
-                _warningCount++;
-                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 操作対象が見つかりません。 path={objectPath}");
-                return;
-            }
-
-            // ExecuteEvents は対象へ直接送るため、モーダルの暗幕などで人間には押せない状態でも成功する。
-            // 異常に気づけないまま巡回が進む事故があったため、遮蔽を検知して警告する
-            var blockingObject = FindBlockingObject(target);
-            if (blockingObject != null)
-            {
-                _warningCount++;
-                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 対象が手前の要素に遮られています。モーダル表示中の可能性があります。 path={objectPath} blockedBy={blockingObject.name}");
-            }
-
-            if (!TrySubmit(target))
-            {
-                _warningCount++;
-                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] submit を受け取る要素がありません。 path={objectPath}");
-            }
-        }
 
         private static bool TrySubmit(GameObject target)
         {
@@ -474,6 +530,22 @@ namespace UniLab.AI
             }
 
             return canvas.worldCamera;
+        }
+
+        /// <summary>
+        /// Selectable を持つ対象は、親 CanvasGroup まで含めて操作可能か判定する。
+        /// Selectable を持たない対象（submit ハンドラだけの GameObject 等）は判定できないため true とする。
+        /// </summary>
+        private static bool IsInteractable(GameObject target)
+        {
+            // 汎用の検証ツールのため結線で持てない。ステップごとの判定であり毎フレーム経路ではないので許容する
+            var selectable = target.GetComponent<Selectable>();
+            if (selectable == null)
+            {
+                return true;
+            }
+
+            return selectable.IsInteractable();
         }
 
         private static bool IsSelfOrDescendant(GameObject candidate, GameObject target)
