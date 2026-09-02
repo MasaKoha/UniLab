@@ -139,10 +139,9 @@ namespace UniLab.AI
             BeginRecordingIfNeeded(_currentStep);
             AddRecordingMarkerIfNeeded(_currentStep);
 
-            if (!string.IsNullOrEmpty(_currentStep.submit) && !TrySubmit(_currentStep.submit))
+            if (!string.IsNullOrEmpty(_currentStep.submit))
             {
-                _warningCount++;
-                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 操作対象が見つかりません。 path={_currentStep.submit}");
+                SubmitCurrentStepTarget(_currentStep.submit);
             }
 
             _phase = string.IsNullOrEmpty(_currentStep.waitScene) ? StepPhase.Settling : StepPhase.WaitingScene;
@@ -381,14 +380,38 @@ namespace UniLab.AI
             return false;
         }
 
-        private static bool TrySubmit(string objectPath)
+        /// <summary>
+        /// 対象を探して submit を送る。見つからない場合と、手前の要素に遮られている場合を
+        /// それぞれ警告する。遮られていても送出自体は行う（既存シナリオの挙動を変えないため）。
+        /// </summary>
+        private void SubmitCurrentStepTarget(string objectPath)
         {
             var target = FindByPathSegment(objectPath);
             if (target == null)
             {
-                return false;
+                _warningCount++;
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 操作対象が見つかりません。 path={objectPath}");
+                return;
             }
 
+            // ExecuteEvents は対象へ直接送るため、モーダルの暗幕などで人間には押せない状態でも成功する。
+            // 異常に気づけないまま巡回が進む事故があったため、遮蔽を検知して警告する
+            var blockingObject = FindBlockingObject(target);
+            if (blockingObject != null)
+            {
+                _warningCount++;
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] 対象が手前の要素に遮られています。モーダル表示中の可能性があります。 path={objectPath} blockedBy={blockingObject.name}");
+            }
+
+            if (!TrySubmit(target))
+            {
+                _warningCount++;
+                UnityEngine.Debug.LogWarning($"[UiScenarioRunner] submit を受け取る要素がありません。 path={objectPath}");
+            }
+        }
+
+        private static bool TrySubmit(GameObject target)
+        {
             var eventSystem = EventSystem.current;
             if (eventSystem == null)
             {
@@ -397,6 +420,75 @@ namespace UniLab.AI
 
             var eventData = new BaseEventData(eventSystem);
             return ExecuteEvents.Execute(target, eventData, ExecuteEvents.submitHandler);
+        }
+
+        /// <summary>
+        /// 対象の中心へレイキャストし、最前面が対象自身でも子孫でもなければ、その遮蔽物を返す。
+        /// 判定できないときは null（遮蔽なし扱い）を返す。
+        /// </summary>
+        private static GameObject FindBlockingObject(GameObject target)
+        {
+            var eventSystem = EventSystem.current;
+            if (eventSystem == null)
+            {
+                return null;
+            }
+
+            var targetRectTransform = target.transform as RectTransform;
+            if (targetRectTransform == null)
+            {
+                return null;
+            }
+
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(ResolveCanvasCamera(target), targetRectTransform.position);
+            var pointerEventData = new PointerEventData(eventSystem)
+            {
+                position = screenPoint,
+            };
+
+            var raycastResults = new List<RaycastResult>();
+            eventSystem.RaycastAll(pointerEventData, raycastResults);
+            if (raycastResults.Count == 0)
+            {
+                return null;
+            }
+
+            var frontMostObject = raycastResults[0].gameObject;
+            if (IsSelfOrDescendant(frontMostObject, target))
+            {
+                return null;
+            }
+
+            return frontMostObject;
+        }
+
+        private static Camera ResolveCanvasCamera(GameObject target)
+        {
+            // 汎用の検証ツールのため対象の Canvas を結線で持てない。ステップごとに1回だけの探索であり
+            // 毎フレーム経路ではないため、ここでは GetComponentInParent を許容する
+            var canvas = target.GetComponentInParent<Canvas>();
+            if (canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                return null;
+            }
+
+            return canvas.worldCamera;
+        }
+
+        private static bool IsSelfOrDescendant(GameObject candidate, GameObject target)
+        {
+            var currentTransform = candidate.transform;
+            while (currentTransform != null)
+            {
+                if (currentTransform.gameObject == target)
+                {
+                    return true;
+                }
+
+                currentTransform = currentTransform.parent;
+            }
+
+            return false;
         }
 
         private static GameObject FindByPathSegment(string objectPath)

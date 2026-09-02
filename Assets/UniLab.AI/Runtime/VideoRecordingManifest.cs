@@ -24,6 +24,9 @@ namespace UniLab.AI
         /// </summary>
         public int frameCount;
 
+        /// <summary>録画した実時間の長さ（秒）。動画の再生時間はこれに一致する。</summary>
+        public float durationSeconds;
+
         /// <summary>
         /// 録画幅です。
         /// </summary>

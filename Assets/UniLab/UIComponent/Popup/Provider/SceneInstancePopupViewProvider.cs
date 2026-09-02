@@ -33,6 +33,14 @@ namespace UniLab.UI.Popup
         /// <summary>破棄せず非表示に戻す。次回の LoadAsync で再利用される。</summary>
         public void Release(PopupBase popup)
         {
+            // 表示中に Play 終了やシーン破棄が起きると、シーンが持つ実体が先に消えたあとで
+            // PresentAsync の finally からここへ到達する。Unity の == 判定で破棄済みを弾く
+            // （シーンごと消えているため、非表示に戻す対象がそもそも無い）
+            if (popup == null)
+            {
+                return;
+            }
+
             popup.gameObject.SetActive(false);
         }
     }
