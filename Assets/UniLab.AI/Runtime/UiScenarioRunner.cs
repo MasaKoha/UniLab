@@ -1,3 +1,4 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,7 +6,6 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 namespace UniLab.AI
 {
     /// <summary>
@@ -212,7 +212,8 @@ namespace UniLab.AI
             var recordingRootDirectory = Path.Combine(DebugOutputPath.DirectoryPath, RecordingDirectoryName);
             var currentRecordingDirectory = Path.Combine(recordingRootDirectory, CurrentRecordingDirectoryName);
             PrepareCurrentRecordingDirectory(currentRecordingDirectory);
-            _videoRecorder = VideoRecorder.StartRecording(currentRecordingDirectory, TemporaryRecordingName, RecordingFramesPerSecond);
+            var recordingFramesPerSecond = step.recordFps > 0 ? step.recordFps : RecordingFramesPerSecond;
+            _videoRecorder = VideoRecorder.StartRecording(currentRecordingDirectory, TemporaryRecordingName, recordingFramesPerSecond);
         }
 
         private void AddRecordingMarkerIfNeeded(UiScenarioStep step)

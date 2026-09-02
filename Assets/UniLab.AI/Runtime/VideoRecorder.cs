@@ -1,12 +1,16 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 namespace UniLab.AI
 {
     /// <summary>
@@ -21,36 +25,53 @@ namespace UniLab.AI
         public const string FrameListFileName = "frames.txt";
 
         private const string FrameFileNameFormat = "frame-{0:D5}.jpg";
-        // 検証で UI のテキストを読む用途のため、圧縮ノイズで文字が潰れない範囲の品質を選ぶ。
         private const int JpegQuality = 90;
         private const int DefaultFramesPerSecond = 30;
-        // concat が 0 秒フレームを弾くため、下限を置く
+        private const int BufferPoolSize = 4;
+        private const int BytesPerPixel = 4;
+        private const int RenderTextureDepth = 0;
+        private const int FirstMipIndex = 0;
+        private const int NoRowBytes = 0;
+        // AsyncGPUReadback は RenderTexture を左下原点で読み戻すため、JPG へ書く前に行を反転する。
+        // 実測で確認済み（反転しないと画面が上下逆さまになる）
+        private const bool FlipVerticallyBeforeEncode = true;
         private const double MinimumFrameDuration = 0.0001;
-        // 描画レートと間引き周期が一致したときの取りこぼしを避けるための許容係数
         private const double CaptureIntervalTolerance = 0.9;
         private static readonly WaitForEndOfFrame WaitForEndOfFrameYieldInstruction = new WaitForEndOfFrame();
 
         private readonly List<VideoRecordingMarker> _markers = new List<VideoRecordingMarker>();
-        // 各フレームを撮った実時刻（録画開始からの経過秒）。動画の尺を実時間へ一致させるために使う
+        // 読み戻しや書き出しに失敗し、ファイルが存在しないフレームの番号。
+        // frames.txt から除外しないと ffmpeg が存在しないファイルを参照して失敗する
+        private readonly HashSet<int> _failedFrameIndexes = new HashSet<int>();
+        private readonly object _failedFrameLock = new object();
         private readonly List<double> _frameTimestamps = new List<double>();
+        private readonly List<Task> _encodingTasks = new List<Task>();
+        private readonly Queue<int> _availableBufferIndexes = new Queue<int>();
+        private readonly object _bufferPoolLock = new object();
+        private readonly object _encodingTaskLock = new object();
 
+        private NativeArray<byte>[] _buffers;
+        private RenderTexture _renderTexture;
         private string _outputDirectory;
         private string _name;
         private string _startedAtRealtime;
         private Coroutine _captureCoroutine;
+        private GraphicsFormat _graphicsFormat;
         private int _framesPerSecond;
         private int _frameCount;
+        private int _droppedFrameCount;
+        private int _failedReadbackCount;
+        private int _capturedWidth;
+        private int _capturedHeight;
+        private int _previousTargetFrameRate;
+        private int _previousVSyncCount;
         private double _targetFrameInterval;
         private double _recordingStartRealtime;
         private double _lastCaptureRealtime;
         private double _durationSeconds;
-        private int _previousTargetFrameRate;
-        private int _previousVSyncCount;
         private bool _hasOverriddenFrameRate;
-        private int _capturedWidth;
-        private int _capturedHeight;
-        private bool _hasCapturedFrameSize;
         private bool _isRecording;
+        private bool _hasReleasedResources;
 
         /// <summary>
         /// 録画中かどうかを取得します。
@@ -104,26 +125,74 @@ namespace UniLab.AI
                 return BuildResult();
             }
 
-            _isRecording = false;
-
-            if (_captureCoroutine != null)
-            {
-                StopCoroutine(_captureCoroutine);
-                _captureCoroutine = null;
-            }
-
-            RestoreFrameRateSettings();
+            StopCaptureLoop();
             _durationSeconds = Time.realtimeSinceStartupAsDouble - _recordingStartRealtime;
+            RestoreFrameRateSettings();
+            WaitForPendingWorkAndReleaseResources();
 
             var result = WriteManifestAndBuildResult();
-            UnityEngine.Debug.Log($"[VideoRecorder] 完了: frames={result.FrameCount} duration={_durationSeconds:F2}s output={result.OutputDirectory} ffmpeg={result.FfmpegCommand}");
+            UnityEngine.Debug.Log($"[VideoRecorder] 完了: frames={result.FrameCount} duration={_durationSeconds:F2}s dropped={_droppedFrameCount} failedReadback={_failedReadbackCount} output={result.OutputDirectory} ffmpeg={result.FfmpegCommand}");
             Destroy(gameObject);
             return result;
         }
 
         private void OnDestroy()
         {
+            if (_isRecording)
+            {
+                StopCaptureLoop();
+            }
+
             RestoreFrameRateSettings();
+            WaitForPendingWorkAndReleaseResources();
+        }
+
+        private void Initialize(string outputDirectory, string name, int framesPerSecond)
+        {
+            _outputDirectory = outputDirectory ?? string.Empty;
+            _name = string.IsNullOrEmpty(name) ? nameof(VideoRecorder) : name;
+            _framesPerSecond = framesPerSecond > 0 ? framesPerSecond : DefaultFramesPerSecond;
+            _startedAtRealtime = DateTime.Now.ToString("o");
+
+            _capturedWidth = Screen.width;
+            _capturedHeight = Screen.height;
+            _targetFrameInterval = 1.0 / _framesPerSecond;
+            _recordingStartRealtime = Time.realtimeSinceStartupAsDouble;
+            _lastCaptureRealtime = double.NegativeInfinity;
+
+            Directory.CreateDirectory(_outputDirectory);
+            CreateCaptureResources(_capturedWidth, _capturedHeight);
+            OverrideFrameRateSettings();
+
+            _isRecording = true;
+            _captureCoroutine = StartCoroutine(CaptureFramesCoroutine());
+        }
+
+        private void CreateCaptureResources(int width, int height)
+        {
+            var readWrite = QualitySettings.activeColorSpace == ColorSpace.Linear
+                ? RenderTextureReadWrite.sRGB
+                : RenderTextureReadWrite.Default;
+            _renderTexture = new RenderTexture(width, height, RenderTextureDepth, RenderTextureFormat.ARGB32, readWrite);
+            _renderTexture.Create();
+            _graphicsFormat = _renderTexture.graphicsFormat;
+
+            var bufferLength = width * height * BytesPerPixel;
+            _buffers = new NativeArray<byte>[BufferPoolSize];
+            for (var bufferIndex = 0; bufferIndex < _buffers.Length; bufferIndex++)
+            {
+                _buffers[bufferIndex] = new NativeArray<byte>(bufferLength, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                _availableBufferIndexes.Enqueue(bufferIndex);
+            }
+        }
+
+        private void OverrideFrameRateSettings()
+        {
+            _previousTargetFrameRate = Application.targetFrameRate;
+            _previousVSyncCount = QualitySettings.vSyncCount;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = _framesPerSecond;
+            _hasOverriddenFrameRate = true;
         }
 
         /// <summary>録画のために絞った描画レート設定を元へ戻す。二重呼び出しに耐える。</summary>
@@ -139,31 +208,17 @@ namespace UniLab.AI
             QualitySettings.vSyncCount = _previousVSyncCount;
         }
 
-        private void Initialize(string outputDirectory, string name, int framesPerSecond)
+        private void StopCaptureLoop()
         {
-            _outputDirectory = outputDirectory ?? string.Empty;
-            _name = string.IsNullOrEmpty(name) ? nameof(VideoRecorder) : name;
-            _framesPerSecond = framesPerSecond > 0 ? framesPerSecond : DefaultFramesPerSecond;
-            _startedAtRealtime = DateTime.Now.ToString("o");
+            _isRecording = false;
 
-            _targetFrameInterval = 1.0 / _framesPerSecond;
-            _recordingStartRealtime = Time.realtimeSinceStartupAsDouble;
-            _lastCaptureRealtime = double.NegativeInfinity;
+            if (_captureCoroutine == null)
+            {
+                return;
+            }
 
-            Directory.CreateDirectory(_outputDirectory);
-
-            // Time.captureFramerate は設定しない。設定するとゲーム時間が固定ステップで進み、
-            // 動画の尺が実時間から乖離する（音声を重ねる際に同期できなくなる）。
-            // 代わりに実際の描画レートを目標 fps へ絞る。こうすると実時間・ゲーム時間・動画の尺が
-            // すべて一致し、プレイヤーが見る速度そのものが録れる
-            _previousTargetFrameRate = Application.targetFrameRate;
-            _previousVSyncCount = QualitySettings.vSyncCount;
-            QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = _framesPerSecond;
-            _hasOverriddenFrameRate = true;
-
-            _isRecording = true;
-            _captureCoroutine = StartCoroutine(CaptureFramesCoroutine());
+            StopCoroutine(_captureCoroutine);
+            _captureCoroutine = null;
         }
 
         private IEnumerator CaptureFramesCoroutine()
@@ -172,10 +227,6 @@ namespace UniLab.AI
             {
                 yield return WaitForEndOfFrameYieldInstruction;
 
-                // 実時間で間引く。ゲームが目標 fps より速く回っても撮りすぎず、
-                // 遅れても実時刻を記録しているので尺は狂わない。
-                // 判定間隔を目標そのものにすると、描画レートと周期が一致したときに
-                // わずかなゆらぎで1フレームおきに取りこぼす。許容係数で余裕を持たせる
                 var now = Time.realtimeSinceStartupAsDouble;
                 if (now - _lastCaptureRealtime < _targetFrameInterval * CaptureIntervalTolerance)
                 {
@@ -189,30 +240,187 @@ namespace UniLab.AI
 
         private void CaptureFrame(double elapsedSeconds)
         {
-            Texture2D screenshotTexture = null;
-            try
+            if (!TryTakeAvailableBuffer(out var bufferIndex))
             {
-                screenshotTexture = ScreenCapture.CaptureScreenshotAsTexture();
-                if (!_hasCapturedFrameSize)
+                _droppedFrameCount++;
+                return;
+            }
+
+            var frameIndex = _frameCount;
+            _frameTimestamps.Add(elapsedSeconds);
+            _frameCount++;
+
+            ScreenCapture.CaptureScreenshotIntoRenderTexture(_renderTexture);
+            AsyncGPUReadback.RequestIntoNativeArray(ref _buffers[bufferIndex], _renderTexture, FirstMipIndex, request =>
+            {
+                HandleReadbackCompleted(request, bufferIndex, frameIndex);
+            });
+        }
+
+        private bool TryTakeAvailableBuffer(out int bufferIndex)
+        {
+            lock (_bufferPoolLock)
+            {
+                if (_availableBufferIndexes.Count == 0)
                 {
-                    _capturedWidth = screenshotTexture.width;
-                    _capturedHeight = screenshotTexture.height;
-                    _hasCapturedFrameSize = true;
+                    bufferIndex = -1;
+                    return false;
                 }
 
-                var frameBytes = screenshotTexture.EncodeToJPG(JpegQuality);
-                var frameFilePath = Path.Combine(_outputDirectory, string.Format(FrameFileNameFormat, _frameCount));
-                File.WriteAllBytes(frameFilePath, frameBytes);
-                _frameTimestamps.Add(elapsedSeconds);
-                _frameCount++;
+                bufferIndex = _availableBufferIndexes.Dequeue();
+                return true;
+            }
+        }
+
+        private void HandleReadbackCompleted(AsyncGPUReadbackRequest request, int bufferIndex, int frameIndex)
+        {
+            if (request.hasError)
+            {
+                _failedReadbackCount++;
+                MarkFrameFailed(frameIndex);
+                ReturnBuffer(bufferIndex);
+                UnityEngine.Debug.LogWarning($"[VideoRecorder] GPU 読み戻しに失敗しました。 frame={frameIndex}");
+                return;
+            }
+
+            var frameFilePath = Path.Combine(_outputDirectory, string.Format(FrameFileNameFormat, frameIndex));
+            var task = Task.Run(() => EncodeAndWriteFrame(bufferIndex, frameFilePath, frameIndex));
+            lock (_encodingTaskLock)
+            {
+                _encodingTasks.Add(task);
+            }
+        }
+
+        private void EncodeAndWriteFrame(int bufferIndex, string frameFilePath, int frameIndex)
+        {
+            NativeArray<byte> encodedBytes = default;
+            NativeArray<byte> flippedBuffer = default;
+            try
+            {
+                var sourceBuffer = _buffers[bufferIndex];
+                if (FlipVerticallyBeforeEncode)
+                {
+                    flippedBuffer = CreateVerticallyFlippedBuffer(sourceBuffer, _capturedWidth, _capturedHeight);
+                    sourceBuffer = flippedBuffer;
+                }
+
+                encodedBytes = ImageConversion.EncodeNativeArrayToJPG(sourceBuffer, _graphicsFormat, (uint)_capturedWidth, (uint)_capturedHeight, NoRowBytes, JpegQuality);
+                File.WriteAllBytes(frameFilePath, encodedBytes.ToArray());
+            }
+            catch (Exception exception)
+            {
+                MarkFrameFailed(frameIndex);
+                UnityEngine.Debug.LogWarning($"[VideoRecorder] フレームの書き出しに失敗しました。 frame={frameIndex} {exception.GetType().Name}: {exception.Message}");
             }
             finally
             {
-                if (screenshotTexture != null)
+                if (encodedBytes.IsCreated)
                 {
-                    // perf: 録画は低頻度の操作であり、常駐バッファを持つより都度破棄のほうが害が小さい。
-                    Destroy(screenshotTexture);
+                    encodedBytes.Dispose();
                 }
+
+                if (flippedBuffer.IsCreated)
+                {
+                    flippedBuffer.Dispose();
+                }
+
+                ReturnBuffer(bufferIndex);
+            }
+        }
+
+        private static NativeArray<byte> CreateVerticallyFlippedBuffer(NativeArray<byte> sourceBuffer, int width, int height)
+        {
+            var rowByteCount = width * BytesPerPixel;
+            var flippedBuffer = new NativeArray<byte>(sourceBuffer.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            for (var y = 0; y < height; y++)
+            {
+                var sourceOffset = y * rowByteCount;
+                var destinationOffset = (height - y - 1) * rowByteCount;
+                NativeArray<byte>.Copy(sourceBuffer, sourceOffset, flippedBuffer, destinationOffset, rowByteCount);
+            }
+
+            return flippedBuffer;
+        }
+
+        /// <summary>ファイルが残らなかったフレームを控える。ワーカースレッドからも呼ばれる。</summary>
+        private void MarkFrameFailed(int frameIndex)
+        {
+            lock (_failedFrameLock)
+            {
+                _failedFrameIndexes.Add(frameIndex);
+            }
+        }
+
+        private void ReturnBuffer(int bufferIndex)
+        {
+            lock (_bufferPoolLock)
+            {
+                _availableBufferIndexes.Enqueue(bufferIndex);
+            }
+        }
+
+        private void WaitForPendingWorkAndReleaseResources()
+        {
+            if (_hasReleasedResources)
+            {
+                return;
+            }
+
+            AsyncGPUReadback.WaitAllRequests();
+            WaitForEncodingTasks();
+            ReleaseCaptureResources();
+            _hasReleasedResources = true;
+        }
+
+        private void WaitForEncodingTasks()
+        {
+            Task[] encodingTasks;
+            lock (_encodingTaskLock)
+            {
+                encodingTasks = _encodingTasks.ToArray();
+            }
+
+            if (encodingTasks.Length == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                Task.WaitAll(encodingTasks);
+            }
+            catch (AggregateException exception)
+            {
+                UnityEngine.Debug.LogError($"[VideoRecorder] エンコードまたは書き出しに失敗しました。 {exception.Flatten()}");
+            }
+        }
+
+        private void ReleaseCaptureResources()
+        {
+            if (_renderTexture != null)
+            {
+                _renderTexture.Release();
+                Destroy(_renderTexture);
+                _renderTexture = null;
+            }
+
+            if (_buffers == null)
+            {
+                return;
+            }
+
+            for (var bufferIndex = 0; bufferIndex < _buffers.Length; bufferIndex++)
+            {
+                if (_buffers[bufferIndex].IsCreated)
+                {
+                    _buffers[bufferIndex].Dispose();
+                }
+            }
+
+            _buffers = null;
+            lock (_bufferPoolLock)
+            {
+                _availableBufferIndexes.Clear();
             }
         }
 
@@ -238,21 +446,36 @@ namespace UniLab.AI
                 return;
             }
 
-            var lineBuilder = new StringBuilder();
+            // 失敗したフレームはファイルが無いため除外する。除外分の表示時間は
+            // 直前の生き残りフレームへ吸収される（次の生存フレームとの差を取るため自動的にそうなる）
+            var survivingFrameIndexes = new List<int>(_frameTimestamps.Count);
             for (var index = 0; index < _frameTimestamps.Count; index++)
             {
-                var frameFileName = string.Format(FrameFileNameFormat, index);
-                var nextTimestamp = index + 1 < _frameTimestamps.Count
-                    ? _frameTimestamps[index + 1]
-                    : _durationSeconds;
-                var frameDuration = Math.Max(nextTimestamp - _frameTimestamps[index], MinimumFrameDuration);
+                if (!_failedFrameIndexes.Contains(index))
+                {
+                    survivingFrameIndexes.Add(index);
+                }
+            }
 
-                lineBuilder.Append("file '").Append(frameFileName).Append("'\n");
+            if (survivingFrameIndexes.Count == 0)
+            {
+                return;
+            }
+
+            var lineBuilder = new StringBuilder();
+            for (var position = 0; position < survivingFrameIndexes.Count; position++)
+            {
+                var frameIndex = survivingFrameIndexes[position];
+                var nextTimestamp = position + 1 < survivingFrameIndexes.Count
+                    ? _frameTimestamps[survivingFrameIndexes[position + 1]]
+                    : _durationSeconds;
+                var frameDuration = Math.Max(nextTimestamp - _frameTimestamps[frameIndex], MinimumFrameDuration);
+
+                lineBuilder.Append("file '").Append(string.Format(FrameFileNameFormat, frameIndex)).Append("'\n");
                 lineBuilder.Append("duration ").Append(frameDuration.ToString("F6", CultureInfo.InvariantCulture)).Append('\n');
             }
 
-            // concat デマルチプレクサは最後の duration を無視するため、末尾のファイルをもう一度並べる
-            lineBuilder.Append("file '").Append(string.Format(FrameFileNameFormat, _frameTimestamps.Count - 1)).Append("'\n");
+            lineBuilder.Append("file '").Append(string.Format(FrameFileNameFormat, survivingFrameIndexes[survivingFrameIndexes.Count - 1])).Append("'\n");
 
             File.WriteAllText(Path.Combine(_outputDirectory, FrameListFileName), lineBuilder.ToString());
         }
@@ -271,6 +494,7 @@ namespace UniLab.AI
                 name = name,
                 framesPerSecond = _framesPerSecond,
                 frameCount = _frameCount,
+                droppedFrameCount = _droppedFrameCount,
                 durationSeconds = (float)_durationSeconds,
                 width = _capturedWidth,
                 height = _capturedHeight,
@@ -287,9 +511,6 @@ namespace UniLab.AI
             var outputFilePath = Path.Combine(outputDirectory, $"{name}.mp4");
             var durationArgument = durationSeconds.ToString("F6", CultureInfo.InvariantCulture);
 
-            // concat デマルチプレクサでフレームごとの実測表示時間を反映し、-r で一定フレームレートへ均す。
-            // -t で尺を実測値に固定する。これが無いと concat の末尾処理と丸めで数フレーム伸び、
-            // 実測では 7.63 秒の録画が 7.70 秒の動画になった（-t 付きなら誤差 1 ミリ秒未満）
             return $"ffmpeg -y -f concat -safe 0 -i \"{frameListFilePath}\" -r {framesPerSecond} -t {durationArgument} -c:v libx264 -pix_fmt yuv420p -vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" \"{outputFilePath}\"";
         }
     }
