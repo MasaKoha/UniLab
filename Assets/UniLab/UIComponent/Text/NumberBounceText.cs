@@ -58,13 +58,11 @@ namespace UniLab.UI
         /// </summary>
         public bool IsPlaying { get; private set; }
 
-        private void Awake()
-        {
-            _textMeshPro = GetComponent<TextMeshProUGUI>();
-            _rectTransform = GetComponent<RectTransform>();
-            ApplyScale(DefaultScale);
-            RefreshText();
-        }
+        // 参照は Awake に頼らず遅延取得する。モーダル配下など非アクティブな GameObject に付いていると、
+        // 呼び出し側が Initialize で Format や SetValue を設定した時点では Awake が走っておらず null になる（2026-09-03 実測）
+        private TextMeshProUGUI TextMeshPro => _textMeshPro != null ? _textMeshPro : (_textMeshPro = GetComponent<TextMeshProUGUI>());
+
+        private RectTransform RectTransform => _rectTransform != null ? _rectTransform : (_rectTransform = GetComponent<RectTransform>());
 
         private void OnDestroy()
         {
@@ -90,7 +88,7 @@ namespace UniLab.UI
             _currentValue = value;
             RefreshText();
 
-            var startScale = _rectTransform.localScale.x;
+            var startScale = RectTransform.localScale.x;
             StopAnimation(resetScale: false);
             StartBounce(startScale, durationSeconds, peakScale);
         }
@@ -238,12 +236,12 @@ namespace UniLab.UI
 
         private void RefreshText()
         {
-            _textMeshPro.SetText(_format, _currentValue);
+            TextMeshPro.SetText(_format, _currentValue);
         }
 
         private void ApplyScale(float scale)
         {
-            _rectTransform.localScale = new Vector3(scale, scale, DefaultScale);
+            RectTransform.localScale = new Vector3(scale, scale, DefaultScale);
         }
 
         private static float EvaluateOutBack(float normalizedTime)
