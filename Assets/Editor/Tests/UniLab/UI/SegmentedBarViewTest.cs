@@ -1,3 +1,4 @@
+using System.Reflection;
 using NUnit.Framework;
 using UniLab.UI;
 using UnityEngine;
@@ -29,6 +30,7 @@ namespace UniLab.Tests.EditMode.UI
                 fillStartColor: Color.clear,
                 fillEndColor: Color.clear,
                 backgroundColor: Color.black,
+                glowColor: Color.white,
                 separatorColor: Color.clear,
                 separatorThickness: 0f,
                 outlineColor: Color.clear,
@@ -90,6 +92,7 @@ namespace UniLab.Tests.EditMode.UI
                 fillStartColor: Color.clear,
                 fillEndColor: Color.clear,
                 backgroundColor: Color.black,
+                glowColor: Color.white,
                 separatorColor: Color.clear,
                 separatorThickness: 0f,
                 outlineColor: Color.clear,
@@ -110,6 +113,24 @@ namespace UniLab.Tests.EditMode.UI
 
             var emptyFilledRect = _segmentedBarView.GetFilledSegmentLocalRect(8);
             Assert.That(emptyFilledRect.width, Is.EqualTo(0f).Within(Epsilon));
+        }
+
+        /// <summary>
+        /// 発光量は範囲外入力でも 0〜1 に Clamp する。
+        /// </summary>
+        [Test]
+        public void SetGlow_OutOfRangeValue_ClampsGlowIntensity()
+        {
+            CreateView();
+
+            _segmentedBarView.SetGlow(2f);
+
+            var glowIntensityField = typeof(SegmentedBarView).GetField("_glowIntensity", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(glowIntensityField!.GetValue(_segmentedBarView), Is.EqualTo(1f).Within(Epsilon));
+
+            _segmentedBarView.SetGlow(-1f);
+
+            Assert.That(glowIntensityField.GetValue(_segmentedBarView), Is.EqualTo(0f).Within(Epsilon));
         }
 
         /// <summary>
