@@ -9,6 +9,8 @@ namespace UniLab.UI
     /// N 軸の値を 1 枚のメッシュで描画する汎用レーダーチャート。
     /// 初期化時にだけバッファを確保し、描画ホットパスでは再確保しない。
     /// </summary>
+    // Graphic の RequireComponent は派生クラスに継承されないため、AddComponent 経路でも CanvasRenderer を保証する
+    [RequireComponent(typeof(CanvasRenderer))]
     public sealed class RadarChartView : MaskableGraphic
     {
         private const int MinAxisCount = 3;
