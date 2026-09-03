@@ -19,6 +19,10 @@ namespace UniLab.UI
         private const float FullProgress = 1f;
         private const float EmptyProgress = 0f;
         private const float FullAlphaThreshold = 0f;
+        private const float OutBackOvershoot = 1.70158f;
+        private const float DefaultGlowIntensity = 0f;
+        private const float ShakeOscillationCycles = 6f;
+        private const float Tau = Mathf.PI * 2f;
 
         private readonly UIVertex[] _quadVertices = new UIVertex[4];
         private readonly UIVertex[] _outlineQuadVertices = new UIVertex[4];
@@ -34,9 +38,22 @@ namespace UniLab.UI
         private float _animationStartValue;
         private float _animationTargetValue;
         private RadarChartEasing _animationEasing;
+        private bool _isValueAnimating;
+        private float _glowIntensity;
+        private float _chargeStartedAtRealtimeSeconds;
+        private float _chargeDurationSeconds;
+        private float _chargeShakeAmplitudePixels;
+        private Vector2 _chargeOriginAnchoredPosition;
+        private bool _isChargePlaying;
+        private float _burstStartedAtRealtimeSeconds;
+        private float _burstDurationSeconds;
+        private float _burstStartValue;
+        private float _burstStartGlowIntensity;
+        private Vector2 _burstOriginAnchoredPosition;
+        private bool _isBurstPlaying;
 
         /// <summary>
-        /// 値アニメーションの再生中かを返す。
+        /// 値アニメーション、溜め演出、弾け演出のいずれかが再生中かを返す。
         /// </summary>
         public bool IsAnimating { get; private set; }
 
@@ -46,7 +63,7 @@ namespace UniLab.UI
         /// </summary>
         public void Initialize(int segmentCount)
         {
-            StopAnimation();
+            StopAllAnimations(restorePosition: true, resetGlow: false);
             _segmentCount = Mathf.Max(MinimumSegmentCount, segmentCount);
             _segmentRects = new Rect[_segmentCount];
             _normalizedValue = Mathf.Clamp01(_normalizedValue);
@@ -61,7 +78,7 @@ namespace UniLab.UI
         public void SetValue(float normalizedValue)
         {
             EnsureInitialized();
-            StopAnimation();
+            StopAllAnimations(restorePosition: true, resetGlow: false);
             _normalizedValue = Mathf.Clamp01(normalizedValue);
             SetVerticesDirty();
         }
@@ -87,9 +104,69 @@ namespace UniLab.UI
         public void AnimateTo(float normalizedValue, float durationSeconds, RadarChartEasing easing)
         {
             EnsureInitialized();
+            StopAllAnimations(restorePosition: true, resetGlow: false);
             _animationStartValue = _normalizedValue;
             _animationTargetValue = Mathf.Clamp01(normalizedValue);
-            StartAnimation(durationSeconds, easing);
+            StartValueAnimation(durationSeconds, easing);
+        }
+
+        /// <summary>
+        /// 塗り色を発光代用の色へ 0〜1 で補間する。
+        /// </summary>
+        public void SetGlow(float intensity)
+        {
+            _glowIntensity = Mathf.Clamp01(intensity);
+            SetVerticesDirty();
+        }
+
+        /// <summary>
+        /// 発光を溜めつつ、バー全体を微振動させる。
+        /// </summary>
+        public void PlayCharge(float durationSeconds, float shakeAmplitudePixels)
+        {
+            EnsureInitialized();
+            StopAllAnimations(restorePosition: true, resetGlow: false);
+
+            if (durationSeconds <= 0f)
+            {
+                SetGlow(1f);
+                return;
+            }
+
+            _chargeStartedAtRealtimeSeconds = Time.realtimeSinceStartup;
+            _chargeDurationSeconds = Mathf.Max(MinimumAnimationDurationSeconds, durationSeconds);
+            _chargeShakeAmplitudePixels = Mathf.Max(0f, shakeAmplitudePixels);
+            _chargeOriginAnchoredPosition = rectTransform.anchoredPosition;
+            _isChargePlaying = true;
+            EnsureAnimationLoop();
+            UpdateAnimatingState();
+        }
+
+        /// <summary>
+        /// 発光を減衰させながら値を 0 に戻す。
+        /// </summary>
+        public void PlayBurst(float durationSeconds)
+        {
+            EnsureInitialized();
+            StopAllAnimations(restorePosition: true, resetGlow: false);
+            SetGlow(1f);
+
+            if (durationSeconds <= 0f)
+            {
+                _normalizedValue = 0f;
+                SetGlow(0f);
+                SetVerticesDirty();
+                return;
+            }
+
+            _burstStartedAtRealtimeSeconds = Time.realtimeSinceStartup;
+            _burstDurationSeconds = Mathf.Max(MinimumAnimationDurationSeconds, durationSeconds);
+            _burstStartValue = _normalizedValue;
+            _burstStartGlowIntensity = _glowIntensity;
+            _burstOriginAnchoredPosition = rectTransform.anchoredPosition;
+            _isBurstPlaying = true;
+            EnsureAnimationLoop();
+            UpdateAnimatingState();
         }
 
         /// <summary>
@@ -141,7 +218,7 @@ namespace UniLab.UI
 
         protected override void OnDestroy()
         {
-            StopAnimation();
+            StopAllAnimations(restorePosition: false, resetGlow: false);
             base.OnDestroy();
         }
 
@@ -163,10 +240,8 @@ namespace UniLab.UI
             }
         }
 
-        private void StartAnimation(float durationSeconds, RadarChartEasing easing)
+        private void StartValueAnimation(float durationSeconds, RadarChartEasing easing)
         {
-            StopAnimation();
-
             if (durationSeconds <= 0f || easing == RadarChartEasing.None)
             {
                 _normalizedValue = _animationTargetValue;
@@ -177,18 +252,51 @@ namespace UniLab.UI
             _animationStartedAtRealtimeSeconds = Time.realtimeSinceStartup;
             _animationDurationSeconds = Mathf.Max(MinimumAnimationDurationSeconds, durationSeconds);
             _animationEasing = easing;
-            IsAnimating = true;
+            _isValueAnimating = true;
+            EnsureAnimationLoop();
+            UpdateAnimatingState();
+        }
+
+        private void EnsureAnimationLoop()
+        {
+            if (_animationSubscription != null)
+            {
+                return;
+            }
+
             _animationSubscription = Observable.EveryUpdate(destroyCancellationToken)
                 .Subscribe(_ => AdvanceAnimation());
         }
 
         private void AdvanceAnimation()
         {
-            if (!IsAnimating)
+            if (_isValueAnimating)
+            {
+                AdvanceValueAnimation();
+            }
+
+            if (_isChargePlaying)
+            {
+                AdvanceChargeAnimation();
+            }
+
+            if (_isBurstPlaying)
+            {
+                AdvanceBurstAnimation();
+            }
+
+            UpdateAnimatingState();
+            if (IsAnimating)
             {
                 return;
             }
 
+            _animationSubscription?.Dispose();
+            _animationSubscription = null;
+        }
+
+        private void AdvanceValueAnimation()
+        {
             var elapsedSeconds = Time.realtimeSinceStartup - _animationStartedAtRealtimeSeconds;
             var normalizedTime = Mathf.Clamp01(elapsedSeconds / _animationDurationSeconds);
             var easedProgress = EvaluateEasing(normalizedTime, _animationEasing);
@@ -201,15 +309,101 @@ namespace UniLab.UI
             }
 
             _normalizedValue = _animationTargetValue;
-            StopAnimation();
+            _isValueAnimating = false;
             SetVerticesDirty();
         }
 
-        private void StopAnimation()
+        private void AdvanceChargeAnimation()
         {
+            var elapsedSeconds = Time.realtimeSinceStartup - _chargeStartedAtRealtimeSeconds;
+            var normalizedTime = Mathf.Clamp01(elapsedSeconds / _chargeDurationSeconds);
+            SetGlow(normalizedTime);
+            ApplyChargeShake(normalizedTime);
+
+            if (normalizedTime < FullProgress)
+            {
+                return;
+            }
+
+            rectTransform.anchoredPosition = _chargeOriginAnchoredPosition;
+            _isChargePlaying = false;
+        }
+
+        private void AdvanceBurstAnimation()
+        {
+            var elapsedSeconds = Time.realtimeSinceStartup - _burstStartedAtRealtimeSeconds;
+            var normalizedTime = Mathf.Clamp01(elapsedSeconds / _burstDurationSeconds);
+            var easedProgress = EvaluateEasing(normalizedTime, RadarChartEasing.OutCubic);
+            _normalizedValue = Mathf.LerpUnclamped(_burstStartValue, 0f, easedProgress);
+            SetGlow(Mathf.LerpUnclamped(_burstStartGlowIntensity, 0f, easedProgress));
+            rectTransform.anchoredPosition = _burstOriginAnchoredPosition;
+            SetVerticesDirty();
+
+            if (normalizedTime < FullProgress)
+            {
+                return;
+            }
+
+            _normalizedValue = 0f;
+            SetGlow(0f);
+            rectTransform.anchoredPosition = _burstOriginAnchoredPosition;
+            _isBurstPlaying = false;
+            SetVerticesDirty();
+        }
+
+        private void StopAllAnimations(bool restorePosition, bool resetGlow)
+        {
+            var restingAnchoredPosition = ResolveRestingAnchoredPosition();
             _animationSubscription?.Dispose();
             _animationSubscription = null;
-            IsAnimating = false;
+            _isValueAnimating = false;
+            _isChargePlaying = false;
+            _isBurstPlaying = false;
+
+            if (restorePosition)
+            {
+                rectTransform.anchoredPosition = restingAnchoredPosition;
+            }
+
+            if (resetGlow)
+            {
+                _glowIntensity = DefaultGlowIntensity;
+            }
+
+            UpdateAnimatingState();
+        }
+
+        private void UpdateAnimatingState()
+        {
+            IsAnimating = _isValueAnimating || _isChargePlaying || _isBurstPlaying;
+        }
+
+        private void ApplyChargeShake(float normalizedTime)
+        {
+            if (_chargeShakeAmplitudePixels <= 0f)
+            {
+                rectTransform.anchoredPosition = _chargeOriginAnchoredPosition;
+                return;
+            }
+
+            var amplitude = Mathf.LerpUnclamped(0f, _chargeShakeAmplitudePixels, EvaluateOutBack(normalizedTime));
+            var shakeOffsetX = Mathf.Sin(normalizedTime * ShakeOscillationCycles * Tau) * amplitude;
+            rectTransform.anchoredPosition = new Vector2(_chargeOriginAnchoredPosition.x + shakeOffsetX, _chargeOriginAnchoredPosition.y);
+        }
+
+        private Vector2 ResolveRestingAnchoredPosition()
+        {
+            if (_isChargePlaying)
+            {
+                return _chargeOriginAnchoredPosition;
+            }
+
+            if (_isBurstPlaying)
+            {
+                return _burstOriginAnchoredPosition;
+            }
+
+            return rectTransform.anchoredPosition;
         }
 
         private void UpdateSegmentRects()
@@ -279,7 +473,7 @@ namespace UniLab.UI
                     continue;
                 }
 
-                AddSolidRect(vertexHelper, filledRect, _style.FillColor);
+                AddSolidRect(vertexHelper, filledRect, EvaluateFillColor(0f));
             }
         }
 
@@ -392,13 +586,11 @@ namespace UniLab.UI
 
         private Color EvaluateFillColor(float normalizedHorizontalPosition)
         {
-            if (!UsesGradientFill())
-            {
-                return _style.FillColor;
-            }
-
             var clampedPosition = Mathf.Clamp01(normalizedHorizontalPosition);
-            return Color.Lerp(_style.FillStartColor, _style.FillEndColor, clampedPosition);
+            var baseColor = UsesGradientFill()
+                ? Color.Lerp(_style.FillStartColor, _style.FillEndColor, clampedPosition)
+                : _style.FillColor;
+            return Color.Lerp(baseColor, _style.GlowColor, _glowIntensity);
         }
 
         private void AddGradientRect(VertexHelper vertexHelper, Rect rect)
@@ -445,13 +637,18 @@ namespace UniLab.UI
                     return 1f - Mathf.Pow(1f - normalizedTime, 3f);
                 case RadarChartEasing.OutBack:
                     {
-                        const float outBackOvershoot = 1.70158f;
                         var inverse = normalizedTime - 1f;
-                        return 1f + ((outBackOvershoot + 1f) * inverse * inverse * inverse) + (outBackOvershoot * inverse * inverse);
+                        return 1f + ((OutBackOvershoot + 1f) * inverse * inverse * inverse) + (OutBackOvershoot * inverse * inverse);
                     }
                 default:
                     return normalizedTime;
             }
+        }
+
+        private static float EvaluateOutBack(float normalizedTime)
+        {
+            var inverse = normalizedTime - 1f;
+            return 1f + ((OutBackOvershoot + 1f) * inverse * inverse * inverse) + (OutBackOvershoot * inverse * inverse);
         }
 
         private static bool IsUnsetColor(Color color)

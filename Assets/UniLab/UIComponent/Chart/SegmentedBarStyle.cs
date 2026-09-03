@@ -19,6 +19,9 @@ namespace UniLab.UI
         /// <summary>未充填セグメントの色。</summary>
         public Color BackgroundColor { get; }
 
+        /// <summary>発光代用で塗りを寄せる先の色。</summary>
+        public Color GlowColor { get; }
+
         /// <summary>セグメント境界線の色。</summary>
         public Color SeparatorColor { get; }
 
@@ -46,6 +49,7 @@ namespace UniLab.UI
                 fillStartColor: Color.clear,
                 fillEndColor: Color.clear,
                 backgroundColor: new Color(1f, 1f, 1f, 0.12f),
+                glowColor: Color.white,
                 separatorColor: new Color(1f, 1f, 1f, 0.5f),
                 separatorThickness: 1f,
                 outlineColor: Color.white,
@@ -61,6 +65,7 @@ namespace UniLab.UI
             Color fillStartColor,
             Color fillEndColor,
             Color backgroundColor,
+            Color glowColor,
             Color separatorColor,
             float separatorThickness,
             Color outlineColor,
@@ -72,6 +77,7 @@ namespace UniLab.UI
             FillStartColor = fillStartColor;
             FillEndColor = fillEndColor;
             BackgroundColor = backgroundColor;
+            GlowColor = glowColor;
             SeparatorColor = separatorColor;
             SeparatorThickness = Mathf.Max(0f, separatorThickness);
             OutlineColor = outlineColor;

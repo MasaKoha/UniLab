@@ -1,12 +1,16 @@
 # SegmentedBarView
 
-`SegmentedBarView` は `MaskableGraphic` 1 枚で区切り付きのバーを描く部品で、HP/MP のような「10 目盛り中 7.4」の表示に使う。公開 API は `Initialize(int segmentCount)`、`SetValue(float normalizedValue)`、`SetStyle(SegmentedBarStyle)`、`AnimateTo(float normalizedValue, float durationSeconds, RadarChartEasing easing)`、`GetSegmentLocalRect(int index)`、`GetFilledSegmentLocalRect(int index)` の 6 つで、ラベルや数値は呼び出し側が別配置する。アロケーション方針は `Initialize` 時の内部バッファ確保に限定し、`SetValue` と `OnPopulateMesh(VertexHelper)` のホットパスでは再確保しない。
+`SegmentedBarView` は `MaskableGraphic` 1 枚で区切り付きのバーを描く部品で、HP/MP のような「10 目盛り中 7.4」の表示に使う。公開 API は `Initialize(int segmentCount)`、`SetValue(float normalizedValue)`、`SetStyle(SegmentedBarStyle)`、`AnimateTo(float normalizedValue, float durationSeconds, RadarChartEasing easing)`、`SetGlow(float intensity)`、`PlayCharge(float durationSeconds, float shakeAmplitudePixels)`、`PlayBurst(float durationSeconds)`、`GetSegmentLocalRect(int index)`、`GetFilledSegmentLocalRect(int index)` で、ラベルや数値は呼び出し側が別配置する。アロケーション方針は `Initialize` 時の内部バッファ確保に限定し、`SetValue` と `OnPopulateMesh(VertexHelper)` のホットパスでは再確保しない。
 
 ## 演出と色
 
 - `AnimateTo(float normalizedValue, float durationSeconds, RadarChartEasing easing)`: 現在値から目標値へ補間する。`IsAnimating` で進行中か分かる。駆動は R3 の `Observable.EveryUpdate(destroyCancellationToken)` で、`Update` を持たず、アニメーション中の追加アロケーションは無い。進行中に `SetValue` / `AnimateTo` を呼ぶと前の補間を止めて差し替える
+- `SetGlow(float intensity)`: 0〜1 に Clamp し、塗り色を `FillColor` もしくはグラデーション評価色から `GlowColor` へ寄せる。シェーダーなしで「白く光る」代用演出を作る
+- `PlayCharge(float durationSeconds, float shakeAmplitudePixels)`: 発光量を 0 から 1 へ上げながら、`RectTransform.anchoredPosition` を横方向に微振動させる。終了時は元位置へ戻る
+- `PlayBurst(float durationSeconds)`: 発光量を 1 から 0 へ落としつつ、現在値を 0 に戻す。次の `AnimateTo` を呼び出し側がつなぐ前提
 - `SegmentedBarStyle.FillStartColor` / `FillEndColor`: 左右グラデーション。両方が透明なら `FillColor` 単色にフォールバックする
 - `SegmentedBarStyle.BackgroundColor`: 未充填セグメントの色
+- `SegmentedBarStyle.GlowColor`: 発光代用で塗り色を寄せる先。既定値は白
 - `SegmentedBarStyle.SeparatorColor` / `SeparatorThickness` / `SegmentSpacing`: 区切り線と隙間。セグメント 1 個の長さが 1px 未満なら視認性より頂点増加の損失が大きいため区切り線を描かない
 - `SegmentedBarStyle.Vertical`: `true` で縦積み表示に切り替える
 
@@ -28,9 +32,21 @@
 
 現在値から目標値へ補間し、毎フレーム再描画する。`durationSeconds <= 0` または `RadarChartEasing.None` のときは即時反映する。
 
+### `void SetGlow(float intensity)`
+
+発光量を 0〜1 に Clamp して保持する。0 で通常色、1 で `GlowColor` に達する。
+
+### `void PlayCharge(float durationSeconds, float shakeAmplitudePixels)`
+
+発光を溜めながら横方向に微振動させる。演出完了時は元の `anchoredPosition` に戻る。
+
+### `void PlayBurst(float durationSeconds)`
+
+発光を減衰させながら値を 0 に戻す。`durationSeconds <= 0` のときは即時に消灯して 0 に戻す。
+
 ### `bool IsAnimating`
 
-値アニメーションの再生中かを返す。
+値補間、溜め、弾けのいずれかが再生中かを返す。
 
 ### `Rect GetSegmentLocalRect(int index)`
 
@@ -48,6 +64,7 @@
 - `FillStartColor`
 - `FillEndColor`
 - `BackgroundColor`
+- `GlowColor`
 - `SeparatorColor`
 - `SeparatorThickness`
 - `OutlineColor`
@@ -80,6 +97,7 @@ public sealed class StatusGaugePresenter
             fillStartColor: Color.clear,
             fillEndColor: Color.clear,
             backgroundColor: new Color(1f, 1f, 1f, 0.12f),
+            glowColor: Color.white,
             separatorColor: new Color(1f, 1f, 1f, 0.6f),
             separatorThickness: 1f,
             outlineColor: Color.white,
@@ -95,6 +113,10 @@ public sealed class StatusGaugePresenter
     }
 }
 ```
+
+## 演出のつなぎ方
+
+満タン直前の溜めを見せたい場合は `PlayCharge(durationSeconds, shakeAmplitudePixels)` を呼び、終了後に `PlayBurst(durationSeconds)` をつなぐ。`PlayBurst` は値を 0 に戻すため、その後の再充填は `AnimateTo` で開始する。
 
 ## 注意点
 
