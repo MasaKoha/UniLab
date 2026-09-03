@@ -11,6 +11,7 @@ Unity プロジェクト向けの共通ライブラリ・エディタツール�
 
 - [Tools Guide](TOOLS_GUIDE.md) — エディタツールの使い方ガイド
 - [AssetVault 利用ガイド](asset-vault-guide.md) — 概要・使い方・サンプル・差分配信運用の統合ガイド
+- [RadarChartView](ui-component-radar-chart.md) — 1 枚メッシュで描く汎用レーダーチャート部品
 
 ## Design Docs
 
