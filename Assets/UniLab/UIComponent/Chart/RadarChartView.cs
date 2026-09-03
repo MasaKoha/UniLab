@@ -18,6 +18,9 @@ namespace UniLab.UI
         private const float FullCircleDegrees = 360f;
         private const float MinimumAnimationDurationSeconds = 0.0001f;
         private const float OutBackOvershoot = 1.70158f;
+        // 値多角形は外枠を越えて描いてよい。上限を 1 に切ると「上限を振り切った」表現ができず、
+        // OutBack の跳ね返りも頭打ちで潰れるため、既定で外枠の 1.5 倍まで許す（2026-09-03）
+        private const float DefaultMaximumNormalizedValue = 1.5f;
 
         // perf: 描画で使う配列は Initialize でだけ確保し、OnPopulateMesh 中の GC を防ぐ。
         private float[] _normalizedValues = Array.Empty<float>();
@@ -70,7 +73,12 @@ namespace UniLab.UI
         }
 
         /// <summary>
-        /// 各軸の正規化済み値を更新する。入力値は 0〜1 に Clamp して保持する。
+        /// 値多角形が外枠を越えて描かれる上限。1 を超える値を渡すと外枠の外側へはみ出す。
+        /// </summary>
+        public float MaximumNormalizedValue { get; set; } = DefaultMaximumNormalizedValue;
+
+        /// <summary>
+        /// 各軸の正規化済み値を更新する。入力値は 0〜<see cref="MaximumNormalizedValue"/> に Clamp して保持する。
         /// </summary>
         public void SetValues(ReadOnlySpan<float> normalizedValues)
         {
@@ -211,7 +219,7 @@ namespace UniLab.UI
 
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
-                destinationValues[axisIndex] = Mathf.Clamp01(sourceValues[axisIndex]);
+                destinationValues[axisIndex] = Mathf.Clamp(sourceValues[axisIndex], 0f, MaximumNormalizedValue);
             }
         }
 
@@ -278,7 +286,7 @@ namespace UniLab.UI
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 var startValue = zeroStart ? 0f : _animationStartValues[axisIndex];
-                _normalizedValues[axisIndex] = Mathf.Clamp01(Mathf.LerpUnclamped(startValue, _animationTargetValues[axisIndex], easedProgress));
+                _normalizedValues[axisIndex] = Mathf.Clamp(Mathf.LerpUnclamped(startValue, _animationTargetValues[axisIndex], easedProgress), 0f, MaximumNormalizedValue);
             }
 
             SetVerticesDirty();

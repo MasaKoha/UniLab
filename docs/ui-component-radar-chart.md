@@ -9,3 +9,6 @@
 - `RadarChartStyle.FillCenterColor` / `FillEdgeColor`: 中心→外周の放射グラデーション（頂点カラー）。未設定（透明）なら `FillColor` 単色にフォールバック
 - イージング: `None` / `Linear` / `OutCubic` / `OutBack`
 
+## 値が外枠を越える表現
+
+`MaximumNormalizedValue`（既定 1.5）まで 1 を超える値を受け付ける。値多角形は外枠の外側へはみ出して描かれるため、「上限を振り切った」ことを見た目で示せる。外枠と軸ラベルは矩形内に収める前提なので、はみ出しぶんの余白は呼び出し側が確保する。0 未満は 0 に丸める。
