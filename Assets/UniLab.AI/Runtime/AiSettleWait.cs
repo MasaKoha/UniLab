@@ -17,8 +17,8 @@ namespace UniLab.AI
 
         internal AiSettleWait(AiCommandArguments arguments)
         {
-            ValidateDuration(arguments.settleSeconds, nameof(arguments.settleSeconds), false);
-            ValidateDuration(arguments.settleTimeoutSeconds, nameof(arguments.settleTimeoutSeconds), true);
+            AiCommandArguments.ValidateDuration(arguments.settleSeconds, nameof(arguments.settleSeconds), false);
+            AiCommandArguments.ValidateDuration(arguments.settleTimeoutSeconds, nameof(arguments.settleTimeoutSeconds), true);
             _settleSeconds = arguments.settleSeconds;
             _timeoutSeconds = arguments.settleTimeoutSeconds;
             _startedAt = Time.realtimeSinceStartup;
@@ -72,14 +72,6 @@ namespace UniLab.AI
             }
 
             return false;
-        }
-
-        private static void ValidateDuration(float seconds, string name, bool requirePositive)
-        {
-            if (float.IsNaN(seconds) || float.IsInfinity(seconds) || seconds < 0f || (requirePositive && seconds == 0f))
-            {
-                throw new ArgumentOutOfRangeException(name, "待機秒数が不正です。");
-            }
         }
     }
 }

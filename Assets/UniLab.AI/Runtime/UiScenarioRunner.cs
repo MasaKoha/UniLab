@@ -373,25 +373,7 @@ namespace UniLab.AI
                 failureMessage = string.Empty;
                 return true;
             }
-            var target = UiInputLocator.FindTarget(primaryTarget);
-            if (target == null)
-            {
-                failureMessage = $"操作対象が現れませんでした。 target={primaryTarget}";
-                return false;
-            }
-            var blockingObject = UiInputLocator.FindBlockingObject(target);
-            if (blockingObject != null)
-            {
-                failureMessage = $"対象が遮られています。 target={primaryTarget} blockedBy={blockingObject.name}";
-                return false;
-            }
-            if (!UiInputLocator.IsInteractable(target))
-            {
-                failureMessage = $"対象が操作可能ではありません。 target={primaryTarget}";
-                return false;
-            }
-            failureMessage = string.Empty;
-            return true;
+            return UiReadiness.IsSubmittable(primaryTarget, out failureMessage);
         }
         private void AddFailure(string kind, string target, string value, string message, string evidencePath)
         {

@@ -85,6 +85,15 @@ namespace UniLab.AI.Tests
             Assert.That(response.error, Is.Not.Empty);
         }
 
+        /// <summary>Play 外の拒否だけで通過せず、scope 自体を検証します。</summary>
+        [Test]
+        public void InvalidObservationScopeReturnsFailure()
+        {
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.observe", args = "{\"scope\":\"foo\"}" });
+            Assert.That(response.ok, Is.False);
+            Assert.That(response.error, Does.Contain("scope"));
+        }
+
         [System.Serializable]
         private sealed class CaptureName
         {

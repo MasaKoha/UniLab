@@ -1,6 +1,7 @@
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -23,19 +24,25 @@ namespace UniLab.AI
         /// <summary>同期で即時実行し、フレームをまたぐ操作は要求時点の結果を返します。</summary>
         public static AiCommandResponse Execute(AiCommandRequest request)
         {
+            var stopwatch = Stopwatch.StartNew();
+            AiCommandResponse response;
             try
             {
-                return ExecuteCore(new AiCommandContext(request));
+                response = ExecuteCore(new AiCommandContext(request));
             }
             catch (Exception exception)
             {
-                return Failure(request, exception.Message);
+                response = Failure(request, exception.Message);
             }
+
+            response.elapsedMs = (int)stopwatch.ElapsedMilliseconds;
+            return response;
         }
 
         /// <summary>フレーム進行を許し、完了時に一度だけ結果を通知します。</summary>
         public static IEnumerator ExecuteAsync(AiCommandRequest request, Action<AiCommandResponse> onCompleted)
         {
+            var stopwatch = Stopwatch.StartNew();
             AiCommandResponse response = null;
             using (var execution = ExecuteAsyncCore(request, result => response = result))
             {
@@ -61,6 +68,7 @@ namespace UniLab.AI
                 }
             }
 
+            response.elapsedMs = (int)stopwatch.ElapsedMilliseconds;
             onCompleted?.Invoke(response);
         }
 
@@ -96,7 +104,7 @@ namespace UniLab.AI
                 case "ping": return Success(operation, $"playMode={Application.isPlaying} scene={SceneManager.GetActiveScene().name} frame={Time.frameCount}");
                 case "ops": return Success(operation, string.Join("\n", ListOps()));
                 case "agent.begin": return ConvertResult(operation, AgentSessionCommands.Begin(context.GetObject("goal", true), context.GetObject("options")));
-                case "agent.observe": return ConvertResult(operation, AgentSessionCommands.Observe(arguments.diffOnly));
+                case "agent.observe": return ConvertResult(operation, AgentSessionCommands.Observe(arguments.diffOnly, arguments.scope));
                 case "agent.act": return ActImmediately(context);
                 case "agent.goal": return ConvertResult(operation, AgentSessionCommands.IsGoalReached());
                 case "agent.end": return ConvertResult(operation, AgentSessionCommands.End());
@@ -161,38 +169,78 @@ namespace UniLab.AI
             AiCommandResponse response = null;
             foreach (var action in context.GetActions())
             {
-                using (var settle = new AiSettleWait(context.Arguments))
+                using (var execution = ExecuteActionAsync(context, action, result => response = result))
                 {
-                    response = ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action)));
-                    if (!response.ok)
+                    while (execution.MoveNext())
                     {
-                        break;
+                        yield return execution.Current;
                     }
-
-                    var wait = settle.Wait();
-                    while (wait.MoveNext())
-                    {
-                        yield return wait.Current;
-                    }
-
-                    RefreshObservation(response);
-                    response.settled = settle.Settled;
                 }
 
-                if (!response.settled)
-                {
-                    response.ok = false;
-                    response.error = "settle timeout";
-                    break;
-                }
-
-                if (!IsRunning(response))
+                if (!IsRunning(response) || !response.settled)
                 {
                     break;
                 }
             }
 
             completed(response);
+        }
+
+        private static System.Collections.Generic.IEnumerator<object> ExecuteActionAsync(
+            AiCommandContext context, AgentAction action, Action<AiCommandResponse> completed)
+        {
+            var targetSpecification = GetReadyTarget(action);
+            var stopwatch = Stopwatch.StartNew();
+            // 対象を持たない操作（press / move 等）は待つものが無いので準備済み扱いにする
+            var ready = string.IsNullOrEmpty(targetSpecification);
+            if (!string.IsNullOrEmpty(targetSpecification))
+            {
+                while (!(ready = UiReadiness.IsSubmittable(targetSpecification, out _))
+                    && stopwatch.Elapsed.TotalSeconds < context.Arguments.readyTimeoutSeconds)
+                {
+                    yield return null;
+                }
+            }
+
+            var waitedMilliseconds = string.IsNullOrEmpty(targetSpecification) ? 0 : (int)stopwatch.ElapsedMilliseconds;
+            using (var settle = new AiSettleWait(context.Arguments))
+            {
+                // タイムアウトでも既存の入力経路へ渡し、拒否理由や座標入力の挙動を維持する。
+                var response = ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action)));
+                response.ready = ready;
+                response.waitedMs = waitedMilliseconds;
+                if (!response.ok || (!string.IsNullOrEmpty(targetSpecification) && !ready))
+                {
+                    completed(response);
+                    yield break;
+                }
+
+                var wait = settle.Wait();
+                while (wait.MoveNext())
+                {
+                    yield return wait.Current;
+                }
+
+                RefreshObservation(response);
+                response.settled = settle.Settled;
+                if (!response.settled)
+                {
+                    response.ok = false;
+                    response.error = "settle timeout";
+                }
+
+                completed(response);
+            }
+        }
+
+        private static string GetReadyTarget(AgentAction action)
+        {
+            if (!string.IsNullOrEmpty(action.submit))
+            {
+                return action.submit;
+            }
+
+            return !string.IsNullOrEmpty(action.click) ? action.click : action.tap;
         }
 
         private static void RefreshObservation(AiCommandResponse response)
@@ -243,7 +291,7 @@ namespace UniLab.AI
             {
                 ok = true,
                 op = "snapshot",
-                text = arguments.compact ? UiSnapshot.ToCompactText(snapshot) : JsonUtility.ToJson(snapshot, true),
+                text = arguments.compact ? UiSnapshot.ToCompactText(snapshot, "all") : JsonUtility.ToJson(snapshot, true),
                 path = arguments.save ? UiSnapshot.Save(snapshot) : string.Empty,
             };
         }

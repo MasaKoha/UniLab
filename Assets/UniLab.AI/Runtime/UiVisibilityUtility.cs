@@ -13,6 +13,33 @@ namespace UniLab.AI
     /// </summary>
     public static class UiVisibilityUtility
     {
+        private const int RectangleValueCount = 4;
+        private const int RectangleWidthIndex = 2;
+        private const int RectangleHeightIndex = 3;
+
+        /// <summary>左下座標・幅・高さで表した要素矩形のうち、クリップ矩形に含まれる面積比を返します。</summary>
+        public static float ComputeVisibleRatio(float[] elementRect, float[] clipRect)
+        {
+            if (elementRect == null || clipRect == null
+                || elementRect.Length < RectangleValueCount || clipRect.Length < RectangleValueCount)
+            {
+                return 0f;
+            }
+
+            var elementWidth = elementRect[RectangleWidthIndex];
+            var elementHeight = elementRect[RectangleHeightIndex];
+            if (elementWidth <= 0f || elementHeight <= 0f)
+            {
+                return 0f;
+            }
+
+            var intersectionWidth = Mathf.Max(0f, Mathf.Min(elementRect[0] + elementWidth,
+                clipRect[0] + clipRect[RectangleWidthIndex]) - Mathf.Max(elementRect[0], clipRect[0]));
+            var intersectionHeight = Mathf.Max(0f, Mathf.Min(elementRect[1] + elementHeight,
+                clipRect[1] + clipRect[RectangleHeightIndex]) - Mathf.Max(elementRect[1], clipRect[1]));
+            return Mathf.Clamp01((intersectionWidth / elementWidth) * (intersectionHeight / elementHeight));
+        }
+
         private static readonly Vector3[] WorldCorners = new Vector3[4];
 
         /// <summary>

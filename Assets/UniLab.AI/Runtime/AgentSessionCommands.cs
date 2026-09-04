@@ -42,14 +42,14 @@ namespace UniLab.AI
         /// <summary>
         /// 現在セッションの観測を返し、外部 LLM の次手選択に使える形へ整えます。
         /// </summary>
-        public static string Observe(bool diffOnly)
+        public static string Observe(bool diffOnly, string scope = "visible")
         {
             if (_currentSession == null)
             {
                 return ToJson(false, string.Empty, "セッションが開始されていません。", string.Empty, string.Empty);
             }
 
-            return ToJson(true, _currentSession.SessionId, "観測しました。", _currentSession.Observe(diffOnly), _currentSession.OutputDirectory);
+            return ToJson(true, _currentSession.SessionId, "観測しました。", _currentSession.Observe(diffOnly, scope), _currentSession.OutputDirectory);
         }
 
         /// <summary>

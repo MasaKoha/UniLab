@@ -130,3 +130,43 @@ Play 外の agent CLI も従来の生文字列から、同じ文言を含む応�
 - ファイルログ読み取りは末尾 N 行だけを保持するが、ファイルは先頭から走査する。
 - クラッシュをまたぐ exactly-once は保証しない。実行後・応答公開前のクラッシュで要求が残り得る。
 - Unity の起動・コンパイル・EditMode テストは依頼者が実施する。
+
+
+## 準備待ち
+
+メールボックスの `agent.act` は `submit` / `click` / `tap` の対象について、
+`UiReadiness.IsSubmittable` で存在・遮蔽なし・操作可能を確認してから既存の `Act` を呼ぶ。
+ランナーも同じヘルパを使い、シナリオのアンカー条件は引き続きランナー側で判定する。
+`readyTimeoutSeconds` は実時間で既定 5 秒。0 は即時判定、負値・NaN・無限大は拒否する。
+上限到達時も `Act` を呼び、submit の対象なし・遮蔽・操作不可などの既存メッセージを保持する。
+click / tap の対象解決失敗時は従来の座標フォールバックも保持する。
+準備待ちがタイムアウトした手では落ち着き待ちと観測更新を省き、追加フィールド以外は Act の応答をそのまま返す。steps もそこで打ち切る。
+`steps` は各手について準備待ち → 実行 → 落ち着き待ちの順に処理する。
+同期 CLI は準備待ちをせず即時実行する。
+
+## 観測の可視フィルタ（offscreen / clipped / scope）
+
+要素矩形は画面座標の `[x, y, width, height]`。`ComputeVisibleRatio` は交差面積を
+要素面積で割った 0〜1 を返し、要素面積が 0 の場合は 0 とする。
+
+- `offscreen`: 画面矩形との交差が要素面積の 10% 未満。
+- `clipped`: 最寄りの有効な祖先 `RectMask2D` または Image 付き `Mask` の矩形との交差が 50% 未満。祖先マスクがなければ false。
+- `agent.observe` の `scope:"visible"`（既定）は両方を除外する。`scope:"all"` は画面外も含め、clipped 行の末尾に ` [clipped]` を付ける。不正な scope は `ok:false`。
+- 通常の `UiSnapshot.ToCompactText` は offscreen を除き、clipped を注記付きで残す。`snapshot` op は全要素を返し、保存 JSON も全要素を保持する。
+- `actions:` は scope に関係なく clipped / offscreen を除外する。
+- `UiSnapshot.Compare` は clipped / offscreen の変化を changed に記録する。visible の差分観測では表示範囲に入った要素を added、外れた要素を removed として返す。
+
+祖先探索は観測時だけ実施する。Selectable の表示ラベルは 80 文字、Text は 120 文字。
+`label:` 推奨表記の長さは変更しない。
+
+## 応答フィールド（ready / waitedMs / elapsedMs）
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `ready` | bool | 非同期経路で最終行動の対象が押下準備条件を満たしたか。タイムアウト・待機対象外・同期経路は false。入力ハンドラーでの成功とは別の判定 |
+| `waitedMs` | int | 最終行動の準備待ち実時間（ミリ秒）。タイムアウト時も計測。待機対象外・同期経路は 0 |
+| `elapsedMs` | int | ディスパッチャの実行開始から応答完成までの実時間（ミリ秒）。準備待ちと落ち着き待ちを含み、同期・非同期・失敗応答すべてで計測 |
+
+`steps` の ready / waitedMs は既存の応答と同じく最後に実行した手の値。
+elapsedMs は要求全体の値。ミリ秒未満は切り捨てるため即時応答は 0 になり得る。
+メールボックスのキュー待ちや応答ファイル公開の時間は含まない。

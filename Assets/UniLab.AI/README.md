@@ -83,6 +83,9 @@ manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
 
 ## AI クライアントからの使い方
 
+- `agent.observe` は `scope:"visible"` が既定。マスク外・画面外も確認する場合は `scope:"all"` を指定する。
+- メールボックスの `submit` / `click` / `tap` は対象が押せるまで実時間で最大 5 秒待つ。`readyTimeoutSeconds` で調整できる。
+
 Unity 内蔵メールボックスを使うと、外部中継プロセスなしで Codex / Claude から操作できる。
 `DebugOutput/agent-mailbox/.enabled` を置いてから Play を開始するか、Play 中に
 `UniLab/AI/Mailbox/Start` または `ai_mailbox --start` で起動する。

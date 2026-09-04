@@ -46,6 +46,12 @@ namespace UniLab.AI
         /// </summary>
         public bool interactable;
 
+        /// <summary>最寄りの祖先マスク内に見える面積が半分未満かを示します。</summary>
+        public bool clipped;
+
+        /// <summary>画面内に見える面積が要素面積の 10% 未満かを示します。</summary>
+        public bool offscreen;
+
         /// <summary>
         /// 最前面でなかった場合の遮蔽物名です。
         /// 画面上に見えていても押せない要因を画像なしで示します。

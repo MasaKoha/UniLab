@@ -28,7 +28,9 @@ namespace UniLab.AI
         private const string InputKind = "Input";
         private const string SelectableKind = "Selectable";
         private const string TextKind = "Text";
-        private const int SelectableLabelLength = 40;
+        private const int SelectableLabelLength = 80;
+        private const float MinimumScreenVisibleRatio = 0.1f;
+        private const float MinimumMaskVisibleRatio = 0.5f;
         private const int TextLabelLength = 120;
         private const int CompactTextCollapseThreshold = 5;
         private const int CompactTextExpandedHeadCount = 3;
@@ -98,13 +100,14 @@ namespace UniLab.AI
         /// スナップショットを AI 向けの圧縮テキストへ変換します。
         /// 座標や内部詳細を省いてトークン効率を上げるためです。
         /// </summary>
-        public static string ToCompactText(UiSnapshotDocument document)
+        public static string ToCompactText(UiSnapshotDocument document, string scope = null)
         {
             if (document == null)
             {
                 return string.Empty;
             }
 
+            document = UiObservationScope.Filter(document, scope);
             var lineBuilder = new StringBuilder();
             lineBuilder.Append("scene=");
             lineBuilder.Append(string.IsNullOrEmpty(document.activeScene) ? "-" : document.activeScene);
@@ -112,33 +115,7 @@ namespace UniLab.AI
             AppendFocusSummary(lineBuilder, document);
             lineBuilder.AppendLine();
 
-            if (document.elements != null)
-            {
-                for (var elementIndex = 0; elementIndex < document.elements.Length; elementIndex++)
-                {
-                    var element = document.elements[elementIndex];
-                    if (ShouldSkipCompactElement(element))
-                    {
-                        continue;
-                    }
-
-                    var sequenceLength = CountCollapsibleSequenceLength(document.elements, elementIndex);
-                    if (sequenceLength >= CompactTextCollapseThreshold)
-                    {
-                        var expandedCount = Math.Min(CompactTextExpandedHeadCount, sequenceLength);
-                        for (var expandedIndex = 0; expandedIndex < expandedCount; expandedIndex++)
-                        {
-                            AppendCompactElementLine(lineBuilder, document.elements[elementIndex + expandedIndex]);
-                        }
-
-                        AppendCollapsedSequenceSummary(lineBuilder, element, sequenceLength - expandedCount);
-                        elementIndex += sequenceLength - 1;
-                        continue;
-                    }
-
-                    AppendCompactElementLine(lineBuilder, element);
-                }
-            }
+            AppendCompactElements(lineBuilder, document.elements);
 
             if (document.game != null && document.game.Length > 0)
             {
@@ -197,6 +174,8 @@ namespace UniLab.AI
                 AppendChangedField(changedEntries, afterPair.Key, "blockedBy", beforeElement.blockedBy, afterPair.Value.blockedBy);
                 AppendChangedField(changedEntries, afterPair.Key, "focused", FormatBoolean(beforeElement.focused), FormatBoolean(afterPair.Value.focused));
                 AppendChangedField(changedEntries, afterPair.Key, "value", beforeElement.value, afterPair.Value.value);
+                AppendChangedField(changedEntries, afterPair.Key, "clipped", FormatBoolean(beforeElement.clipped), FormatBoolean(afterPair.Value.clipped));
+                AppendChangedField(changedEntries, afterPair.Key, "offscreen", FormatBoolean(beforeElement.offscreen), FormatBoolean(afterPair.Value.offscreen));
             }
 
             addedPaths.Sort(StringComparer.Ordinal);
@@ -306,6 +285,8 @@ namespace UniLab.AI
                 kind = ResolveSelectableKind(button, toggle, slider, inputField),
                 label = label,
                 rect = rectValues,
+                offscreen = UiVisibilityUtility.ComputeVisibleRatio(rectValues, new[] { 0f, 0f, (float)Screen.width, Screen.height }) < MinimumScreenVisibleRatio,
+                clipped = IsClipped(rectTransform, rectValues),
                 interactable = UiVisibilityUtility.IsInteractable(selectable),
                 blockedBy = GetBlockingObjectName(selectable.gameObject),
                 focused = selectedObject == selectable.gameObject,
@@ -335,12 +316,35 @@ namespace UniLab.AI
                 kind = TextKind,
                 label = UiVisibilityUtility.Truncate(textObject.text, TextLabelLength),
                 rect = rectValues,
+                offscreen = UiVisibilityUtility.ComputeVisibleRatio(rectValues, new[] { 0f, 0f, (float)Screen.width, Screen.height }) < MinimumScreenVisibleRatio,
+                clipped = IsClipped(rectTransform, rectValues),
                 interactable = false,
                 blockedBy = string.Empty,
                 focused = selectedObject == textObject.gameObject,
                 value = string.Empty,
             };
             return true;
+        }
+
+        private static bool IsClipped(RectTransform elementTransform, float[] elementRect)
+        {
+            // perf: 観測時のみ祖先を探索し、毎フレームの階層検索を避ける。
+            for (var ancestor = elementTransform.parent; ancestor != null; ancestor = ancestor.parent)
+            {
+                var rectangleMask = ancestor.GetComponent<RectMask2D>();
+                var mask = ancestor.GetComponent<Mask>();
+                var hasRectangleMask = rectangleMask != null && rectangleMask.isActiveAndEnabled;
+                var hasImageMask = mask != null && mask.isActiveAndEnabled && ancestor.GetComponent<Image>() != null;
+                if (!hasRectangleMask && !hasImageMask)
+                {
+                    continue;
+                }
+
+                return UiVisibilityUtility.TryGetScreenRect(ancestor as RectTransform, out var clipRect)
+                    && UiVisibilityUtility.ComputeVisibleRatio(elementRect, clipRect) < MinimumMaskVisibleRatio;
+            }
+
+            return false;
         }
 
         private static List<UiSnapshotGameEntry> CollectGameEntries()
@@ -595,6 +599,39 @@ namespace UniLab.AI
             lineBuilder.Append(document.focusedPath);
         }
 
+        private static void AppendCompactElements(StringBuilder lineBuilder, UiSnapshotElement[] elements)
+        {
+            if (elements == null)
+            {
+                return;
+            }
+
+            for (var elementIndex = 0; elementIndex < elements.Length; elementIndex++)
+            {
+                var element = elements[elementIndex];
+                if (ShouldSkipCompactElement(element))
+                {
+                    continue;
+                }
+
+                var sequenceLength = CountCollapsibleSequenceLength(elements, elementIndex);
+                if (sequenceLength < CompactTextCollapseThreshold)
+                {
+                    AppendCompactElementLine(lineBuilder, element);
+                    continue;
+                }
+
+                var expandedCount = Math.Min(CompactTextExpandedHeadCount, sequenceLength);
+                for (var expandedIndex = 0; expandedIndex < expandedCount; expandedIndex++)
+                {
+                    AppendCompactElementLine(lineBuilder, elements[elementIndex + expandedIndex]);
+                }
+
+                AppendCollapsedSequenceSummary(lineBuilder, element, sequenceLength - expandedCount);
+                elementIndex += sequenceLength - 1;
+            }
+        }
+
         private static bool ShouldSkipCompactElement(UiSnapshotElement element)
         {
             if (element == null)
@@ -620,6 +657,11 @@ namespace UniLab.AI
             {
                 var element = elements[elementIndex];
                 if (ShouldSkipCompactElement(element))
+                {
+                    break;
+                }
+
+                if (firstElement.clipped || element.clipped)
                 {
                     break;
                 }
@@ -690,6 +732,11 @@ namespace UniLab.AI
             {
                 lineBuilder.Append(" value:");
                 lineBuilder.Append(element.value);
+            }
+
+            if (element.clipped)
+            {
+                lineBuilder.Append(" [clipped]");
             }
 
             lineBuilder.AppendLine();
