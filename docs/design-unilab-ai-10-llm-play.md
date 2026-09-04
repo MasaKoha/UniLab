@@ -146,3 +146,17 @@ public sealed class AgentSession
 - 強化学習など、LLM 以外の方策
 - リアルタイム性が要る操作（アクションゲーム的な反射）。LLM の応答時間が手番の間に収まる
   ゲーム（手番制・メニュー操作中心）を対象とする。反射が要るジャンルでは 06 のモンキーか 05 のリプレイを使う
+
+## 実装構成（2026-09-05）
+
+`AgentSession` は責務ごとに 4 クラスへ分割し、本体は組み合わせるだけの調停役（約 300 行）にした。公開 API・観測テキスト・`actions.jsonl` / `session.json` / `scenario.json` の出力形式は分割前と同一。
+
+| クラス | 責務 |
+|---|---|
+| `AgentSession` | `Begin` / `Observe` / `Act` / `End` の入口。予算チェック → forbid → stuck → 実行 → 差分 → 記録 → 目標判定の順序を持つ |
+| `AgentActionExecutor` | 1 手 JSON の解釈と `InputInjector` への送出。語彙のパース（ボタン名・方向・キー）と行動キーの生成 |
+| `AgentObservationFormatter` | 観測テキストの整形（全文／差分、`actions:` 候補、`game:`、目標未達の理由） |
+| `AgentSessionArtifacts` | `actions.jsonl` / `session.json` / 異常時スクショ / `scenario.json` の書き出しと出力ディレクトリ |
+| `AgentSessionGuards` | 手数・実時間の予算、同一観測＋同一行動の反復検出、`forbid` の判定 |
+
+外部からの入口は `AiCommandDispatcher`（設計書 12）に統一されており、CLI・メールボックスのどちらも同じ経路で `AgentSessionCommands` → `AgentSession` を呼ぶ。

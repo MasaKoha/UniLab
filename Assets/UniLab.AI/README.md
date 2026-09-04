@@ -16,6 +16,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 | 観測 | `UiLayoutAuditor` | UI のはみ出し・重なりを検出して JSON で返す |
 | 観測 | `SceneHierarchyDumper` | シーン階層と SerializeField の結線状態をテキストで出す |
 | 運転 | `UiScenarioRunner` | JSON シナリオに従って UI を操作し、撮影・録画・監査を自動実行する。対象が押せる状態になった瞬間に操作し、フレーム数で待たない |
+| 運転 | `AgentSession`（＋ `AgentActionExecutor` / `AgentObservationFormatter` / `AgentSessionArtifacts` / `AgentSessionGuards`） | LLM エージェントのセッションを調停し、入力・観測整形・成果物・停止判定を分担する |
 
 ## この階層の制約（必ず守ること）
 
