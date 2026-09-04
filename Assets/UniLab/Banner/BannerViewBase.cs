@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace UniLab.Banner
 {
-    public abstract class BannerViewBase<TPrefab, TParameter> : MonoBehaviour where TPrefab : MonoBehaviour
+    public abstract class BannerViewBase<TPrefab, TParameter> : MonoBehaviour where TPrefab : BannerCellBase<TParameter>
         where TParameter : class
     {
         [SerializeField] private TPrefab _bannerCellPrefab = null;
@@ -18,7 +18,7 @@ namespace UniLab.Banner
         private CancellationTokenSource _autoScrollCts;
         private readonly ReactiveProperty<int> _currentIndexReactiveProperty = new(0);
         public Observable<int> OnCurrentIndexChanged => _currentIndexReactiveProperty;
-        private readonly List<RectTransform> _cells = new();
+        private readonly List<BannerCellBase<TParameter>> _cells = new();
 
         private float _cellWidth;
 
@@ -113,20 +113,15 @@ namespace UniLab.Banner
         private void AddCell()
         {
             var cell = Instantiate(_bannerCellPrefab, _content);
-            var rectTransform = cell.GetComponent<RectTransform>();
             if (_cellWidth == 0f)
             {
-                _cellWidth = rectTransform.rect.width;
+                _cellWidth = cell.RectTransform.rect.width;
             }
 
-            _cells.Add(rectTransform);
-
-            if (cell is BannerCellBase<TParameter> bannerCell)
-            {
-                bannerCell.OnSwipe
-                    .Subscribe(OnCellSwiped)
-                    .AddTo(destroyCancellationToken);
-            }
+            _cells.Add(cell);
+            cell.OnSwipe
+                .Subscribe(OnCellSwiped)
+                .AddTo(destroyCancellationToken);
         }
 
         private void UpdateCellPositions()
@@ -135,7 +130,7 @@ namespace UniLab.Banner
             for (var i = 0; i < _cells.Count; i++)
             {
                 var posX = (i - centerIndex) * (_cellWidth + _spaceX);
-                _cells[i].anchoredPosition = new Vector2(posX, 0f);
+                _cells[i].RectTransform.anchoredPosition = new Vector2(posX, 0f);
             }
         }
 
@@ -143,36 +138,25 @@ namespace UniLab.Banner
         {
             foreach (var cell in _cells)
             {
-                var banner = cell.GetComponent<BannerCellBase<TParameter>>();
-                banner.Initialize();
+                cell.Initialize();
             }
         }
 
         private void UpdateAllCellContents()
         {
             // 0: dummy cell (shows the last parameter — appears to the left of the first real cell)
-            if (_cells[0].GetComponent<BannerCellBase<TParameter>>() is { } dummyFirst)
-            {
-                dummyFirst.UpdateContentAsync(_currentBannerParameters.Last.Value).Forget();
-            }
+            _cells[0].UpdateContentAsync(_currentBannerParameters.Last.Value).Forget();
 
             // 1～N: real data cells
             var cellIndex = 1;
             foreach (var parameter in _currentBannerParameters)
             {
-                if (_cells[cellIndex].GetComponent<BannerCellBase<TParameter>>() is { } cell)
-                {
-                    cell.UpdateContentAsync(parameter).Forget();
-                }
-
+                _cells[cellIndex].UpdateContentAsync(parameter).Forget();
                 cellIndex++;
             }
 
             // N+1: dummy cell (shows the first parameter — appears to the right of the last real cell)
-            if (_cells[^1].GetComponent<BannerCellBase<TParameter>>() is { } dummyLast)
-            {
-                dummyLast.UpdateContentAsync(_currentBannerParameters.First.Value).Forget();
-            }
+            _cells[^1].UpdateContentAsync(_currentBannerParameters.First.Value).Forget();
         }
 
         private void OnCellSwiped(SwipeDirection direction)
@@ -201,9 +185,12 @@ namespace UniLab.Banner
             }
 
             var targetX = _content.anchoredPosition.x + (_cellWidth + _spaceX) * (direction == SwipeDirection.Left ? 1 : -1);
+            // 破棄トークンを渡さないと、破棄後もツイーンが走り続け
+            // await 後の続きが破棄済みオブジェクトを触る（呼び出し元は Forget で投げっぱなし）
             await _content.DOAnchorPosX(targetX, duration)
                 .SetEase(ease)
-                .ToUniTask();
+                .SetLink(gameObject)
+                .ToUniTask(cancellationToken: destroyCancellationToken);
 
             if (direction == SwipeDirection.Left)
             {

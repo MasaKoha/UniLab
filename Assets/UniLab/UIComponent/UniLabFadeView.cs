@@ -37,7 +37,7 @@ namespace UniLab.UI
             gameObject.SetActive(true);
             _canvasGroup.alpha = 0f;
 
-            var tween = _canvasGroup.DOFade(1f, duration).SetEase(Ease.Linear);
+            var tween = _canvasGroup.DOFade(1f, duration).SetEase(Ease.Linear).SetLink(gameObject);
             try
             {
                 await tween.ToUniTask(cancellationToken: cancellationToken);
@@ -58,7 +58,7 @@ namespace UniLab.UI
         /// </summary>
         public virtual async UniTask HideAsync(float duration = 0.3f, CancellationToken cancellationToken = default)
         {
-            var tween = _canvasGroup.DOFade(0f, duration).SetEase(Ease.Linear);
+            var tween = _canvasGroup.DOFade(0f, duration).SetEase(Ease.Linear).SetLink(gameObject);
             try
             {
                 await tween.ToUniTask(cancellationToken: cancellationToken);

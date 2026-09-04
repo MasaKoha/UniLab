@@ -11,10 +11,17 @@ namespace UniLab.UI.Toast
     /// View component for a single toast notification.
     /// Handles slide-in, display duration, and fade-out animation.
     /// </summary>
+    [RequireComponent(typeof(CanvasGroup))]
     public class ToastView : MonoBehaviour
     {
+        // 画面下から滑り込ませる距離。トーストの高さにこの余白を足した分だけ下げてから戻す
+        private const float SlideExtraDistancePixels = 32f;
+        private const float SlideInDurationSeconds = 0.2f;
+        private const float FadeOutDurationSeconds = 0.3f;
+
         [SerializeField] private TMP_Text _messageText = null;
         [SerializeField] private Image _backgroundImage = null;
+        [SerializeField] private CanvasGroup _canvasGroup = null;
 
         /// <summary>
         /// Animates the toast: slide in from bottom, hold, then fade out.
@@ -31,15 +38,15 @@ namespace UniLab.UI.Toast
 
             // Slide in from below
             var rectTransform = (RectTransform)transform;
-            var slideDistance = rectTransform.rect.height + 32f;
+            var slideDistance = rectTransform.rect.height + SlideExtraDistancePixels;
             rectTransform.anchoredPosition = new Vector2(0f, -slideDistance);
 
-            var canvasGroup = GetComponent<CanvasGroup>();
-            canvasGroup.alpha = 1f;
+            _canvasGroup.alpha = 1f;
 
             await rectTransform
-                .DOAnchorPosY(0f, 0.2f)
+                .DOAnchorPosY(0f, SlideInDurationSeconds)
                 .SetEase(Ease.OutCubic)
+                .SetLink(gameObject)
                 .ToUniTask(cancellationToken: cancellationToken);
 
             await UniTask.Delay(
@@ -47,9 +54,10 @@ namespace UniLab.UI.Toast
                 cancellationToken: cancellationToken);
 
             // Fade out
-            await canvasGroup
-                .DOFade(0f, 0.3f)
+            await _canvasGroup
+                .DOFade(0f, FadeOutDurationSeconds)
                 .SetEase(Ease.InCubic)
+                .SetLink(gameObject)
                 .ToUniTask(cancellationToken: cancellationToken);
         }
     }
