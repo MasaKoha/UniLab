@@ -8,6 +8,8 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 
 | 種別 | クラス | 役割 |
 |---|---|---|
+| 入口 | `AiCommandDispatcher` | CLI とメールボックスの操作を統一し、非同期経路では落ち着き待ちを行う |
+| 通信 | `AiMailboxServer` | Unity 内でファイル要求を一件ずつ処理する |
 | 記録 | `FileLogSink` | Unity ログを全てファイルへ複写する |
 | 記録 | `VideoRecorder` | 画面を連番 JPG で実時間どおりに録画し、時刻とステップを対応付ける manifest を出す |
 | 記録 | `AudioRecorder` | ミックス後の音声を WAV へ書き出す。動画と同じ時間軸なのでそのまま多重化できる |
@@ -78,3 +80,26 @@ manifest の `ffmpegCommand` をそのまま実行すれば mp4 になる。
   捨てた数は manifest の `droppedFrameCount` に出る。3D の高解像度・高 fps では影響が大きくなる
 - **音声を録るにはシーンに `AudioListener` が要る。** 無いと Unity はミックスを生成せず、
   正しい長さの無音 WAV ができるだけで気づきにくい
+
+## AI クライアントからの使い方
+
+Unity 内蔵メールボックスを使うと、外部中継プロセスなしで Codex / Claude から操作できる。
+`DebugOutput/agent-mailbox/.enabled` を置いてから Play を開始するか、Play 中に
+`UniLab/AI/Mailbox/Start` または `ai_mailbox --start` で起動する。
+Python クライアントもマーカーを自動作成するが、Play 開始後に作った場合はメニュー等で起動が必要。
+
+```sh
+python3 Assets/UniLab.AI/Tools/ai_client.py ping
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"goal":[{"kind":"textVisible","value":"__never__"}],"maxSteps":5000,"maxSeconds":14400}}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"}}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"steps":[{"press":"east"},{"submit":"TabButton1"}]}'
+python3 Assets/UniLab.AI/Tools/ai_client.py capture '{"name":"03_workshop"}'
+```
+
+メールボックスは `--mailbox DIR`、`UNILAB_AI_MAILBOX`、親ディレクトリ探索の順で解決する。
+`--timeout` の既定は 60 秒。応答メタデータが先頭の一行 JSON、観測が続く本文になる。
+act は各手の入力完了後に既定 0.35 秒待ち、最新の観測を返す。同時処理は一要求。
+CLI は従来どおり即時実行する。操作一覧は `ai_ops` またはクライアントの `ops`。
+
+プロトコル、起動条件、`ai_snapshot` の応答形式変更と制約は
+[12 AI ゲートウェイ設計](../../docs/design-unilab-ai-12-ai-gateway.md) を参照。

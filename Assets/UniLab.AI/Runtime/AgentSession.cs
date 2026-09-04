@@ -90,6 +90,12 @@ namespace UniLab.AI
             return session;
         }
 
+        /// <summary>継続入力（hold / stick / drag 等）がまだ進行中なら true。落ち着き待ちの判断材料にする。</summary>
+        public bool IsInputBusy
+        {
+            get { return _driver != null && _driver.IsBusy; }
+        }
+
         /// <summary>
         /// セッション識別子を返し、外部ログと DebugOutput の対応を固定します。
         /// </summary>

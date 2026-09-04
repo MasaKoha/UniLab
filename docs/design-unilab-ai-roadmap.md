@@ -49,6 +49,7 @@ AI エージェントが **知覚 → 判断 → 操作 → 確認** のルー�
 | 09 | RunArchive とスマホ閲覧 | なし（成果物の集約） | 中 |
 | 10 | LLM 駆動の目標プレイ | 01, 02, 04 | 大 |
 | 11 | 入力可視化オーバーレイ | なし（録画機能の一部。01・07 が除外を実装） | 小〜中 |
+| 12 | AI ゲートウェイ（単一ディスパッチャ＋Unity 内蔵メールボックス） | 01, 10 | 中 |
 
 ### 実装順
 
@@ -167,3 +168,4 @@ VerificationRuns/run-<ts>/    09 が上記をラン単位に集約
 | 09 | `design-unilab-ai-09-run-archive.md` |
 | 10 | `design-unilab-ai-10-llm-play.md` |
 | 11 | `design-unilab-ai-11-input-overlay.md` |
+| 12 | `design-unilab-ai-12-ai-gateway.md` |

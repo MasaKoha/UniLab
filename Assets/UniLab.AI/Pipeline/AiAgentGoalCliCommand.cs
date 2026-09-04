@@ -1,6 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using UniLab.AI;
 using Unity.Pipeline.Commands;
+using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -16,12 +16,8 @@ namespace UniLab.AI.Pipeline
         [CliCommand("ai_agent_goal", "エージェントの目標達成状態を返します。", Tags = new[] { "agent" })]
         public static string Goal()
         {
-            if (!AiCliCommandSupport.IsPlayModeActive())
-            {
-                return AiCliCommandSupport.PlayModeRequiredMessage;
-            }
-
-            return AgentSessionCommands.IsGoalReached();
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.goal", args = "{}" });
+            return JsonUtility.ToJson(response, true);
         }
     }
 }

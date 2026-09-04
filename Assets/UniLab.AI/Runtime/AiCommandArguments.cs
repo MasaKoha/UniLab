@@ -1,0 +1,32 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+using System;
+
+namespace UniLab.AI
+{
+    /// <summary>省略値を経路間で統一するゲートウェイ引数です。</summary>
+    [Serializable]
+    internal sealed class AiCommandArguments
+    {
+        internal const float DefaultSettleSeconds = 0.35f;
+        internal const float DefaultSettleTimeoutSeconds = 10f;
+        internal const int DefaultConsoleCount = 40;
+
+        /// <summary>差分観測を指定します。</summary>
+        public bool diffOnly;
+        /// <summary>圧縮スナップショットを指定します。</summary>
+        public bool compact = true;
+        /// <summary>スナップショット保存を指定します。</summary>
+        public bool save;
+        /// <summary>成果物名です。</summary>
+        public string name;
+        /// <summary>成果物の保存先です。</summary>
+        public string directory;
+        /// <summary>返すログの末尾行数です。</summary>
+        public int count = DefaultConsoleCount;
+        /// <summary>入力とシーンの完了後に待つ実時間です。</summary>
+        public float settleSeconds = DefaultSettleSeconds;
+        /// <summary>各行動の待機上限です。</summary>
+        public float settleTimeoutSeconds = DefaultSettleTimeoutSeconds;
+    }
+}
+#endif
