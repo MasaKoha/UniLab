@@ -1,7 +1,7 @@
 {
     "name": "UniLab.AI.Tests.EditMode",
     "rootNamespace": "UniLab.AI.Tests",
-    "references": ["UniLab.AI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["UniLab.AI", "Unity.InputSystem", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
