@@ -1,6 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using UniLab.AI;
 using Unity.Pipeline.Commands;
+using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -17,12 +17,8 @@ namespace UniLab.AI.Pipeline
         public static string Export(
             [CliArg("name", "出力シナリオ名。")] string name = "")
         {
-            if (!AiCliCommandSupport.IsPlayModeActive())
-            {
-                return AiCliCommandSupport.PlayModeRequiredMessage;
-            }
-
-            return AgentSessionCommands.ExportAsScenario(name);
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.export", args = JsonUtility.ToJson(new AiCliArguments { name = name }) });
+            return JsonUtility.ToJson(response, true);
         }
     }
 }

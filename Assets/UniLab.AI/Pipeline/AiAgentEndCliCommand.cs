@@ -1,6 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using UniLab.AI;
 using Unity.Pipeline.Commands;
+using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -16,12 +16,8 @@ namespace UniLab.AI.Pipeline
         [CliCommand("ai_agent_end", "エージェントセッションを終了します。", Tags = new[] { "agent" })]
         public static string End()
         {
-            if (!AiCliCommandSupport.IsPlayModeActive())
-            {
-                return AiCliCommandSupport.PlayModeRequiredMessage;
-            }
-
-            return AgentSessionCommands.End();
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.end", args = "{}" });
+            return JsonUtility.ToJson(response, true);
         }
     }
 }

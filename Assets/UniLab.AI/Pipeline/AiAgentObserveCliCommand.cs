@@ -1,6 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using UniLab.AI;
 using Unity.Pipeline.Commands;
+using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -17,12 +17,8 @@ namespace UniLab.AI.Pipeline
         public static string Observe(
             [CliArg("diffOnly", "前回との差分だけ返すか。")] bool diffOnly = false)
         {
-            if (!AiCliCommandSupport.IsPlayModeActive())
-            {
-                return AiCliCommandSupport.PlayModeRequiredMessage;
-            }
-
-            return AgentSessionCommands.Observe(diffOnly);
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.observe", args = JsonUtility.ToJson(new AiCliArguments { diffOnly = diffOnly }) });
+            return JsonUtility.ToJson(response, true);
         }
     }
 }

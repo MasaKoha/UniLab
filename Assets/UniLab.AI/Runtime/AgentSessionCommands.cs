@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UniLab.AI
 {
     /// <summary>
-    /// MCP ブリッジの execute_code から文字列だけで呼べる静的入口です。
+    /// AI ゲートウェイ（AiCommandDispatcher）から文字列だけで呼べる静的入口です。
     /// インスタンス参照を外側へ保持させず、セッション操作を JSON に寄せるために用意します。
     /// </summary>
     public static class AgentSessionCommands
@@ -31,6 +31,12 @@ namespace UniLab.AI
             var options = string.IsNullOrEmpty(optionsJson) ? new AgentOptions() : JsonUtility.FromJson<AgentOptions>(optionsJson);
             _currentSession = AgentSession.Begin(goal, options);
             return ToJson(true, _currentSession.SessionId, "セッションを開始しました。", _currentSession.Observe(false), _currentSession.OutputDirectory);
+        }
+
+        /// <summary>現在セッションが継続入力の途中なら true。セッションが無ければ false。</summary>
+        public static bool IsInputBusy()
+        {
+            return _currentSession != null && _currentSession.IsInputBusy;
         }
 
         /// <summary>

@@ -1,6 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using UniLab.AI;
 using Unity.Pipeline.Commands;
+using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -18,18 +18,12 @@ namespace UniLab.AI.Pipeline
             [CliArg("compact", "圧縮テキストを返すか。")] bool compact = true,
             [CliArg("save", "DebugOutput/snapshots へ保存するか。")] bool save = false)
         {
-            var snapshot = UiSnapshot.Capture();
-            if (save)
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest
             {
-                UiSnapshot.Save(snapshot);
-            }
-
-            if (compact)
-            {
-                return UiSnapshot.ToCompactText(snapshot);
-            }
-
-            return snapshot;
+                op = "snapshot",
+                args = JsonUtility.ToJson(new AiCliArguments { compact = compact, save = save }),
+            });
+            return JsonUtility.ToJson(response, true);
         }
     }
 }
