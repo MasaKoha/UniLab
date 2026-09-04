@@ -95,6 +95,14 @@ namespace UniLab.UI.Focus
                 return;
             }
 
+            // 選択処理の途中（OnSelect の連鎖の中）から呼ばれると EventSystem が再入を拒否して
+            // 「Attempting to select ... while already selecting an object」を出す。
+            // 同じ対象を選び直す必要はなく、別対象でも EventSystem 側が受け付けないため、ここで打ち切る
+            if (_eventSystem.alreadySelecting || _eventSystem.currentSelectedGameObject == selectable.gameObject)
+            {
+                return;
+            }
+
             _eventSystem.SetSelectedGameObject(selectable.gameObject);
 
             if (_gridStack.Count > 0 && _gridStack[_gridStack.Count - 1].TryFindCell(selectable.gameObject, out var cell))
