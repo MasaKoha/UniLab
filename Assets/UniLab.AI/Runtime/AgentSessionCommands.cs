@@ -11,13 +11,23 @@ namespace UniLab.AI
     {
         private static AgentSession _currentSession;
 
+        /// <summary>目標に期待値が無いときの拒否メッセージ。呼び出し側がキー違いに気づけるよう正しい形を示す。</summary>
+        public const string EmptyGoalMessage = "目標 JSON に期待値がありません。{\"goal\":[{\"kind\":\"textVisible\",\"value\":\"...\"}]} の形で 1 件以上指定してください。";
+
         /// <summary>
         /// 目標 JSON とオプション JSON から現在セッションを開始します。
         /// </summary>
         public static string Begin(string goalJson, string optionsJson)
         {
-            _currentSession?.Dispose();
             var goal = string.IsNullOrEmpty(goalJson) ? new AgentGoal() : JsonUtility.FromJson<AgentGoal>(goalJson);
+            // 期待値が 0 件の目標は「常に達成」と評価され、1 手ごとにセッションが終了する。
+            // JsonUtility はキー違いを黙って null にするため、ここで弾かないと無音で毎手終了する
+            if (goal == null || goal.goal == null || goal.goal.Length == 0)
+            {
+                return ToJson(false, string.Empty, EmptyGoalMessage, string.Empty, string.Empty);
+            }
+
+            _currentSession?.Dispose();
             var options = string.IsNullOrEmpty(optionsJson) ? new AgentOptions() : JsonUtility.FromJson<AgentOptions>(optionsJson);
             _currentSession = AgentSession.Begin(goal, options);
             return ToJson(true, _currentSession.SessionId, "セッションを開始しました。", _currentSession.Observe(false), _currentSession.OutputDirectory);
