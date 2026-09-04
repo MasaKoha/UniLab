@@ -125,12 +125,13 @@ namespace UniLab.AI
         /// 現在の観測を AI 向け圧縮テキストで返します。
         /// 差分だけを選べるようにして、長いプレイのトークン消費を抑えます。
         /// </summary>
-        public string Observe(bool diffOnly)
+        public string Observe(bool diffOnly, string scope = "visible")
         {
+            UiObservationScope.Validate(scope);
             var snapshot = UiSnapshot.Capture();
             var text = diffOnly && _lastSnapshot != null
-                ? BuildDiffObservation(_lastSnapshot, snapshot)
-                : BuildFullObservation(snapshot);
+                ? BuildDiffObservation(_lastSnapshot, snapshot, scope)
+                : BuildFullObservation(snapshot, scope);
             _lastSnapshot = snapshot;
             return text;
         }
@@ -488,11 +489,11 @@ namespace UniLab.AI
             return _driver;
         }
 
-        private string BuildFullObservation(UiSnapshotDocument snapshot)
+        private string BuildFullObservation(UiSnapshotDocument snapshot, string scope = "visible")
         {
             _evaluator.Evaluate(_goal.goal, snapshot, null);
             var builder = new StringBuilder();
-            builder.AppendLine(UiSnapshot.ToCompactText(snapshot));
+            builder.AppendLine(UiSnapshot.ToCompactText(snapshot, scope));
             AppendCandidates(builder, snapshot);
             if (_driver != null && _driver.IsBusy)
             {
@@ -506,12 +507,13 @@ namespace UniLab.AI
             return builder.ToString().TrimEnd();
         }
 
-        private string BuildDiffObservation(UiSnapshotDocument before, UiSnapshotDocument after)
+        private string BuildDiffObservation(UiSnapshotDocument before, UiSnapshotDocument after, string scope = "visible")
         {
             var diff = UiSnapshot.Compare(before, after);
             _evaluator.Evaluate(_goal.goal, after, diff);
             var builder = new StringBuilder();
-            builder.AppendLine(FormatDiff(diff));
+            var visibleDiff = UiSnapshot.Compare(UiObservationScope.Filter(before, scope), UiObservationScope.Filter(after, scope));
+            builder.AppendLine(FormatDiff(visibleDiff));
             builder.AppendLine("game:");
             AppendGameState(builder, after);
             AppendCandidates(builder, after);
@@ -841,7 +843,7 @@ namespace UniLab.AI
                 return false;
             }
 
-            if (!element.interactable || !string.IsNullOrEmpty(element.blockedBy))
+            if (element.clipped || element.offscreen || !element.interactable || !string.IsNullOrEmpty(element.blockedBy))
             {
                 return false;
             }

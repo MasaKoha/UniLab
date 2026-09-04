@@ -7,9 +7,15 @@ namespace UniLab.AI
     [Serializable]
     internal sealed class AiCommandArguments
     {
+        internal const float DefaultReadyTimeoutSeconds = 5f;
         internal const float DefaultSettleSeconds = 0.35f;
         internal const float DefaultSettleTimeoutSeconds = 10f;
         internal const int DefaultConsoleCount = 40;
+
+        /// <summary>観測範囲です。visible は可視要素、all は全要素を返します。</summary>
+        public string scope = "visible";
+        /// <summary>対象が操作可能になるまでの実時間の上限です。</summary>
+        public float readyTimeoutSeconds = DefaultReadyTimeoutSeconds;
 
         /// <summary>差分観測を指定します。</summary>
         public bool diffOnly;
@@ -27,6 +33,14 @@ namespace UniLab.AI
         public float settleSeconds = DefaultSettleSeconds;
         /// <summary>各行動の待機上限です。</summary>
         public float settleTimeoutSeconds = DefaultSettleTimeoutSeconds;
+
+        internal static void ValidateDuration(float seconds, string name, bool requirePositive)
+        {
+            if (float.IsNaN(seconds) || float.IsInfinity(seconds) || seconds < 0f || (requirePositive && seconds == 0f))
+            {
+                throw new ArgumentOutOfRangeException(name, "待機秒数が不正です。");
+            }
+        }
     }
 }
 #endif

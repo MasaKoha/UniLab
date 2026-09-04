@@ -21,6 +21,12 @@ namespace UniLab.AI
         public string path = string.Empty;
         /// <summary>非同期経路で落ち着き待ち、または撮影完了を確認した場合に true です。</summary>
         public bool settled;
+        /// <summary>非同期の最終行動で対象が操作可能になった場合に true です。</summary>
+        public bool ready;
+        /// <summary>最終行動の準備待ちに費やした実時間のミリ秒です。</summary>
+        public int waitedMs;
+        /// <summary>要求の実行開始から応答完成までの実時間のミリ秒です。</summary>
+        public int elapsedMs;
         /// <summary>失敗の理由です。</summary>
         public string error = string.Empty;
     }

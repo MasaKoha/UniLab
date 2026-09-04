@@ -24,6 +24,11 @@ namespace UniLab.AI
             _members = AiJsonObject.Parse(json);
             Arguments = new AiCommandArguments();
             JsonUtility.FromJsonOverwrite(json, Arguments);
+            AiCommandArguments.ValidateDuration(Arguments.readyTimeoutSeconds, nameof(Arguments.readyTimeoutSeconds), false);
+            if (Operation == "agent.observe")
+            {
+                UiObservationScope.Validate(Arguments.scope);
+            }
         }
 
         internal string GetObject(string name, bool required = false)
