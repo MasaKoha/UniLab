@@ -3,7 +3,6 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -12,14 +11,8 @@ namespace UniLab.AI
     /// <summary>CLI とメールボックスの操作実装を一箇所に集約します。</summary>
     public static class AiCommandDispatcher
     {
-        private const float CaptureTimeoutSeconds = 3f;
         private const string RunningStatusPrefix = "agent: status=running ";
         private static AiConsoleLog _console;
-
-        static AiCommandDispatcher()
-        {
-            ResetConsole();
-        }
 
         /// <summary>同期で即時実行し、フレームをまたぐ操作は要求時点の結果を返します。</summary>
         public static AiCommandResponse Execute(AiCommandRequest request)
@@ -104,14 +97,14 @@ namespace UniLab.AI
                 case "ping": return Success(operation, $"playMode={Application.isPlaying} scene={SceneManager.GetActiveScene().name} frame={Time.frameCount}");
                 case "ops": return Success(operation, string.Join("\n", ListOps()));
                 case "agent.begin": return ConvertResult(operation, AgentSessionCommands.Begin(context.GetObject("goal", true), context.GetObject("options")));
-                case "agent.observe": return ConvertResult(operation, AgentSessionCommands.Observe(arguments.diffOnly, arguments.scope));
+                case "agent.observe": return Observe(arguments);
                 case "agent.act": return ActImmediately(context);
                 case "agent.goal": return ConvertResult(operation, AgentSessionCommands.IsGoalReached());
                 case "agent.end": return ConvertResult(operation, AgentSessionCommands.End());
                 case "agent.export": return ConvertResult(operation, AgentSessionCommands.ExportAsScenario(arguments.name));
                 case "capture": return Capture(arguments);
                 case "snapshot": return Snapshot(arguments);
-                case "console": return Success(operation, _console.Read(arguments.count));
+                case "console": return ReadConsole(arguments);
                 default: throw new InvalidOperationException("登録済み操作の実装がありません。");
             }
         }
@@ -133,17 +126,17 @@ namespace UniLab.AI
             }
 
             var response = ExecuteCore(context);
-            if (context.Operation == "capture" && response.ok)
+            var hasCapture = context.Operation == "capture"
+                || (context.Operation == "agent.observe" && !string.IsNullOrEmpty(context.Arguments.capture));
+            if (hasCapture && response.ok)
             {
-                var startedAt = Time.realtimeSinceStartup;
-                do
+                using (var capture = AiCaptureSupport.CompleteAsync(response))
                 {
-                    yield return null;
+                    while (capture.MoveNext())
+                    {
+                        yield return capture.Current;
+                    }
                 }
-                while (!File.Exists(response.path) && Time.realtimeSinceStartup - startedAt < CaptureTimeoutSeconds);
-                response.settled = File.Exists(response.path);
-                response.ok = response.settled;
-                response.error = response.settled ? string.Empty : "capture timeout";
             }
 
             completed(response);
@@ -261,27 +254,37 @@ namespace UniLab.AI
             return response.ok && response.text.StartsWith(RunningStatusPrefix, StringComparison.Ordinal);
         }
 
+        private static AiCommandResponse ReadConsole(AiCommandArguments arguments)
+        {
+            AiConsoleLog.Validate(arguments.count, arguments.level);
+            return Success("console", _console?.Read(arguments.count, arguments.level) ?? string.Empty);
+        }
+
+        private static AiCommandResponse Observe(AiCommandArguments arguments)
+        {
+            if (!string.IsNullOrEmpty(arguments.capture))
+            {
+                AiCaptureSupport.ValidateName(arguments.capture);
+            }
+
+            var response = ConvertResult("agent.observe", AgentSessionCommands.Observe(arguments.diffOnly, arguments.scope));
+            if (response.ok && !string.IsNullOrEmpty(arguments.capture))
+            {
+                // 観測と撮影の間で yield せず、ターン進行によるフレームのずれを防ぐ。
+                response.path = AiCaptureSupport.Request(arguments.capture, arguments.directory);
+            }
+
+            return response;
+        }
+
         private static AiCommandResponse Capture(AiCommandArguments arguments)
         {
-            if (string.IsNullOrEmpty(arguments.name) || !Regex.IsMatch(arguments.name, @"\A[A-Za-z0-9_-]+\z"))
+            return new AiCommandResponse
             {
-                throw new ArgumentException("name は英数字・_・- のみで必ず指定してください。");
-            }
-
-            var projectRoot = Path.GetDirectoryName(Application.dataPath);
-            var directory = string.IsNullOrEmpty(arguments.directory)
-                ? Path.Combine(DebugOutputPath.DirectoryPath, "captures")
-                : Path.GetFullPath(Path.Combine(projectRoot, arguments.directory));
-            Directory.CreateDirectory(directory);
-            var path = Path.GetFullPath(Path.Combine(directory, arguments.name + ".png"));
-            // 前回のファイルを今回の撮影完了と誤認しないようにする。
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-
-            ScreenCapture.CaptureScreenshot(path);
-            return new AiCommandResponse { ok = true, op = "capture", path = path };
+                ok = true,
+                op = "capture",
+                path = AiCaptureSupport.Request(arguments.name, arguments.directory),
+            };
         }
 
         private static AiCommandResponse Snapshot(AiCommandArguments arguments)

@@ -19,6 +19,12 @@ namespace UniLab.AI
         public string text = string.Empty;
         /// <summary>成果物のパスです。</summary>
         public string path = string.Empty;
+        /// <summary>非同期撮影で読み取った画像の幅です。同期経路では 0 です。</summary>
+        public int width;
+        /// <summary>非同期撮影で読み取った画像の高さです。同期経路では 0 です。</summary>
+        public int height;
+        /// <summary>輝度の標準偏差が閾値未満の画像です。同期経路では false です。</summary>
+        public bool blank;
         /// <summary>非同期経路で落ち着き待ち、または撮影完了を確認した場合に true です。</summary>
         public bool settled;
         /// <summary>非同期の最終行動で対象が操作可能になった場合に true です。</summary>

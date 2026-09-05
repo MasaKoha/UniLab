@@ -7,6 +7,7 @@ namespace UniLab.AI
     /// <summary>保存用の全観測を保持したまま、表示対象だけを絞り込みます。</summary>
     internal static class UiObservationScope
     {
+        /// <summary>観測範囲の誤指定を入口で拒否します。</summary>
         internal static void Validate(string scope)
         {
             if (scope != "visible" && scope != "all")
@@ -15,6 +16,7 @@ namespace UniLab.AI
             }
         }
 
+        /// <summary>元の観測を変更せず、指定範囲の要素だけを返します。</summary>
         internal static UiSnapshotDocument Filter(UiSnapshotDocument document, string scope)
         {
             if (document == null)
@@ -32,6 +34,11 @@ namespace UniLab.AI
             foreach (var element in document.elements ?? Array.Empty<UiSnapshotElement>())
             {
                 if (element == null || (scope != "all" && element.offscreen) || (scope == "visible" && element.clipped))
+                {
+                    continue;
+                }
+
+                if (scope == "visible" && element.kind == "Text" && !string.IsNullOrEmpty(element.blockedBy))
                 {
                     continue;
                 }

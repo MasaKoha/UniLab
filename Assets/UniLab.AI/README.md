@@ -94,9 +94,11 @@ Python クライアントもマーカーを自動作成するが、Play 開始�
 
 ```sh
 python3 Assets/UniLab.AI/Tools/ai_client.py ping
-python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"goal":[{"kind":"textVisible","value":"__never__"}],"maxSteps":5000,"maxSeconds":14400}}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"}}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"steps":[{"press":"east"},{"submit":"TabButton1"}]}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.observe '{"capture":"turn_01"}'
+python3 Assets/UniLab.AI/Tools/ai_client.py console '{"level":"error","count":40}'
 python3 Assets/UniLab.AI/Tools/ai_client.py capture '{"name":"03_workshop"}'
 ```
 
@@ -107,3 +109,18 @@ CLI は従来どおり即時実行する。操作一覧は `ai_ops` またはク
 
 プロトコル、起動条件、`ai_snapshot` の応答形式変更と制約は
 [12 AI ゲートウェイ設計](../../docs/design-unilab-ai-12-ai-gateway.md) を参照。
+
+`freePlay:true` は目標判定と反復による自動終了を行わず、手数・時間の上限で終了する。
+明示的な `agent.end` と禁止操作の拒否は引き続き利用できる。観測に `goalFailures:` は出ず、
+`agent.export` は目標未達でも最終ステップへ期待値を追加せず書き出す。
+
+`agent.observe {"capture":"turn_01"}` は観測取得と撮影要求を同じフレームで行う。
+本文 `text` は観測のままで、画像は `path` から取得する。非同期応答には `width` / `height` / `blank` が入り、
+`blank` は輝度の標準偏差が 3.0 未満の場合に true（単色の暗い画像も含む）。
+同期 CLI はファイル生成を待たず、`width=height=0`、`blank=false` を返す。
+
+`console` は Play 開始時からの直近 500 行のリングバッファを読み、ファイルのフラッシュに依存しない。
+`level:"all"` が既定で、`level:"error"` は Error / Exception / Assert と各スタック先頭 3 行に絞る。
+`count` は絞り込み後の末尾行数。Play 開始前の未購読時は空文字を返す。
+モーダルに遮られた Text は `scope:"visible"` から除き、`scope:"all"` では `blocked:<name>` を付ける。
+Selectable は押せない理由を伝えるため、visible でも遮蔽元を付けて残す。

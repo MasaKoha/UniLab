@@ -7,50 +7,63 @@ using UnityEngine;
 
 namespace UniLab.AI
 {
-    /// <summary>稼働中のファイルログを優先し、未設定時は直近の Unity ログを返します。</summary>
+    /// <summary>ファイルのフラッシュ時点に依存せず、直近の Unity ログを行単位で保持します。</summary>
     internal sealed class AiConsoleLog : IDisposable
     {
-        private const int RingCapacity = 200;
+        private const int RingCapacity = 500;
+        private const int MaximumStackTraceLines = 3;
         private readonly Queue<string> _lines = new Queue<string>(RingCapacity);
+        private readonly Queue<bool> _errorFlags = new Queue<bool>(RingCapacity);
         // perf: 繰り返す観測の本文バッファを再利用する。
         private readonly StringBuilder _builder = new StringBuilder();
 
+        /// <summary>Play 開始時にログ購読を開始します。</summary>
         internal AiConsoleLog()
         {
             Application.logMessageReceived += OnLogMessage;
         }
 
-        internal string Read(int count)
+        /// <summary>対象レベルで絞り込んだ末尾の行を返します。</summary>
+        internal string Read(int count, string level = "all")
+        {
+            Validate(count, level);
+            _builder.Clear();
+            var matchingCount = level == "all" ? _lines.Count : CountErrorLines();
+            var skipCount = Math.Max(0, matchingCount - count);
+            using (var flags = _errorFlags.GetEnumerator())
+            {
+                foreach (var line in _lines)
+                {
+                    flags.MoveNext();
+                    if (level == "error" && !flags.Current)
+                    {
+                        continue;
+                    }
+
+                    if (skipCount-- > 0)
+                    {
+                        continue;
+                    }
+
+                    _builder.AppendLine(line);
+                }
+            }
+
+            return _builder.ToString().TrimEnd();
+        }
+
+        /// <summary>未購読の Editor 時も同じ引数契約で検証します。</summary>
+        internal static void Validate(int count, string level)
         {
             if (count < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(count));
             }
 
-            _builder.Clear();
-            if (count == 0)
+            if (level != "all" && level != "error")
             {
-                return string.Empty;
+                throw new ArgumentException("level は all または error を指定してください。", nameof(level));
             }
-
-            var path = FileLogSink.ActiveOutputFilePath;
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
-            {
-                return ReadFile(path, count);
-            }
-
-            var skipCount = Math.Max(0, _lines.Count - count);
-            foreach (var line in _lines)
-            {
-                if (skipCount-- > 0)
-                {
-                    continue;
-                }
-
-                _builder.AppendLine(line);
-            }
-
-            return _builder.ToString().TrimEnd();
         }
 
         /// <summary>ドメイン再読み込みなしの Play 再開でも二重購読を防ぎます。</summary>
@@ -59,46 +72,58 @@ namespace UniLab.AI
             Application.logMessageReceived -= OnLogMessage;
         }
 
-        private string ReadFile(string path, int count)
+        /// <summary>本文とエラー系の先頭 3 行のスタックを同じレベルで保持します。</summary>
+        internal void OnLogMessage(string condition, string stackTrace, LogType type)
         {
-            var tail = new Queue<string>();
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var reader = new StreamReader(stream))
+            var isError = type == LogType.Error || type == LogType.Exception || type == LogType.Assert;
+            AppendLines($"[{type}] {condition}", isError, int.MaxValue);
+            if (isError && !string.IsNullOrEmpty(stackTrace))
             {
-                string line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    tail.Enqueue(line);
-                    if (tail.Count > count)
-                    {
-                        tail.Dequeue();
-                    }
-                }
+                AppendLines(stackTrace, true, MaximumStackTraceLines);
             }
-
-            foreach (var line in tail)
-            {
-                _builder.AppendLine(line);
-            }
-
-            return _builder.ToString().TrimEnd();
         }
 
-        private void OnLogMessage(string condition, string stackTrace, LogType type)
+        private void AppendLines(string text, bool isError, int maximumLines)
         {
-            using (var reader = new StringReader($"[{type}] {condition}\n{stackTrace}".TrimEnd()))
+            using (var reader = new StringReader(text))
             {
-                string line;
-                while ((line = reader.ReadLine()) != null)
+                for (var lineIndex = 0; lineIndex < maximumLines; lineIndex++)
                 {
-                    if (_lines.Count == RingCapacity)
+                    var line = reader.ReadLine();
+                    if (line == null)
                     {
-                        _lines.Dequeue();
+                        break;
                     }
 
-                    _lines.Enqueue(line);
+                    AppendLine(line, isError);
                 }
             }
+        }
+
+        private void AppendLine(string line, bool isError)
+        {
+            if (_lines.Count == RingCapacity)
+            {
+                _lines.Dequeue();
+                _errorFlags.Dequeue();
+            }
+
+            _lines.Enqueue(line);
+            _errorFlags.Enqueue(isError);
+        }
+
+        private int CountErrorLines()
+        {
+            var count = 0;
+            foreach (var isError in _errorFlags)
+            {
+                if (isError)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
     }
 }

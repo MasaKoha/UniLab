@@ -31,7 +31,10 @@ namespace UniLab.AI
         /// <summary>現在の観測と入力候補を既存の形式で返します。</summary>
         internal string BuildFullObservation(UiSnapshotDocument snapshot, string scope = "visible")
         {
-            _evaluator.Evaluate(_goal.goal, snapshot, null);
+            if (!_goal.freePlay)
+            {
+                _evaluator.Evaluate(_goal.goal, snapshot, null);
+            }
             var builder = _builder;
             builder.Clear();
             builder.AppendLine(UiSnapshot.ToCompactText(snapshot, scope));
@@ -52,7 +55,10 @@ namespace UniLab.AI
         internal string BuildDiffObservation(UiSnapshotDocument before, UiSnapshotDocument after, string scope = "visible")
         {
             var diff = UiSnapshot.Compare(before, after);
-            _evaluator.Evaluate(_goal.goal, after, diff);
+            if (!_goal.freePlay)
+            {
+                _evaluator.Evaluate(_goal.goal, after, diff);
+            }
             var visibleDiff = UiSnapshot.Compare(UiObservationScope.Filter(before, scope), UiObservationScope.Filter(after, scope));
             var diffText = FormatDiff(visibleDiff);
             var builder = _builder;
@@ -179,7 +185,7 @@ namespace UniLab.AI
 
         private void AppendGoalFailures(StringBuilder builder)
         {
-            if (_evaluator.Failures.Count == 0)
+            if (_goal.freePlay || _evaluator.Failures.Count == 0)
             {
                 return;
             }
@@ -203,7 +209,7 @@ namespace UniLab.AI
         /// <summary>シナリオ出力の拒否理由に目標失敗の詳細を添えます。</summary>
         internal string BuildGoalFailureSummary()
         {
-            if (_evaluator.Failures.Count == 0)
+            if (_goal.freePlay || _evaluator.Failures.Count == 0)
             {
                 return "goalFailures: なし";
             }

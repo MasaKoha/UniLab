@@ -114,7 +114,7 @@ namespace UniLab.AI
                 return RejectAction(action, beforeObservationKey, actionKind, target, "forbid に一致するため拒否しました。");
             }
 
-            if (_guards.IsStuck(beforeObservationKey, actionKey))
+            if (!_goal.freePlay && _guards.IsStuck(beforeObservationKey, actionKey))
             {
                 Finish("stuck", "同じ観測または同じ観測で同じ行動が反復したため停止しました。");
                 _artifacts.SaveAbnormalCapture("stuck");
@@ -171,7 +171,7 @@ namespace UniLab.AI
         /// <summary>成功した手順を 02 のシナリオ JSON として書き出し、探索結果を再実行可能なテストへ昇格します。</summary>
         public string ExportAsScenario(string name)
         {
-            if (!IsGoalReached())
+            if (!_goal.freePlay && !IsGoalReached())
             {
                 _message = $"目標未達のため scenario.json は書き出しません。 {_formatter.BuildGoalFailureSummary()}";
                 _artifacts.SaveAbnormalCapture("goal-failed");
@@ -234,7 +234,7 @@ namespace UniLab.AI
 
         private bool IsGoalReached(UiSnapshotDocument snapshot, UiSnapshotDiff diff)
         {
-            return _evaluator.Evaluate(_goal.goal, snapshot, diff);
+            return !_goal.freePlay && _evaluator.Evaluate(_goal.goal, snapshot, diff);
         }
 
         private string RejectAction(AgentAction action, string observationKey, string actionKind, string target, string message)

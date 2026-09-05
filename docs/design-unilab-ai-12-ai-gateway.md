@@ -18,17 +18,17 @@ CLI と Unity 内蔵メールボックスの実行先を `AiCommandDispatcher` �
 |---|---|---|
 | `ping` | なし | `playMode=<bool> scene=<name> frame=<n>` |
 | `ops` | なし | 登録済み op を改行区切りで返す |
-| `agent.begin` | `goal` 必須、`options` 任意 | 既存 Begin。期待値 0 件は既存文言で拒否 |
-| `agent.observe` | `diffOnly=false` | 現在の観測 |
+| `agent.begin` | `goal` 必須、`options` 任意 | freePlay:true は期待値 0 件を許可。それ以外は拒否 |
+| `agent.observe` | `diffOnly=false`、`scope="visible"`、`capture`・`directory` 任意 | 現在の観測。撮影指定時は画像情報も返す |
 | `agent.act` | `action` または空でない `steps` 配列 | 各手を順に実行し、status が running 以外なら打ち切る |
 | `agent.goal` | なし | 既存の目標判定 |
 | `agent.end` | なし | 既存のセッション終了 |
-| `agent.export` | `name` | 成功セッションのシナリオ保存 |
+| `agent.export` | `name` | 成功または自由行動セッションのシナリオ保存 |
 | `capture` | 英数字・`_`・`-` だけの `name` 必須、`directory` 任意 | PNG の絶対パス。既定は `DebugOutput/captures` |
 | `snapshot` | `compact=true`、CLI 互換の `save=false` | 圧縮テキストまたはスナップショット JSON を text に格納 |
-| `console` | `count=40` | 最後に初期化された稼働中 FileLogSink の末尾 N 行。未稼働なら直近 200 行のリングバッファ |
+| `console` | `count=40`、`level="all"` | 直近 500 行のリングから対象レベルの末尾 N 行 |
 
-`AiCommandResponse` は `ok/op/session/message/text/path/settled/error` を持つ。
+`AiCommandResponse` は `ok/op/session/message/text/path/width/height/blank/settled/ready/waitedMs/elapsedMs/error` を持つ。
 既存の `AgentCommandResult` の `ok/session/message/text/path` は同名・同型を保つ。
 変換はディスパッチャの一箇所に集約する。未知 op は `error:"unknown op"`、不正 JSON は
 `ok:false` と例外メッセージを返す。`agent.*` は Play 外で `message:"playMode が必要です"`。
@@ -91,7 +91,7 @@ Stop は `.enabled` を削除しないため、次の Play では再び自動起
 
 ```sh
 python3 Assets/UniLab.AI/Tools/ai_client.py ping
-python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"goal":[{"kind":"textVisible","value":"__never__"}],"maxSteps":5000,"maxSeconds":14400}}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"}}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"steps":[{"press":"east"},{"submit":"TabButton1"}],"settleSeconds":0.35}'
 python3 Assets/UniLab.AI/Tools/ai_client.py capture '{"name":"03_workshop"}'
@@ -170,3 +170,54 @@ click / tap の対象解決失敗時は従来の座標フォールバックも�
 `steps` の ready / waitedMs は既存の応答と同じく最後に実行した手の値。
 elapsedMs は要求全体の値。ミリ秒未満は切り捨てるため即時応答は 0 になり得る。
 メールボックスのキュー待ちや応答ファイル公開の時間は含まない。
+
+## PR4: 観測品質とクライアント操作
+
+### フリープレイ
+
+`agent.begin {"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}` で、
+期待値を持たないプレイテストを開始する。`freePlay` の既定は false で、通常目標では従来どおり
+期待値が 1 件以上必要。検証は `AgentGoalValidator` に分離し、`Begin` では Play 判定より先に実施する。
+
+自由行動では目標は常に未達で、レポートの `goalReached` も false。目標判定・反復検出による
+自動終了を行わず、既存の手数・時間予算を行動時に確認する。禁止語の拒否と明示終了は維持する。
+観測の `goalFailures:` 節は出さず、`agent.export` は目標未達の拒否をスキップし、
+最後のステップに目標の `expect` やシーン待ちを追加しない。
+
+### 観測＋撮影の同一フレーム
+
+`agent.observe` に任意の `capture`（英数字・`_`・`-` の撮影名）を追加する。
+スナップショット取得から `ScreenCapture.CaptureScreenshot` の発行まで yield を挟まず、
+別要求によるフレームのずれを解消する。Unity の撮影自体はそのフレームの描画終了時であり、
+フレーム内で後続処理が UI を更新した場合まで状態を凍結するものではない。
+`text` は観測テキストを保持し、撮影先は `path` に返す。`directory` は単独撮影と同じ保存先指定。
+
+単独の `capture` op も残し、両経路で `AiCaptureSupport` の撮影発行と完了待ちを共有する。
+非同期版は最大 3 秒待って PNG を読み取り、応答に `int width` / `int height` / `bool blank` を設定する。
+読み取りは `File.ReadAllBytes` → `Texture2D` → `ImageConversion.LoadImage` → `GetPixels32`。
+RGB を 0〜255 の輝度（係数 0.2126 / 0.7152 / 0.0722）に変換し、母標準偏差が 3.0 未満なら
+`blank=true`。白色に限定せず、ほぼ単色の画像を判定する。Texture は Play 中なら Destroy、
+それ以外は DestroyImmediate で必ず破棄する。撮影時だけの処理で毎フレーム解析はしない。
+同期 CLI は生成を待たず、`width=height=0` / `blank=false` のまま返す。
+
+### console のリングバッファ
+
+ファイルログ参照を廃止し、`Application.logMessageReceived` で収集した 500 行のリングを正とする。
+`[{type}] {condition}` を格納し、Error / Exception / Assert にはスタック先頭 3 行を続ける。
+各行のレベルを保持するため、容量超過で本文が落ちてもスタック行のエラー分類は維持される。
+超過した最古行は Dequeue する。
+
+`console {"level":"all","count":40}` が既定。`level:"error"` は Error / Exception / Assert と
+そのスタック行だけに絞り、`count` は絞り込み後の末尾行数。無効な level・負の count は拒否する。
+生成・購読は SubsystemRegistration のみで実行し、前回購読を解除して Play 再開時にリセットする。
+静的コンストラクタでは生成せず、Play 開始前の未購読状態は空文字を返す。
+
+### Text の遮蔽判定
+
+Text の矩形中心にレイキャストし、GraphicRaycaster の結果から観測用 OverlayMarker 配下を除いた
+最前面 Graphic を調べる。その Graphic が Text 自身・祖先・子孫のいずれでもなければ
+`blockedBy` に遮蔽元の名前を格納する。Text 自身の `raycastTarget=false` でも判定できる。
+これは中心点とレイキャスト対象 Graphic に基づく判定であり、文字の全ピクセルの遮蔽率ではない。
+
+`visible` は遮蔽された Text を除外する。`all` は残して `blocked:<name>` を出力する。
+Selectable は既存の遮蔽判定を維持し、visible でも押せない理由を表示する。

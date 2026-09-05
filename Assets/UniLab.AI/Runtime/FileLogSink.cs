@@ -11,8 +11,6 @@ namespace UniLab.AI
     /// </summary>
     public sealed class FileLogSink : IDisposable
     {
-        internal static string ActiveOutputFilePath { get; private set; }
-
         private const string FileNamePrefix = "player-log-";
         private const string FileNameTimestampFormat = "yyyyMMdd-HHmmss";
         private const string FileExtension = ".log";
@@ -62,7 +60,6 @@ namespace UniLab.AI
                 _streamWriter = new StreamWriter(OutputFilePath, false, Encoding.UTF8);
                 Application.logMessageReceivedThreaded += HandleLogMessageReceivedThreaded;
                 _isInitialized = true;
-                ActiveOutputFilePath = OutputFilePath;
             }
             catch (Exception exception)
             {
@@ -91,10 +88,6 @@ namespace UniLab.AI
             {
                 _streamWriter?.Dispose();
                 _streamWriter = null;
-                if (ActiveOutputFilePath == OutputFilePath)
-                {
-                    ActiveOutputFilePath = null;
-                }
             }
         }
 
@@ -149,10 +142,6 @@ namespace UniLab.AI
 
                 _streamWriter?.Dispose();
                 _streamWriter = null;
-                if (ActiveOutputFilePath == OutputFilePath)
-                {
-                    ActiveOutputFilePath = null;
-                }
 
                 if (_hasReportedFailure)
                 {
