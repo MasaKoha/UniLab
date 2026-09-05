@@ -132,6 +132,8 @@ namespace UniLab.AI
             return new UiScenarioStep
             {
                 submit = action.submit,
+                scrollTo = action.scrollTo,
+                expect = action.expect,
                 press = action.press,
                 hold = action.hold,
                 move = action.move,
@@ -169,7 +171,11 @@ namespace UniLab.AI
             var steps = _scenarioSteps.ToArray();
             if (!_goal.freePlay && steps.Length > 0)
             {
-                steps[steps.Length - 1].expect = _goal.goal ?? Array.Empty<ScenarioExpectation>();
+                var finalStep = JsonUtility.FromJson<UiScenarioStep>(JsonUtility.ToJson(steps[steps.Length - 1]));
+                var expectations = new List<ScenarioExpectation>(finalStep.expect ?? Array.Empty<ScenarioExpectation>());
+                expectations.AddRange(_goal.goal ?? Array.Empty<ScenarioExpectation>());
+                finalStep.expect = expectations.ToArray();
+                steps[steps.Length - 1] = finalStep;
                 // 目標がシーン到達なら、最終ステップの操作後にそのシーンを待ってから expect を評価させる。
                 // 待ちが無いと遷移フェード中（前のシーン）に評価されて必ず失敗する（2026-09-02 再生で実測）
                 var sceneGoal = Array.Find(steps[steps.Length - 1].expect, expectation => expectation != null && expectation.kind == "sceneIs");

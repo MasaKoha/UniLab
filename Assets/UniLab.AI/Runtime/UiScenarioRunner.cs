@@ -373,6 +373,10 @@ namespace UniLab.AI
                 failureMessage = string.Empty;
                 return true;
             }
+            if (!string.IsNullOrEmpty(step.scrollTo) && string.IsNullOrEmpty(step.submit))
+            {
+                return UiReadiness.Exists(primaryTarget, out failureMessage);
+            }
             return UiReadiness.IsSubmittable(primaryTarget, out failureMessage);
         }
         private void AddFailure(string kind, string target, string value, string message, string evidencePath)

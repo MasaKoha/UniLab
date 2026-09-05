@@ -14,6 +14,9 @@ namespace UniLab.AI
         /// </summary>
         public string submit;
 
+        /// <summary>指定要素を祖先 ScrollRect の表示範囲へ入れる。フォーカスは動かさない。</summary>
+        public string scrollTo;
+
         /// <summary>
         /// ボタン 1 発を次フレームで離し、プレイヤー入力と同じ経路へ落とすための語彙です。
         /// </summary>

@@ -12,6 +12,9 @@ namespace UniLab.AI
         /// <summary>UI の submit 経路を直接検証するための対象名です。</summary>
         public string submit;
 
+        /// <summary>指定要素を祖先 ScrollRect の表示範囲へ入れる。フォーカスは動かさない。</summary>
+        public string scrollTo;
+
         /// <summary>ゲームパッド単打を文字列 JSON で選べるようにするためのボタン名です。</summary>
         public string press;
 
@@ -95,6 +98,9 @@ namespace UniLab.AI
 
         /// <summary>外部 LLM の判断理由を UniLab.AI 側の行動ログへ残すための文字列です。</summary>
         public string reason;
+
+        /// <summary>行動後の落ち着いた観測で検証する事後条件です。</summary>
+        public ScenarioExpectation[] expect;
     }
 }
 #endif

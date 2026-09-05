@@ -130,6 +130,7 @@ namespace UniLab.AI
 
         private void AppendRawInputCandidates(StringBuilder builder)
         {
+            builder.AppendLine(" - scrollTo=<target>");
             var inputMode = string.IsNullOrEmpty(_options.inputMode) ? "gamepad" : _options.inputMode;
             if (inputMode == "gamepad" || inputMode == "all")
             {

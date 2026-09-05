@@ -20,7 +20,8 @@ CLI と Unity 内蔵メールボックスの実行先を `AiCommandDispatcher` �
 | `ops` | なし | 登録済み op を改行区切りで返す |
 | `agent.begin` | `goal` 必須、`options` 任意 | freePlay:true は期待値 0 件を許可。それ以外は拒否 |
 | `agent.observe` | `diffOnly=false`、`scope="visible"`、`capture`・`directory` 任意 | 現在の観測。撮影指定時は画像情報も返す |
-| `agent.act` | `action` または空でない `steps` 配列 | 各手を順に実行し、status が running 以外なら打ち切る |
+| `agent.find` | `label`、`kind` 任意、`scope="visible"` | 観測を検索し、一件一行で推奨 target spec を返す |
+| `agent.act` | `action` または空でない `steps` 配列、`expect` 任意 | 各手を順に実行し、expect 未達・status が running 以外なら打ち切る |
 | `agent.goal` | なし | 既存の目標判定 |
 | `agent.end` | なし | 既存のセッション終了 |
 | `agent.export` | `name` | 成功または自由行動セッションのシナリオ保存 |
@@ -28,7 +29,7 @@ CLI と Unity 内蔵メールボックスの実行先を `AiCommandDispatcher` �
 | `snapshot` | `compact=true`、CLI 互換の `save=false` | 圧縮テキストまたはスナップショット JSON を text に格納 |
 | `console` | `count=40`、`level="all"` | 直近 500 行のリングから対象レベルの末尾 N 行 |
 
-`AiCommandResponse` は `ok/op/session/message/text/path/width/height/blank/settled/ready/waitedMs/elapsedMs/error` を持つ。
+`AiCommandResponse` は `ok/op/session/message/text/path/width/height/blank/settled/ready/expectOk/expectFailures/waitedMs/elapsedMs/error` を持つ。
 既存の `AgentCommandResult` の `ok/session/message/text/path` は同名・同型を保つ。
 変換はディスパッチャの一箇所に集約する。未知 op は `error:"unknown op"`、不正 JSON は
 `ok:false` と例外メッセージを返す。`agent.*` は Play 外で `message:"playMode が必要です"`。
@@ -221,3 +222,84 @@ Text の矩形中心にレイキャストし、GraphicRaycaster の結果から�
 
 `visible` は遮蔽された Text を除外する。`all` は残して `blocked:<name>` を出力する。
 Selectable は既存の遮蔽判定を維持し、visible でも押せない理由を表示する。
+
+
+## PR5: 検索・事後条件・スクロールと省電力化
+
+### agent.find
+
+`agent.find {"label":"開始","kind":"Button","scope":"visible"}` は `UiSnapshot.Capture()` の
+結果に `UiObservationScope.Filter` を適用して検索する。セッション開始は不要、PlayMode は必要。
+`label` はリッチテキストタグ除去後の部分一致（大文字小文字を区別）。省略すると全ラベル。
+`kind` は `Button` / `Text` / `Toggle` / `Input` / `Selectable`、省略時は全種別。
+`scope` は `visible` が既定、`all` はマスク外・画面外も含める。
+
+応答 `text` は次の一件一行形式。改行や引用符はエスケープする。
+
+```text
+Button Canvas/List/Row label="冒険を開始" interactable=true blockedBy="" clipped=false rect=[10,20,30,40] → submit:"label:冒険を開始"
+```
+
+推奨 spec は通常はパス。全観測内に同名要素がある場合は
+`UiInputLocator.CreateLabelTargetSpec` による `label:` 指定を使う。ラベル自体も重複する場合は
+既存 Locator の優先順位に従う。0 件は `ok:true`、`text:""`、`message:"見つかりません"`。
+
+### agent.act の expect
+
+```json
+{"action":{"submit":"StartButton"},"expect":[{"kind":"sceneIs","value":"Game"}]}
+```
+
+単一行動は引数直下または `action.expect` に `ScenarioExpectation[]` を指定できる。
+両方指定した場合は `action.expect` を優先する。`steps` は各行動オブジェクト内に指定する。
+
+```json
+{"steps":[{"scrollTo":"label:ステージ5"},{"submit":"label:ステージ5","expect":[{"kind":"textVisible","value":"準備完了"}]}]}
+```
+
+非同期経路は落ち着き待ち後に `AgentExpectationEvaluator.Evaluate` で評価する。
+`textVisible` / `sceneIs` / `focused` など既存評価器の語彙・判定規則を使用し、`changed` は行動前後の差分を渡す。
+応答に `expectOk:bool` と `expectFailures:string[]` を追加する。未指定は `true` と空配列。
+未達理由は ` - kind target=... value=... message=...` の goalFailures と同じ一行形式。
+事後条件未達だけでは `ok` を false にしない。一括実行は未達の手で停止し、
+`message:"expect 未達で打ち切り"` とその手の結果を返す。
+準備待ち・落ち着き待ちの既存タイムアウト契約は維持する。
+同期経路はフレームを進めず、その時点の観測で評価するため `settled:false`。
+行動後の画面変化を検証するクライアントはメールボックスの非同期経路を使う。
+
+### scrollTo
+
+`AgentAction.scrollTo` と `UiScenarioStep.scrollTo` は同じ対象指定を使い、
+`UiInputLocator.FindTarget` で対象を解決する。祖先 ScrollRect を内側から順に扱い、
+対象矩形が viewport に収まる最小移動を、座標系変換して `content.anchoredPosition` へ反映する。
+有効な縦横軸だけを動かし、慣性を停止する。フォーカスは変更せず、Input System に依存しない。
+対象が viewport より大きい軸は表示範囲を覆う位置まで最小移動し、既に覆っていれば動かさない。
+ScrollRect が無い場合は「ScrollRect がありません」。準備待ちは対象の存在だけで判定する。
+ログ種別は `scrollTo`、対象は指定文字列。シナリオへは `scrollTo` を保持して出力し、
+`scroll` へ変換しない。各手の `expect` も保持し、最終手にはセッション目標を追加する。
+入力候補には入力モードに関係なく ` - scrollTo=<target>` を表示する。
+
+### メールボックスの省電力ポーリング
+
+通常は `_pollIntervalSeconds=0.05` 秒。直近の応答処理完了から `_idleAfterSeconds=5` 秒以上
+要求を処理していなければ `_idlePollIntervalSeconds=0.25` 秒へ伸ばす。起動直後は起動時刻を基準とする。
+Prefab の SerializeField で調整できる。間隔は `ResolvePollInterval(lastHandledAt, now)` の純関数で解決し、
+要求を一件処理した時点で最終処理時刻と次回ポーリング予定を更新して通常間隔に戻す。
+`ai_mailbox --status` は `pollIntervalSeconds` と UTC ISO 8601 形式の `lastHandledAt` を追加する。
+停止中の間隔は 0、未処理または停止中の最終処理時刻は空文字列。
+
+### フレーム内のスナップショット共有
+
+Play 中の `UiSnapshot.Capture()` は同じ `Time.frameCount` では同じ `UiSnapshotDocument` 参照を返す。
+フレームが変わると再収集し、SubsystemRegistration でキャッシュをリセットする。
+Play 停止中は毎回収集する。内部の `Capture(int frameCount)` で共有と更新を EditMode テストできる。
+返された共有ドキュメントは変更せずに利用する。フレーム内の入力直後も最初の観測が返るため、
+入力結果の再観測には次フレーム以降を使う。
+
+### 追加テスト
+
+- `AgentFindTest`: タグ除去・部分一致・種別・同名行の推奨 spec・0 件・scope・不正 kind。
+- `AgentExpectTest`: 応答 JSON、未指定時の既定値、二手目未達で停止、単一行動の引数、changed 差分。
+- `AiMailboxServerPollingTest`: 待機閾値、処理後の復帰、設定間隔の適用。
+- `UiSnapshotCacheTest`: 同一参照、フレーム更新、Play 停止中のキャッシュ無効。
+- `UiScrollToTest`: 最小移動とシナリオ語彙。`AgentActionExecutorTest` に scrollTo の種別・対象判定を追加。

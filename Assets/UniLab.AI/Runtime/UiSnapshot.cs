@@ -34,12 +34,42 @@ namespace UniLab.AI
         private const int TextLabelLength = 120;
         private const int CompactTextCollapseThreshold = 5;
         private const int CompactTextExpandedHeadCount = 3;
+        private static UiSnapshotDocument _cachedDocument;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCache()
+        {
+            _cachedDocument = null;
+        }
 
         /// <summary>
         /// 現在フレーム内で完結する UI 状態を収集します。
         /// フレームをまたがる待機を入れないことで観測がゲームの見え方を変えないようにします。
         /// </summary>
         public static UiSnapshotDocument Capture()
+        {
+            if (Application.isPlaying)
+            {
+                return Capture(Time.frameCount);
+            }
+
+            ResetCache();
+            return CaptureUncached(Time.frameCount);
+        }
+
+        /// <summary>指定フレームの観測を共有し、フレーム変更時に収集し直します。</summary>
+        internal static UiSnapshotDocument Capture(int frameCount)
+        {
+            // perf: 観測・準備待ち・差分計算で 1 フレームに複数回呼ばれるため。
+            if (_cachedDocument == null || _cachedDocument.frame != frameCount)
+            {
+                _cachedDocument = CaptureUncached(frameCount);
+            }
+
+            return _cachedDocument;
+        }
+
+        private static UiSnapshotDocument CaptureUncached(int frameCount)
         {
             var selectedObject = EventSystem.current == null ? null : EventSystem.current.currentSelectedGameObject;
             var elements = CollectElements(selectedObject);
@@ -48,7 +78,7 @@ namespace UniLab.AI
             return new UiSnapshotDocument
             {
                 capturedAt = DateTimeOffset.Now.ToString("o"),
-                frame = Time.frameCount,
+                frame = frameCount,
                 activeScene = SceneManager.GetActiveScene().name,
                 screenWidth = Screen.width,
                 screenHeight = Screen.height,

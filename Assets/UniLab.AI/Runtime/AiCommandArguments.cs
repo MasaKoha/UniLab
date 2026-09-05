@@ -14,6 +14,12 @@ namespace UniLab.AI
 
         /// <summary>観測範囲です。visible は可視要素、all は全要素を返します。</summary>
         public string scope = "visible";
+        /// <summary>タグ除去後のラベルに部分一致させる検索文字列です。</summary>
+        public string label;
+        /// <summary>検索対象の要素種別です。省略すると全種別を検索します。</summary>
+        public string kind;
+        /// <summary>単一 action に指定する事後条件です。</summary>
+        public ScenarioExpectation[] expect;
         /// <summary>観測と同じフレームで撮影する任意の成果物名です。</summary>
         public string capture;
         /// <summary>ログの対象です。all または error を指定します。</summary>

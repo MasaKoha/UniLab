@@ -29,6 +29,10 @@ namespace UniLab.AI
         public bool settled;
         /// <summary>非同期の最終行動で対象が操作可能になった場合に true です。</summary>
         public bool ready;
+        /// <summary>事後条件がすべて成立したかを示します。未指定時は true です。</summary>
+        public bool expectOk = true;
+        /// <summary>goalFailures と同じ一行形式の事後条件未達理由です。</summary>
+        public string[] expectFailures = Array.Empty<string>();
         /// <summary>最終行動の準備待ちに費やした実時間のミリ秒です。</summary>
         public int waitedMs;
         /// <summary>要求の実行開始から応答完成までの実時間のミリ秒です。</summary>

@@ -25,7 +25,7 @@ namespace UniLab.AI
             Arguments = new AiCommandArguments();
             JsonUtility.FromJsonOverwrite(json, Arguments);
             AiCommandArguments.ValidateDuration(Arguments.readyTimeoutSeconds, nameof(Arguments.readyTimeoutSeconds), false);
-            if (Operation == "agent.observe")
+            if (Operation == "agent.observe" || Operation == "agent.find")
             {
                 UiObservationScope.Validate(Arguments.scope);
             }
@@ -58,7 +58,9 @@ namespace UniLab.AI
 
             if (hasAction)
             {
-                return new[] { JsonUtility.FromJson<AgentAction>(GetObject("action", true)) };
+                var action = JsonUtility.FromJson<AgentAction>(GetObject("action", true));
+                action.expect = action.expect ?? Arguments.expect;
+                return new[] { action };
             }
 
             var steps = AiJsonObject.ParseObjectArray(stepsJson);

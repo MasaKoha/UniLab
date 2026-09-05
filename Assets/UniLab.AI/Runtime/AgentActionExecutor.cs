@@ -35,6 +35,12 @@ namespace UniLab.AI
                 return ExecuteSubmit(action.submit);
             }
 
+            if (!string.IsNullOrEmpty(action.scrollTo))
+            {
+                UiScrollTo.Execute(action.scrollTo, out var message);
+                return message;
+            }
+
             if (!InputInjector.IsSupported && HasRawInputAction(action))
             {
                 return "Input System が有効ではないため入力を省略しました。";
@@ -187,6 +193,7 @@ namespace UniLab.AI
         {
             if (action == null) { return string.Empty; }
             if (!string.IsNullOrEmpty(action.submit)) { return "submit"; }
+            if (!string.IsNullOrEmpty(action.scrollTo)) { return "scrollTo"; }
             if (!string.IsNullOrEmpty(action.press)) { return "press"; }
             if (!string.IsNullOrEmpty(action.hold)) { return "hold"; }
             if (!string.IsNullOrEmpty(action.move)) { return "move"; }
@@ -208,6 +215,7 @@ namespace UniLab.AI
         {
             if (action == null) { return string.Empty; }
             if (!string.IsNullOrEmpty(action.submit)) { return action.submit; }
+            if (!string.IsNullOrEmpty(action.scrollTo)) { return action.scrollTo; }
             if (!string.IsNullOrEmpty(action.pointerMove)) { return action.pointerMove; }
             if (!string.IsNullOrEmpty(action.click)) { return action.click; }
             if (!string.IsNullOrEmpty(action.scroll)) { return action.scroll; }

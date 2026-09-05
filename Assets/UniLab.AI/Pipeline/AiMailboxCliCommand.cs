@@ -36,7 +36,7 @@ namespace UniLab.AI.Pipeline
 
                 response.ok = true;
                 response.path = AiMailboxServer.Directory;
-                response.text = $"running={AiMailboxServer.IsRunning} handledCount={AiMailboxServer.HandledCount}";
+                response.text = $"running={AiMailboxServer.IsRunning} handledCount={AiMailboxServer.HandledCount} pollIntervalSeconds={AiMailboxServer.CurrentPollIntervalSeconds} lastHandledAt={AiMailboxServer.LastHandledAt}";
             }
             catch (Exception exception)
             {

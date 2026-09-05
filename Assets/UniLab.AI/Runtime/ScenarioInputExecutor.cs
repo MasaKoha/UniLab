@@ -17,6 +17,16 @@ namespace UniLab.AI
     {
         internal IEnumerator ExecuteInputCoroutine(UiScenarioStep step, Action<string, string, string, string, string> addFailure)
         {
+            if (!string.IsNullOrEmpty(step.scrollTo))
+            {
+                if (!UiScrollTo.Execute(step.scrollTo, out var message))
+                {
+                    addFailure("scrollTo", step.scrollTo, string.Empty, message, string.Empty);
+                }
+
+                yield break;
+            }
+
             if (!InputInjector.IsSupported && IsInputStep(step))
             {
                 addFailure("input", GetInputKind(step), string.Empty, "Input System が有効ではありません。", string.Empty);
@@ -139,7 +149,8 @@ namespace UniLab.AI
 
         internal static bool IsInputStep(UiScenarioStep step)
         {
-            return !string.IsNullOrEmpty(step.press)
+            return !string.IsNullOrEmpty(step.scrollTo)
+                || !string.IsNullOrEmpty(step.press)
                 || !string.IsNullOrEmpty(step.hold)
                 || !string.IsNullOrEmpty(step.move)
                 || !string.IsNullOrEmpty(step.stick)
@@ -156,6 +167,7 @@ namespace UniLab.AI
 
         internal static string GetInputKind(UiScenarioStep step)
         {
+            if (!string.IsNullOrEmpty(step.scrollTo)) { return "scrollTo"; }
             if (!string.IsNullOrEmpty(step.press)) { return "press"; }
             if (!string.IsNullOrEmpty(step.hold)) { return "hold"; }
             if (!string.IsNullOrEmpty(step.move)) { return "move"; }
