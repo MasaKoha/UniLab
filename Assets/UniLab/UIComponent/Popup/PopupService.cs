@@ -164,29 +164,29 @@ namespace UniLab.UI.Popup
                 popup.gameObject.SetActive(true);
                 _stack.Add(popup);
                 RefreshState();
-                await popup.OpenAsync();
-
-                // 開くアニメーションの完了後に積む。再生中は PopupBase が操作不可にしているため
+                // 開閉中にも背後の画面へ Submit が届かないよう、表示前にフォーカスを移す。
                 focusGrid = PushFocus(popup);
+                await popup.OpenAsync();
 
                 return await popup.GetResultAsync().AttachExternalCancellation(cancellationToken);
             }
             finally
             {
-                // グリッドは View の解放より先に降ろす。破棄済みの Selectable を握ったまま方向解決が走るのを防ぐ
-                PopFocus(focusGrid, previousSelected);
-
-                if (popup != null)
+                try
                 {
-                    // CloseAsync が中断例外を投げても、Release を必ず実行して View リークを防ぐ
-                    try
+                    if (popup != null)
                     {
                         await popup.CloseAsync();
                     }
-                    finally
+                }
+                finally
+                {
+                    // 閉じるアニメーション後に戻す。外部破棄・例外時もグリッドを残さない。
+                    PopFocus(focusGrid, previousSelected);
+                    _stack.Remove(popup);
+                    RefreshState();
+                    if (popup != null)
                     {
-                        _stack.Remove(popup);
-                        RefreshState();
                         _viewProvider.Release(popup);
                     }
                 }
