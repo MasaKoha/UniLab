@@ -40,6 +40,8 @@ namespace UniLab.AI.Tests
             Assert.That(response.text, Does.Contain("agent.begin"));
             Assert.That(response.text, Does.Contain("agent.act"));
             Assert.That(response.text, Does.Contain("capture"));
+            Assert.That(response.text, Does.Contain("scenario.run"));
+            Assert.That(response.text, Does.Contain("scenario.status"));
         }
 
         /// <summary>ディレクトリ逸脱や空の撮影名を撮影前に拒否します。</summary>
@@ -92,6 +94,34 @@ namespace UniLab.AI.Tests
             var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "agent.observe", args = "{\"scope\":\"foo\"}" });
             Assert.That(response.ok, Is.False);
             Assert.That(response.error, Does.Contain("scope"));
+        }
+
+        /// <summary>PlayMode の拒否に先立って必須のシナリオパスを検証します。</summary>
+        [Test]
+        public void ScenarioRunWithoutPathReturnsFailure()
+        {
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "scenario.run" });
+            Assert.That(response.ok, Is.False);
+            Assert.That(response.error, Does.Contain("path"));
+        }
+
+        /// <summary>メールボックス経路でもパス未指定を同じエラーへ変換します。</summary>
+        [Test]
+        public void AsyncScenarioRunWithoutPathReturnsFailure()
+        {
+            AiCommandResponse response = null;
+            var execution = AiCommandDispatcher.ExecuteAsync(new AiCommandRequest { op = "scenario.run" }, result => response = result);
+            Assert.That(execution.MoveNext(), Is.False);
+            Assert.That(response.ok, Is.False);
+            Assert.That(response.error, Does.Contain("path"));
+        }
+
+        /// <summary>操作の落ち着き待ちから独立した既定のシナリオ待機時間を使います。</summary>
+        [Test]
+        public void ScenarioTimeoutDefaultsToDedicatedLimit()
+        {
+            var context = new AiCommandContext(new AiCommandRequest { op = "scenario.run", args = "{\"path\":\"scenario.json\",\"settleTimeoutSeconds\":1}" });
+            Assert.That(context.Arguments.scenarioTimeoutSeconds, Is.EqualTo(AiCommandArguments.DefaultScenarioTimeoutSeconds));
         }
 
         [System.Serializable]

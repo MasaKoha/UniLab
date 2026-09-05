@@ -3,6 +3,11 @@
 
 自由行動の開始例:
     ai_client.py agent.begin '{"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}'
+探索した動線を書き出して回帰再生（export 応答の path を指定）:
+    ai_client.py agent.export '{"name":"regression"}'
+    ai_client.py scenario.run '{"path":"/absolute/path/scenario.json","name":"regression","scenarioTimeoutSeconds":900}' --timeout 930
+直前のシナリオの実行状態:
+    ai_client.py scenario.status
 同じフレームの観測と撮影:
     ai_client.py agent.observe '{"capture":"turn_01"}'
 """

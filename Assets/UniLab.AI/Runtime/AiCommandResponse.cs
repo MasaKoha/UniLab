@@ -19,6 +19,14 @@ namespace UniLab.AI
         public string text = string.Empty;
         /// <summary>成果物のパスです。</summary>
         public string path = string.Empty;
+        /// <summary>シナリオの実行状態です。running または completed を返します。</summary>
+        public string status = string.Empty;
+        /// <summary>完了したシナリオの合否です。完了前は空です。</summary>
+        public string verdict = string.Empty;
+        /// <summary>シナリオで失敗したステップ数です。</summary>
+        public int failedSteps;
+        /// <summary>シナリオ実行中の警告数です。</summary>
+        public int warningCount;
         /// <summary>非同期撮影で読み取った画像の幅です。同期経路では 0 です。</summary>
         public int width;
         /// <summary>非同期撮影で読み取った画像の高さです。同期経路では 0 です。</summary>

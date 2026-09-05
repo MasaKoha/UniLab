@@ -168,6 +168,18 @@ namespace UniLab.AI
             return isReached;
         }
 
+        /// <summary>実行されなかった手の評価を前の手へ混入させないための記録位置です。</summary>
+        internal int RecordedStepCount => _artifacts.StepCount;
+
+        /// <summary>書き出したシナリオの集計です。</summary>
+        internal string ExportSummary => _artifacts.ExportSummary;
+
+        /// <summary>ゲートウェイが入力安定後に評価した結果を保存対象へ戻します。</summary>
+        internal void RecordActExpectation(int previousStepCount, bool expectOk)
+        {
+            _artifacts.RecordActExpectation(previousStepCount, expectOk);
+        }
+
         /// <summary>成功した手順を 02 のシナリオ JSON として書き出し、探索結果を再実行可能なテストへ昇格します。</summary>
         public string ExportAsScenario(string name)
         {

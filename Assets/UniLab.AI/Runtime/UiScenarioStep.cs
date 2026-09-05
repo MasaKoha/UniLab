@@ -14,6 +14,9 @@ namespace UniLab.AI
         /// </summary>
         public string submit;
 
+        /// <summary>探索時の未達など、回帰再生で確認すべき背景を残します。</summary>
+        public string comment;
+
         /// <summary>指定要素を祖先 ScrollRect の表示範囲へ入れる。フォーカスは動かさない。</summary>
         public string scrollTo;
 

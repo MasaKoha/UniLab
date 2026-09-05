@@ -1,5 +1,4 @@
 #if UNILAB_AI_PIPELINE
-using System.IO;
 using UniLab.AI;
 using Unity.Pipeline.Commands;
 using UnityEngine;
@@ -20,30 +19,21 @@ namespace UniLab.AI.Pipeline
             [CliArg("path", "シナリオ JSON ファイルのパス。", Required = true)] string path,
             [CliArg("name", "結果表示に使うシナリオ名。")] string name = "")
         {
-            if (!AiCliCommandSupport.IsPlayModeActive())
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest
             {
-                return AiCliCommandSupport.PlayModeRequiredMessage;
-            }
+                op = "scenario.run",
+                args = JsonUtility.ToJson(new ScenarioArguments { path = path, name = name }),
+            });
+            return response.ok ? response.path : string.IsNullOrEmpty(response.error) ? response.message : response.error;
+        }
 
-            var scenarioPath = Path.GetFullPath(path);
-            if (!File.Exists(scenarioPath))
-            {
-                return $"シナリオファイルが見つかりません。 path={scenarioPath}";
-            }
-
-            var scenarioJson = File.ReadAllText(scenarioPath);
-            var scenario = JsonUtility.FromJson<UiScenario>(scenarioJson);
-            if (scenario == null)
-            {
-                return $"シナリオ JSON の読み込みに失敗しました。 path={scenarioPath}";
-            }
-
-            UiScenarioJsonPresence.Apply(scenarioJson, scenario);
-            var scenarioName = AiCliCommandSupport.ResolveScenarioName(name, scenarioPath);
-            var resultFilePath = UiScenarioRunner.CreateResultFilePath(scenarioName);
-            UiScenarioRunner.Run(scenario, scenarioName, resultFilePath);
-            AiCliCommandSupport.LastScenarioResultFilePath = resultFilePath;
-            return resultFilePath;
+        [System.Serializable]
+        private sealed class ScenarioArguments
+        {
+            /// <summary>CLI の指定を共通の引数へ渡します。</summary>
+            public string path;
+            /// <summary>結果表示名をゲートウェイへ渡します。</summary>
+            public string name;
         }
     }
 }

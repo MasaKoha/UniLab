@@ -192,3 +192,28 @@ public static class InputOverlay
 
 - 入力履歴のタイムライン表示（画面下に流れるバー等）。まずは「今何を押しているか」に限る
 - コントローラ種別ごとのボタン刻印（Xbox / PlayStation / Switch）。記号は汎用の A/B/X/Y 位置で表す
+
+## 実装構成（2026-09-05）
+
+PR7 で `InputOverlayController` の責務を通常の C# クラスへ移動した。
+`InputOverlay` の静的入口、Controller の public API、`TouchSnapshot` は変更しない。
+
+| クラス | 責務 |
+|---|---|
+| `InputOverlayController` | 明示初期化、入力取得と描画更新の呼び出し、破棄 |
+| `InputOverlayRenderer` | ゲームパッド・キーボードの図とハイライト、表示機器の切り替え |
+| `InputOverlayPointerRenderer` | ポインタ、クリック波紋、ドラッグ軌跡、タッチ描画 |
+| `InputOverlayVisualPrimitives` | 既存の UI 生成、配置、スプライト生成の共通処理 |
+| `InputOverlayInputState` | キーの押下集合、押下・解放遷移、スティック残像の状態更新 |
+| `InputOverlayHeldState` | 単一入力の時刻・反復回数・保持表示の判定 |
+| `InputOverlayInputSystemSource` | Input System の入力取得。注入入力も同じデバイス経由で観測 |
+| `InputOverlayLegacyInputSource` | Input System がない場合の旧 Input Manager 入力取得 |
+| `InputOverlayHistory` | `SetStepLabel` の履歴表示、入力履歴、既存 `UiOverlayMarker` の付与 |
+
+既存実装はイベント購読ではなく polling であり、Input System 優先・旧入力へのフォールバックを維持する。
+`SetStepLabel` → `AddSyntheticHistory` の経路、録画に写る Canvas と観測除外マーカーのルート、
+描画順（ゲームパッド・キーボード・履歴・ポインタ・タッチ）を維持した。
+VideoRecorder の制御経路や除外条件は追加・変更しない。
+UI の生成方式と各メソッドの計算・入力判定は従来どおりとし、参照先と呼び先のみを接続し直した。
+通知用デリゲートは初期化時に固定し、毎フレームのアロケーションを増やさない。
+履歴の文字列更新にある `// perf:` も保持する。

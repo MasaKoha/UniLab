@@ -1,9 +1,6 @@
 #if UNILAB_AI_PIPELINE
-using System;
-using System.IO;
 using UniLab.AI;
 using Unity.Pipeline.Commands;
-using UnityEngine;
 
 namespace UniLab.AI.Pipeline
 {
@@ -19,31 +16,10 @@ namespace UniLab.AI.Pipeline
         [CliCommand("ai_scenario_status", "直前の UI シナリオ実行状態を返します。", Tags = new[] { "ui" })]
         public static object GetStatus()
         {
-            var resultFilePath = AiCliCommandSupport.LastScenarioResultFilePath;
-            if (string.IsNullOrEmpty(resultFilePath) || !File.Exists(resultFilePath))
-            {
-                return AiScenarioStatusResult.CreateRunning(resultFilePath);
-            }
-
-            try
-            {
-                var resultJson = File.ReadAllText(resultFilePath);
-                var result = JsonUtility.FromJson<ScenarioResult>(resultJson);
-                if (result == null || string.IsNullOrEmpty(result.verdict))
-                {
-                    return AiScenarioStatusResult.CreateRunning(resultFilePath);
-                }
-
-                return AiScenarioStatusResult.CreateCompleted(
-                    resultFilePath,
-                    result.verdict,
-                    result.failedSteps,
-                    result.warningCount);
-            }
-            catch (Exception)
-            {
-                return AiScenarioStatusResult.CreateRunning(resultFilePath);
-            }
+            var response = AiCommandDispatcher.Execute(new AiCommandRequest { op = "scenario.status" });
+            return response.status == "completed"
+                ? AiScenarioStatusResult.CreateCompleted(response.path, response.verdict, response.failedSteps, response.warningCount)
+                : AiScenarioStatusResult.CreateRunning(response.path);
         }
     }
 }
