@@ -17,6 +17,7 @@ namespace UniLab.AI
         internal static string GetPrimaryTarget(UiScenarioStep step)
         {
             if (!string.IsNullOrEmpty(step.submit)) { return step.submit; }
+            if (!string.IsNullOrEmpty(step.scrollTo)) { return step.scrollTo; }
             if (!string.IsNullOrEmpty(step.waitForObject)) { return step.waitForObject; }
             if (!string.IsNullOrEmpty(step.click)) { return step.click; }
             if (!string.IsNullOrEmpty(step.tap)) { return step.tap; }

@@ -17,6 +17,7 @@ namespace UniLab.AI.Tests
         [TestCase("{\"move\":\"up\"}", "move", "up")]
         [TestCase("{\"click\":\"Row\"}", "click", "Row")]
         [TestCase("{\"drag\":\"pointer\",\"from\":\"First\",\"to\":\"Last\"}", "drag", "First")]
+        [TestCase("{\"scrollTo\":\"Row\"}", "scrollTo", "Row")]
         [TestCase("{}", "", "")]
         [TestCase(null, "", "")]
         [TestCase("{\"submit\":\"Start\",\"press\":\"south\"}", "submit", "Start")]

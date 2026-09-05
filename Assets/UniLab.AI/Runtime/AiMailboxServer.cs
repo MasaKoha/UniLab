@@ -12,9 +12,15 @@ namespace UniLab.AI
         private const string PrefabResourcePath = "AiMailboxPrefab";
         private const string EnabledMarker = ".enabled";
         private const float DefaultPollIntervalSeconds = 0.05f;
+        private const float DefaultIdleAfterSeconds = 5f;
+        private const float DefaultIdlePollIntervalSeconds = 0.25f;
         private static AiMailboxServer _instance;
 
         [SerializeField] private float _pollIntervalSeconds = DefaultPollIntervalSeconds;
+        [SerializeField] private float _idleAfterSeconds = DefaultIdleAfterSeconds;
+        [SerializeField] private float _idlePollIntervalSeconds = DefaultIdlePollIntervalSeconds;
+        private float _lastHandledAt;
+        private string _lastHandledTimestamp = string.Empty;
         private string _directory;
         private string _requestPath;
         private AiCommandRequest _request;
@@ -29,6 +35,10 @@ namespace UniLab.AI
         public static string Directory => IsRunning ? _instance._directory : DefaultDirectory;
         /// <summary>現在の起動で応答を書き終えた要求数です。</summary>
         public static int HandledCount => IsRunning ? _instance._handledCount : 0;
+        /// <summary>現在適用するポーリング間隔です。停止中は 0 です。</summary>
+        public static float CurrentPollIntervalSeconds => IsRunning ? _instance.GetPollInterval(Time.realtimeSinceStartup) : 0f;
+        /// <summary>最終処理完了の UTC 時刻です。未処理または停止中は空です。</summary>
+        public static string LastHandledAt => IsRunning ? _instance._lastHandledTimestamp : string.Empty;
         /// <summary>プロジェクトルートを基準にした既定パスです。</summary>
         public static string DefaultDirectory => Path.Combine(DebugOutputPath.DirectoryPath, "agent-mailbox");
 
@@ -56,6 +66,7 @@ namespace UniLab.AI
 
             _instance = Instantiate(prefab.Server);
             _instance._directory = resolvedDirectory;
+            _instance._lastHandledAt = Time.realtimeSinceStartup;
             DontDestroyOnLoad(_instance.gameObject);
         }
 
@@ -89,7 +100,7 @@ namespace UniLab.AI
                 return;
             }
 
-            _nextPollAt = Time.realtimeSinceStartup + Mathf.Max(DefaultPollIntervalSeconds, _pollIntervalSeconds);
+            _nextPollAt = Time.realtimeSinceStartup + GetPollInterval(Time.realtimeSinceStartup);
             try
             {
                 Poll();
@@ -98,6 +109,22 @@ namespace UniLab.AI
             {
                 UnityEngine.Debug.LogError($"[AiMailboxServer] {exception.Message}");
             }
+        }
+
+        /// <summary>時計への依存を持たず、経過時間から待機間隔を決定します。</summary>
+        internal static float ResolvePollInterval(float lastHandledAt, float now,
+            float idleAfterSeconds = DefaultIdleAfterSeconds, float idlePollIntervalSeconds = DefaultIdlePollIntervalSeconds,
+            float pollIntervalSeconds = DefaultPollIntervalSeconds)
+        {
+            var activeInterval = Mathf.Max(DefaultPollIntervalSeconds, pollIntervalSeconds);
+            return now - lastHandledAt >= idleAfterSeconds
+                ? Mathf.Max(activeInterval, idlePollIntervalSeconds)
+                : activeInterval;
+        }
+
+        private float GetPollInterval(float now)
+        {
+            return ResolvePollInterval(_lastHandledAt, now, _idleAfterSeconds, _idlePollIntervalSeconds, _pollIntervalSeconds);
         }
 
         private void Poll()
@@ -165,6 +192,9 @@ namespace UniLab.AI
         {
             AiMailboxFiles.Complete(_requestPath, _pendingResponse);
             _handledCount++;
+            _lastHandledAt = Time.realtimeSinceStartup;
+            _lastHandledTimestamp = DateTimeOffset.UtcNow.ToString("o");
+            _nextPollAt = _lastHandledAt + GetPollInterval(_lastHandledAt);
             ClearRequest();
         }
 

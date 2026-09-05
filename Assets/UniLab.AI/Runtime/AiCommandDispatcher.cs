@@ -68,7 +68,7 @@ namespace UniLab.AI
         /// <summary>登録済み操作名の一覧を返します。</summary>
         public static string[] ListOps()
         {
-            return new[] { "ping", "ops", "agent.begin", "agent.observe", "agent.act", "agent.goal", "agent.end", "agent.export", "capture", "snapshot", "console" };
+            return new[] { "ping", "ops", "agent.begin", "agent.observe", "agent.find", "agent.act", "agent.goal", "agent.end", "agent.export", "capture", "snapshot", "console" };
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -98,6 +98,7 @@ namespace UniLab.AI
                 case "ops": return Success(operation, string.Join("\n", ListOps()));
                 case "agent.begin": return ConvertResult(operation, AgentSessionCommands.Begin(context.GetObject("goal", true), context.GetObject("options")));
                 case "agent.observe": return Observe(arguments);
+                case "agent.find": return AgentFind.Find(UiSnapshot.Capture(), arguments.label, arguments.kind, arguments.scope);
                 case "agent.act": return ActImmediately(context);
                 case "agent.goal": return ConvertResult(operation, AgentSessionCommands.IsGoalReached());
                 case "agent.end": return ConvertResult(operation, AgentSessionCommands.End());
@@ -144,11 +145,23 @@ namespace UniLab.AI
 
         private static AiCommandResponse ActImmediately(AiCommandContext context)
         {
+            return ActImmediately(context, action => ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action))), UiSnapshot.Capture);
+        }
+
+        /// <summary>同期の一括実行を観測・入力の差し替え可能な経路で検証します。</summary>
+        internal static AiCommandResponse ActImmediately(AiCommandContext context, Func<AgentAction, AiCommandResponse> executeAction, Func<UiSnapshotDocument> capture)
+        {
             AiCommandResponse response = null;
             foreach (var action in context.GetActions())
             {
-                response = ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action)));
-                if (!IsRunning(response))
+                var before = capture();
+                response = executeAction(action);
+                if (response.ok)
+                {
+                    AgentActExpectation.Apply(response, action.expect, before, capture());
+                }
+
+                if (AgentActExpectation.ShouldStop(response) || !IsRunning(response))
                 {
                     break;
                 }
@@ -170,7 +183,7 @@ namespace UniLab.AI
                     }
                 }
 
-                if (!IsRunning(response) || !response.settled)
+                if (AgentActExpectation.ShouldStop(response) || !IsRunning(response) || !response.settled)
                 {
                     break;
                 }
@@ -188,7 +201,7 @@ namespace UniLab.AI
             var ready = string.IsNullOrEmpty(targetSpecification);
             if (!string.IsNullOrEmpty(targetSpecification))
             {
-                while (!(ready = UiReadiness.IsSubmittable(targetSpecification, out _))
+                while (!(ready = IsActionReady(action, targetSpecification))
                     && stopwatch.Elapsed.TotalSeconds < context.Arguments.readyTimeoutSeconds)
                 {
                     yield return null;
@@ -198,6 +211,7 @@ namespace UniLab.AI
             var waitedMilliseconds = string.IsNullOrEmpty(targetSpecification) ? 0 : (int)stopwatch.ElapsedMilliseconds;
             using (var settle = new AiSettleWait(context.Arguments))
             {
+                var before = UiSnapshot.Capture();
                 // タイムアウトでも既存の入力経路へ渡し、拒否理由や座標入力の挙動を維持する。
                 var response = ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action)));
                 response.ready = ready;
@@ -215,6 +229,7 @@ namespace UniLab.AI
                 }
 
                 RefreshObservation(response);
+                AgentActExpectation.Apply(response, action.expect, before, UiSnapshot.Capture());
                 response.settled = settle.Settled;
                 if (!response.settled)
                 {
@@ -226,11 +241,23 @@ namespace UniLab.AI
             }
         }
 
+        private static bool IsActionReady(AgentAction action, string targetSpecification)
+        {
+            return AgentActionExecutor.GetActionKind(action) == "scrollTo"
+                ? UiReadiness.Exists(targetSpecification, out _)
+                : UiReadiness.IsSubmittable(targetSpecification, out _);
+        }
+
         private static string GetReadyTarget(AgentAction action)
         {
             if (!string.IsNullOrEmpty(action.submit))
             {
                 return action.submit;
+            }
+
+            if (!string.IsNullOrEmpty(action.scrollTo))
+            {
+                return action.scrollTo;
             }
 
             return !string.IsNullOrEmpty(action.click) ? action.click : action.tap;

@@ -96,6 +96,8 @@ Python クライアントもマーカーを自動作成するが、Play 開始�
 python3 Assets/UniLab.AI/Tools/ai_client.py ping
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.begin '{"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"}}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.find '{"label":"開始","kind":"Button"}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"},"expect":[{"kind":"textVisible","value":"ステージ選択"}]}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"steps":[{"press":"east"},{"submit":"TabButton1"}]}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.observe '{"capture":"turn_01"}'
 python3 Assets/UniLab.AI/Tools/ai_client.py console '{"level":"error","count":40}'
