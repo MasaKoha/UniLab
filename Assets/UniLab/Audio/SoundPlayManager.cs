@@ -1,3 +1,4 @@
+#nullable enable
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -26,145 +27,154 @@ namespace UniLab.Audio
         public int VoiceCount = 10;
     }
 
-    /// <summary>
-    /// <see cref="ISoundPlayManager"/> の実装。AudioMixer のチャンネル経由で BGM / SE / ボイスを鳴らす。
-    /// 常駐オブジェクトに載せ、利用側の LifetimeScope で登録する。再生前に Initialize() を呼ぶこと。
-    /// </summary>
+    /// <summary>常駐する音源プール。ミキサー未設定時は線形音量で再生する。</summary>
     public class SoundPlayManager : MonoBehaviour, ISoundPlayManager
     {
-        [SerializeField] private AudioMixer _audioMixer = null;
-        [SerializeField] private AudioMixerGroup _seMixerGroup = null;
-        [SerializeField] private AudioMixerGroup _bgmMixerGroup = null;
-        [SerializeField] private AudioMixerGroup _voiceMixerGroup = null;
+        /// <summary>未設定なら AudioSource.volume を使用する。</summary>
+        [SerializeField] private AudioMixer? _audioMixer = null;
+        /// <summary>未設定ならミキサーへルーティングせず、ソース音量を使う。</summary>
+        [SerializeField] private AudioMixerGroup? _seMixerGroup = null;
+        /// <summary>未設定ならミキサーへルーティングせず、ソース音量を使う。</summary>
+        [SerializeField] private AudioMixerGroup? _bgmMixerGroup = null;
+        /// <summary>未設定ならミキサーへルーティングせず、ソース音量を使う。</summary>
+        [SerializeField] private AudioMixerGroup? _voiceMixerGroup = null;
+        [SerializeField] private AudioSource _audioSourcePrefab = null!;
+        [SerializeField] private string _masterParameter = "MasterVolume";
+        [SerializeField] private string _bgmParameter = "BGMVolume";
+        [SerializeField] private string _seParameter = "SEVolume";
+        [SerializeField] private string _voiceParameter = "VoiceVolume";
+        private AudioSource _bgmSource = null!;
+        private readonly List<AudioSource> _seSources = new();
+        private readonly List<AudioSource> _voiceSources = new();
+        private float _masterVolume = 1f;
+        private float _bgmVolume = 1f;
+        private float _seVolume = 1f;
+        private float _voiceVolume = 1f;
+        private bool _isInitialized;
 
-        private AudioSource _bgmSource = null;
-        private readonly List<AudioSource> _seSource = new();
-        private readonly List<AudioSource> _voiceSource = new();
-        private bool _isInitialized = false;
-
-        /// <inheritdoc/>
+        /// <summary>所有者が起動時に音源プールを生成する。</summary>
         public void Initialize(AudioCount audioCount, AudioSettings audioSettings)
         {
             if (_isInitialized)
             {
                 return;
             }
-
-            var bgmSource = new GameObject($"BGMSource").AddComponent<AudioSource>();
-            bgmSource.transform.SetParent(transform);
-            _bgmSource = bgmSource;
-
-            for (var i = 0; i < audioCount.SeCount; i++)
-            {
-                var source = new GameObject($"SESource_{i}").AddComponent<AudioSource>();
-                source.transform.SetParent(transform);
-                _seSource.Add(source);
-            }
-
-            for (var i = 0; i < audioCount.VoiceCount; i++)
-            {
-                var source = new GameObject($"VoiceSource_{i}").AddComponent<AudioSource>();
-                source.transform.SetParent(transform);
-                _voiceSource.Add(source);
-            }
-
+            _bgmSource = Instantiate(_audioSourcePrefab, transform);
+            _bgmSource.outputAudioMixerGroup = _bgmMixerGroup;
+            CreateSources(_seSources, audioCount.SeCount, _seMixerGroup);
+            CreateSources(_voiceSources, audioCount.VoiceCount, _voiceMixerGroup);
+            _isInitialized = true;
             SetMasterVolume(audioSettings.MasterVolume);
             SetBgmVolume(audioSettings.BgmVolume);
             SetSeVolume(audioSettings.SeVolume);
             SetVoiceVolume(audioSettings.VoiceVolume);
-
-            _bgmSource.outputAudioMixerGroup = _bgmMixerGroup;
-            _isInitialized = true;
         }
 
-        public void SetMasterVolume(float volume)
+        private void CreateSources(List<AudioSource> sources, int count, AudioMixerGroup? group)
         {
-            var db = CalculateDb(volume);
-            _audioMixer.SetFloat("MasterVolume", db);
-        }
-
-        public void SetSeVolume(float volume)
-        {
-            var db = CalculateDb(volume);
-            _audioMixer.SetFloat("SEVolume", db);
-        }
-
-        public void SetBgmVolume(float volume)
-        {
-            var db = CalculateDb(volume);
-            _audioMixer.SetFloat("BGMVolume", db);
-        }
-
-        public void SetVoiceVolume(float volume)
-        {
-            var db = CalculateDb(volume);
-            _audioMixer.SetFloat("VoiceVolume", db);
-        }
-
-        private float CalculateDb(float volume)
-        {
-            return volume <= 0.01f ? -80f : Mathf.Log10(Mathf.Clamp(volume, 0.01f, 1f)) * 20f;
-        }
-
-        public void PlaySe(AudioClip clip)
-        {
-            foreach (var source in _seSource)
+            for (var index = 0; index < count; index++)
             {
-                if (source.isPlaying)
+                var source = Instantiate(_audioSourcePrefab, transform);
+                source.outputAudioMixerGroup = group;
+                sources.Add(source);
+            }
+        }
+
+        /// <summary>マスター音量を設定する。</summary>
+        public void SetMasterVolume(float volume) { _masterVolume = Mathf.Clamp01(volume); ApplyVolumes(); }
+        /// <summary>BGM 音量を設定する。</summary>
+        public void SetBgmVolume(float volume) { _bgmVolume = Mathf.Clamp01(volume); ApplyVolumes(); }
+        /// <summary>SE 音量を設定する。</summary>
+        public void SetSeVolume(float volume) { _seVolume = Mathf.Clamp01(volume); ApplyVolumes(); }
+        /// <summary>ボイス音量を設定する。</summary>
+        public void SetVoiceVolume(float volume) { _voiceVolume = Mathf.Clamp01(volume); ApplyVolumes(); }
+
+        private void ApplyVolumes()
+        {
+            if (!_isInitialized)
+            {
+                return;
+            }
+            // perf: フェード中も配列を作らず既存ソースへ適用する。
+            var masterUsesMixer = SetMixerVolume(_masterParameter, _masterVolume);
+            var masterGain = masterUsesMixer ? 1f : _masterVolume;
+            _bgmSource.volume = masterGain * (SetMixerVolume(_bgmParameter, _bgmVolume) ? 1f : _bgmVolume);
+            ApplySourceVolumes(_seSources, masterGain * (SetMixerVolume(_seParameter, _seVolume) ? 1f : _seVolume));
+            if (_voiceSources.Count > 0)
+            {
+                ApplySourceVolumes(_voiceSources, masterGain * (SetMixerVolume(_voiceParameter, _voiceVolume) ? 1f : _voiceVolume));
+            }
+        }
+
+        private bool SetMixerVolume(string parameter, float volume)
+        {
+            const float SilenceDecibels = -80f;
+            const float AmplitudeDecibelFactor = 20f;
+            return _audioMixer != null && _audioMixer.SetFloat(parameter,
+                volume <= 0f ? SilenceDecibels : Mathf.Max(SilenceDecibels, AmplitudeDecibelFactor * Mathf.Log10(volume)));
+        }
+
+        private static void ApplySourceVolumes(List<AudioSource> sources, float volume)
+        {
+            foreach (var source in sources)
+            {
+                source.volume = volume;
+            }
+        }
+
+        /// <summary>空きソース、または最も古い音を置換して SE を鳴らす。</summary>
+        public void PlaySe(AudioClip clip) => PlayPooled(_seSources, clip);
+        /// <summary>ボイスを鳴らす。</summary>
+        public void PlayVoice(AudioClip clip) => PlayPooled(_voiceSources, clip);
+        private static void PlayPooled(List<AudioSource> sources, AudioClip clip)
+        {
+            if (sources.Count == 0)
+            {
+                return;
+            }
+            var selectedIndex = 0;
+            for (var index = 0; index < sources.Count; index++)
+            {
+                if (!sources[index].isPlaying)
                 {
-                    continue;
+                    selectedIndex = index;
+                    break;
                 }
-
-                source.outputAudioMixerGroup = _seMixerGroup;
-                source.clip = clip;
-                source.Play();
-                return;
             }
-
-            // Overwrite the first AudioSource when all are busy
-            if (_seSource.Count <= 0)
-            {
-                return;
-            }
-
-            _seSource[0].outputAudioMixerGroup = _seMixerGroup;
-            _seSource[0].clip = clip;
-            _seSource[0].Play();
-        }
-
-        public void PlayBgm(AudioClip clip, bool loop = true)
-        {
-            var source = _bgmSource;
-            source.outputAudioMixerGroup = _bgmMixerGroup;
+            var source = sources[selectedIndex];
+            sources.RemoveAt(selectedIndex);
+            sources.Add(source);
+            source.Stop();
             source.clip = clip;
-            source.loop = loop;
             source.Play();
         }
 
-        public void PlayVoice(AudioClip clip)
+        /// <summary>曲を差し替えて再生する。</summary>
+        public void PlayBgm(AudioClip clip, bool loop = true)
         {
-            foreach (var source in _voiceSource)
-            {
-                if (source.isPlaying)
-                {
-                    continue;
-                }
-
-                source.outputAudioMixerGroup = _voiceMixerGroup;
-                source.clip = clip;
-                source.Play();
-                return;
-            }
-
-            // Overwrite the first AudioSource when all are busy
-            if (_voiceSource.Count <= 0)
+            _bgmSource.Stop();
+            _bgmSource.clip = clip;
+            _bgmSource.loop = loop;
+            _bgmSource.Play();
+        }
+        /// <summary>所有者が Addressables を解放する前に再生参照を外す。</summary>
+        public void StopBgm()
+        {
+            if (!_isInitialized)
             {
                 return;
             }
-
-            _voiceSource[0].outputAudioMixerGroup = _voiceMixerGroup;
-            _voiceSource[0].clip = clip;
-            _voiceSource[0].Play();
+            _bgmSource.Stop();
+            _bgmSource.clip = null;
+        }
+        /// <summary>終了時に SE の再生参照を外す。</summary>
+        public void StopSoundEffects()
+        {
+            foreach (var source in _seSources)
+            {
+                source.Stop();
+                source.clip = null;
+            }
         }
     }
 }
