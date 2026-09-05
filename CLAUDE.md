@@ -12,7 +12,7 @@ Unity 共通ライブラリ。karakuri など複数プロジェクトから `Ass
 ## UniLab.AI は Testify へ移った（2026-09-05）
 
 AI デバッグ・自動プレイツール群（旧 `Assets/UniLab.AI/`）は独立リポジトリ **Testify** に切り出した。
-`/Users/masakoha/GitHub/pisuke-root/testify`（GitHub `MasaKoha/testify`、public）。設計書もそちらの `docs/design/` にある。
+`/Users/masakoha/GitHub/pisuke-root/Testify`（GitHub `MasaKoha/Testify`、public）。設計書もそちらの `docs/design/` にある。
 このリポジトリには置かない。UniLab 本体は Testify に依存せず、Testify も UniLab に依存しない。
 
 ## 同期
