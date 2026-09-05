@@ -7,9 +7,16 @@ namespace UniLab.AI
     [Serializable]
     internal sealed class AiCommandArguments
     {
+        /// <summary>シナリオ全体の既定待機上限です。</summary>
+        internal const float DefaultScenarioTimeoutSeconds = 900f;
+
+        /// <summary>対象の準備を待つ既定上限です。</summary>
         internal const float DefaultReadyTimeoutSeconds = 5f;
+        /// <summary>入力後の静止確認に使う既定時間です。</summary>
         internal const float DefaultSettleSeconds = 0.35f;
+        /// <summary>入力後の待機に使う既定上限です。</summary>
         internal const float DefaultSettleTimeoutSeconds = 10f;
+        /// <summary>コンソール応答の既定行数です。</summary>
         internal const int DefaultConsoleCount = 40;
 
         /// <summary>観測範囲です。visible は可視要素、all は全要素を返します。</summary>
@@ -35,6 +42,10 @@ namespace UniLab.AI
         public bool save;
         /// <summary>成果物名です。</summary>
         public string name;
+        /// <summary>実行するシナリオのプロジェクト相対または絶対パスです。</summary>
+        public string path;
+        /// <summary>シナリオ完了を待つ実時間の上限です。</summary>
+        public float scenarioTimeoutSeconds = DefaultScenarioTimeoutSeconds;
         /// <summary>成果物の保存先です。</summary>
         public string directory;
         /// <summary>返すログの末尾行数です。</summary>
@@ -44,6 +55,7 @@ namespace UniLab.AI
         /// <summary>各行動の待機上限です。</summary>
         public float settleTimeoutSeconds = DefaultSettleTimeoutSeconds;
 
+        /// <summary>無限待機や負の待機時間を入口で拒否します。</summary>
         internal static void ValidateDuration(float seconds, string name, bool requirePositive)
         {
             if (float.IsNaN(seconds) || float.IsInfinity(seconds) || seconds < 0f || (requirePositive && seconds == 0f))

@@ -32,15 +32,18 @@ namespace UniLab.AI
         private readonly double _startedAtRealtime;
         private string _scenarioFilePath;
 
+        /// <summary>書き出したシナリオの手数と事後条件付きの手数です。</summary>
+        internal string ExportSummary { get; private set; } = string.Empty;
+
         /// <summary>成果物の識別子と開始時刻を揃えるために生成時に固定します。</summary>
-        internal AgentSessionArtifacts(AgentGoal goal, AgentOptions options, AgentSessionGuards guards, AgentExpectationEvaluator evaluator)
+        internal AgentSessionArtifacts(AgentGoal goal, AgentOptions options, AgentSessionGuards guards, AgentExpectationEvaluator evaluator, string outputDirectory = null)
         {
             _goal = goal;
             _options = options;
             _guards = guards;
             _evaluator = evaluator;
             _sessionId = DateTime.Now.ToString(SessionTimestampFormat, CultureInfo.InvariantCulture);
-            _outputDirectory = Path.Combine(DebugOutputPath.DirectoryPath, AgentDirectoryName, _sessionId);
+            _outputDirectory = outputDirectory ?? Path.Combine(DebugOutputPath.DirectoryPath, AgentDirectoryName, _sessionId);
             _sessionFilePath = Path.Combine(_outputDirectory, SessionFileName);
             _actionsFilePath = Path.Combine(_outputDirectory, ActionsFileName);
             _startedAtText = DateTimeOffset.Now.ToString("o");
@@ -122,6 +125,21 @@ namespace UniLab.AI
             ScreenCapture.CaptureScreenshot(Path.Combine(_outputDirectory, fileName));
         }
 
+        /// <summary>評価が終わった今回の手だけへ未達情報を戻します。</summary>
+        internal void RecordActExpectation(int previousStepCount, bool expectOk)
+        {
+            if (_scenarioSteps.Count <= previousStepCount)
+            {
+                return;
+            }
+
+            var step = _scenarioSteps[_scenarioSteps.Count - 1];
+            if (step.expect != null && step.expect.Length > 0 && !expectOk)
+            {
+                step.comment = "元の実行では未達";
+            }
+        }
+
         private UiScenarioStep ToScenarioStep(AgentAction action)
         {
             if (action == null)
@@ -193,7 +211,17 @@ namespace UniLab.AI
                 steps = steps,
             };
 
-            _scenarioFilePath = Path.Combine(_outputDirectory, ScenarioFileName);
+            var expectationStepCount = 0;
+            foreach (var step in steps)
+            {
+                if (step.expect != null && step.expect.Length > 0)
+                {
+                    expectationStepCount++;
+                }
+            }
+
+            ExportSummary = $"steps={steps.Length} expectSteps={expectationStepCount}";
+            _scenarioFilePath = Path.GetFullPath(Path.Combine(_outputDirectory, ScenarioFileName));
             File.WriteAllText(_scenarioFilePath, UiScenarioJsonPresence.StripDefaultMonkey(JsonUtility.ToJson(scenario, true)));
             return _scenarioFilePath;
         }

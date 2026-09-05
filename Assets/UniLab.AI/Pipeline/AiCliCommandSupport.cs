@@ -14,8 +14,7 @@ namespace UniLab.AI.Pipeline
         private const string PlayModeRequiredMessageText = "playMode が必要です";
         private const int ForensicsPreviewLineCount = 20;
 
-        internal static string LastScenarioResultFilePath { get; set; } = string.Empty;
-
+        /// <summary>CLI 間で PlayMode 要求の文言を揃えます。</summary>
         internal static string PlayModeRequiredMessage
         {
             get
@@ -24,21 +23,13 @@ namespace UniLab.AI.Pipeline
             }
         }
 
+        /// <summary>Runtime の操作を開始できる Editor 状態かを確認します。</summary>
         internal static bool IsPlayModeActive()
         {
             return EditorApplication.isPlaying;
         }
 
-        internal static string ResolveScenarioName(string name, string scenarioPath)
-        {
-            if (!string.IsNullOrEmpty(name))
-            {
-                return name;
-            }
-
-            return Path.GetFileNameWithoutExtension(scenarioPath);
-        }
-
+        /// <summary>時刻順の成果物から最新の保存先を選びます。</summary>
         internal static string GetLatestDirectoryPath(string rootDirectoryPath)
         {
             if (string.IsNullOrEmpty(rootDirectoryPath) || !Directory.Exists(rootDirectoryPath))
@@ -56,6 +47,7 @@ namespace UniLab.AI.Pipeline
             return directoryPaths[directoryPaths.Length - 1];
         }
 
+        /// <summary>大量のログを CLI 応答へ流さないよう先頭だけを返します。</summary>
         internal static string[] ReadFirstLines(string filePath)
         {
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))

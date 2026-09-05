@@ -101,6 +101,8 @@ python3 Assets/UniLab.AI/Tools/ai_client.py agent.find '{"label":"開始","kind"
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"action":{"submit":"NewGameButton"},"expect":[{"kind":"textVisible","value":"ステージ選択"}]}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.act '{"steps":[{"press":"east"},{"submit":"TabButton1"}]}'
 python3 Assets/UniLab.AI/Tools/ai_client.py agent.observe '{"capture":"turn_01"}'
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.export '{"name":"regression"}'
+python3 Assets/UniLab.AI/Tools/ai_client.py scenario.run '{"path":"<export 応答の path>","name":"regression"}' --timeout 930
 python3 Assets/UniLab.AI/Tools/ai_client.py console '{"level":"error","count":40}'
 python3 Assets/UniLab.AI/Tools/ai_client.py capture '{"name":"03_workshop"}'
 ```

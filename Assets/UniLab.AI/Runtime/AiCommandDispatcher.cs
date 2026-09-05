@@ -2,7 +2,6 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -13,6 +12,7 @@ namespace UniLab.AI
     {
         private const string RunningStatusPrefix = "agent: status=running ";
         private static AiConsoleLog _console;
+        private static string _lastScenarioResultFilePath = string.Empty;
 
         /// <summary>同期で即時実行し、フレームをまたぐ操作は要求時点の結果を返します。</summary>
         public static AiCommandResponse Execute(AiCommandRequest request)
@@ -68,12 +68,13 @@ namespace UniLab.AI
         /// <summary>登録済み操作名の一覧を返します。</summary>
         public static string[] ListOps()
         {
-            return new[] { "ping", "ops", "agent.begin", "agent.observe", "agent.find", "agent.act", "agent.goal", "agent.end", "agent.export", "capture", "snapshot", "console" };
+            return new[] { "ping", "ops", "agent.begin", "agent.observe", "agent.find", "agent.act", "agent.goal", "agent.end", "agent.export", "capture", "snapshot", "console", "scenario.run", "scenario.status" };
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetConsole()
         {
+            _lastScenarioResultFilePath = string.Empty;
             _console?.Dispose();
             _console = new AiConsoleLog();
         }
@@ -103,6 +104,8 @@ namespace UniLab.AI
                 case "agent.goal": return ConvertResult(operation, AgentSessionCommands.IsGoalReached());
                 case "agent.end": return ConvertResult(operation, AgentSessionCommands.End());
                 case "agent.export": return ConvertResult(operation, AgentSessionCommands.ExportAsScenario(arguments.name));
+                case "scenario.run": return RunScenario(arguments);
+                case "scenario.status": return AiScenarioExecution.ReadStatus(_lastScenarioResultFilePath, operation);
                 case "capture": return Capture(arguments);
                 case "snapshot": return Snapshot(arguments);
                 case "console": return ReadConsole(arguments);
@@ -127,6 +130,17 @@ namespace UniLab.AI
             }
 
             var response = ExecuteCore(context);
+            if (context.Operation == "scenario.run" && response.ok)
+            {
+                using (var execution = AiScenarioExecution.WaitAsync(response, context.Arguments.scenarioTimeoutSeconds))
+                {
+                    while (execution.MoveNext())
+                    {
+                        yield return execution.Current;
+                    }
+                }
+            }
+
             var hasCapture = context.Operation == "capture"
                 || (context.Operation == "agent.observe" && !string.IsNullOrEmpty(context.Arguments.capture));
             if (hasCapture && response.ok)
@@ -154,11 +168,13 @@ namespace UniLab.AI
             AiCommandResponse response = null;
             foreach (var action in context.GetActions())
             {
+                var previousStepCount = AgentSessionCommands.RecordedStepCount;
                 var before = capture();
                 response = executeAction(action);
                 if (response.ok)
                 {
                     AgentActExpectation.Apply(response, action.expect, before, capture());
+                    AgentSessionCommands.RecordActExpectation(previousStepCount, response.expectOk);
                 }
 
                 if (AgentActExpectation.ShouldStop(response) || !IsRunning(response))
@@ -211,6 +227,7 @@ namespace UniLab.AI
             var waitedMilliseconds = string.IsNullOrEmpty(targetSpecification) ? 0 : (int)stopwatch.ElapsedMilliseconds;
             using (var settle = new AiSettleWait(context.Arguments))
             {
+                var previousStepCount = AgentSessionCommands.RecordedStepCount;
                 var before = UiSnapshot.Capture();
                 // タイムアウトでも既存の入力経路へ渡し、拒否理由や座標入力の挙動を維持する。
                 var response = ConvertResult(context.Operation, AgentSessionCommands.Act(JsonUtility.ToJson(action)));
@@ -218,6 +235,7 @@ namespace UniLab.AI
                 response.waitedMs = waitedMilliseconds;
                 if (!response.ok || (!string.IsNullOrEmpty(targetSpecification) && !ready))
                 {
+                    RecordActExpectation(response, action, before, previousStepCount);
                     completed(response);
                     yield break;
                 }
@@ -229,7 +247,7 @@ namespace UniLab.AI
                 }
 
                 RefreshObservation(response);
-                AgentActExpectation.Apply(response, action.expect, before, UiSnapshot.Capture());
+                RecordActExpectation(response, action, before, previousStepCount);
                 response.settled = settle.Settled;
                 if (!response.settled)
                 {
@@ -239,6 +257,17 @@ namespace UniLab.AI
 
                 completed(response);
             }
+        }
+
+        private static void RecordActExpectation(AiCommandResponse response, AgentAction action, UiSnapshotDocument before, int previousStepCount)
+        {
+            if (!response.ok)
+            {
+                return;
+            }
+
+            AgentActExpectation.Apply(response, action.expect, before, UiSnapshot.Capture());
+            AgentSessionCommands.RecordActExpectation(previousStepCount, response.expectOk);
         }
 
         private static bool IsActionReady(AgentAction action, string targetSpecification)
@@ -279,6 +308,17 @@ namespace UniLab.AI
         private static bool IsRunning(AiCommandResponse response)
         {
             return response.ok && response.text.StartsWith(RunningStatusPrefix, StringComparison.Ordinal);
+        }
+
+        private static AiCommandResponse RunScenario(AiCommandArguments arguments)
+        {
+            var response = AiScenarioExecution.Start(arguments);
+            if (response.ok)
+            {
+                _lastScenarioResultFilePath = response.path;
+            }
+
+            return response;
         }
 
         private static AiCommandResponse ReadConsole(AiCommandArguments arguments)

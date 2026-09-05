@@ -313,3 +313,44 @@ Play 停止中は毎回収集する。内部の `Capture(int frameCount)` で共
 - 観測テキストに `agent: busy=<reason>` を出す。AI はこの行があれば途中経過として扱い、再観測する
 - karakuri では `IInputBlockManager.BlockedInput`（ローディング・演出中の入力ブロック）を busy として登録する
 
+## PR7: export の expect 化と scenario.run
+
+`agent.act` に渡した `expect` は、単一 action・引数直下・steps のどの形式でも
+各手の `UiScenarioStep.expect` へそのまま保存する。PR5 の `AgentActExpectation` は
+配列を保管する型ではなく評価器なので、既存の `AgentAction.expect` のコピーを維持し、
+評価後の `expectOk` を今回記録されたステップへ戻す。
+未達だった手も削除せず、`comment: "元の実行では未達"` を付ける。
+拒否されて記録が増えなかった手の評価は、直前のステップへ反映しない。
+
+`agent.export` は `path` に scenario.json の絶対パス、`text` に
+`steps=<全ステップ数> expectSteps=<expect を持つステップ数>` を返す。
+freePlay の書き出しは従来どおり目標達成不要で、最終手へ目標条件を追加しない。
+目標付きセッションの達成チェックと最終手への目標追加は従来どおり。
+
+| op | 引数 | 応答 |
+|---|---|---|
+| `scenario.run` | `path` 必須（プロジェクト相対または絶対）、`name` 任意、`scenarioTimeoutSeconds` 既定 900 秒 | `path` は結果 JSON の絶対パス。同期は `status: "running"`、非同期は完了まで待ち `status: "completed"` と `verdict` を返す |
+| `scenario.status` | なし | 直前に開始した結果の `path`、`status`、`verdict`、`failedSteps`、`warningCount` |
+
+完了時の `scenario.run` も `failedSteps` と `warningCount` を返す。
+`ok` はコマンド処理の成否で、回帰結果が `verdict: "fail"` でも `ok: true`。
+完了前の `verdict` は空文字列。結果未作成・書き込み途中は `running` とする。
+タイムアウトは `ok: false` / `error: "scenario timeout"` と予定 `path` を返す。
+ランナーは停止せず、後から `scenario.status` で完了結果を回収できる。
+待機先は起動した要求固有のパスで固定し、同名の連続実行でも前回結果と衝突させない。
+
+`AiCommandDispatcher` が直前の結果パスを所有し、`AiScenarioExecution` が
+既存 `UiScenarioRunner` の起動・結果読取・専用タイムアウトでの待機を共有する。
+`ai_scenario_run` / `ai_scenario_status` もディスパッチャ経由とし、CLI の従来の返却形式
+（開始時は予定パス、status は `resultFilePath` を持つオブジェクト）は維持する。
+`settleTimeoutSeconds` はシナリオ全体の待機には使わない。
+メールボックスは一要求ずつ処理するため、run 待機中の status 要求はその後に処理される。
+
+```sh
+python3 Assets/UniLab.AI/Tools/ai_client.py agent.export '{"name":"regression"}'
+python3 Assets/UniLab.AI/Tools/ai_client.py scenario.run '{"path":"<export 応答の path>","name":"regression","scenarioTimeoutSeconds":900}' --timeout 930
+```
+
+クライアント側の `--timeout` はサーバーの `scenarioTimeoutSeconds` より長く設定する。
+追加テストは `AgentExportTest`、`AiScenarioExecutionTest`、`InputOverlayInputStateTest`、
+`AiCommandDispatcherTest` のシナリオ操作契約。Unity のコンパイル・再生・録画確認は別途行う。

@@ -98,7 +98,7 @@ namespace UniLab.AI
             var path = _currentSession.ExportAsScenario(name);
             var ok = !string.IsNullOrEmpty(path);
             var message = ok ? "scenario.json を書き出しました。" : _currentSession.StatusMessage;
-            return ToJson(ok, _currentSession.SessionId, message, string.Empty, path);
+            return ToJson(ok, _currentSession.SessionId, message, ok ? _currentSession.ExportSummary : string.Empty, path);
         }
 
         /// <summary>
@@ -117,6 +117,15 @@ namespace UniLab.AI
             _currentSession.Dispose();
             _currentSession = null;
             return ToJson(true, sessionId, "セッションを終了しました。", string.Empty, outputDirectory);
+        }
+
+        /// <summary>評価前の行動履歴位置をゲートウェイと共有します。</summary>
+        internal static int RecordedStepCount => _currentSession?.RecordedStepCount ?? 0;
+
+        /// <summary>今回実行された手へ事後条件の評価結果を反映します。</summary>
+        internal static void RecordActExpectation(int previousStepCount, bool expectOk)
+        {
+            _currentSession?.RecordActExpectation(previousStepCount, expectOk);
         }
 
         private static string ToJson(bool ok, string session, string message, string text, string path)
