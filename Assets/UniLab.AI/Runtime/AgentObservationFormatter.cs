@@ -44,6 +44,13 @@ namespace UniLab.AI
                 builder.AppendLine("agent: inputBusy=true");
             }
 
+            if (GameAdapterRegistry.IsGameBusy(out var busyReason))
+            {
+                // ゲーム側の遷移・演出中。この観測は途中経過の可能性があるので、AI が待つ判断材料にする
+                builder.Append("agent: busy=");
+                builder.AppendLine(string.IsNullOrEmpty(busyReason) ? "true" : busyReason);
+            }
+
             builder.Append("agent: settleFrames=");
             builder.AppendLine(ResolveSettleFrames(_options).ToString(CultureInfo.InvariantCulture));
 
@@ -70,6 +77,13 @@ namespace UniLab.AI
             if (_isInputBusy())
             {
                 builder.AppendLine("agent: inputBusy=true");
+            }
+
+            if (GameAdapterRegistry.IsGameBusy(out var busyReason))
+            {
+                // ゲーム側の遷移・演出中。この観測は途中経過の可能性があるので、AI が待つ判断材料にする
+                builder.Append("agent: busy=");
+                builder.AppendLine(string.IsNullOrEmpty(busyReason) ? "true" : busyReason);
             }
 
             builder.Append("agent: settleFrames=");

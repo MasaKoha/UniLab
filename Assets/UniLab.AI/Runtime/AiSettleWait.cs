@@ -33,7 +33,7 @@ namespace UniLab.AI
             while (Time.realtimeSinceStartup - _startedAt < _timeoutSeconds)
             {
                 var now = Time.realtimeSinceStartup;
-                if (AgentSessionCommands.IsInputBusy() || HasLoadingScene())
+                if (AgentSessionCommands.IsInputBusy() || HasLoadingScene() || GameAdapterRegistry.IsGameBusy(out _))
                 {
                     _quietSince = now;
                     yield return null;
