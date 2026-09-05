@@ -131,6 +131,17 @@ namespace UniLab.AI
         /// </summary>
         public static GameObject FindBlockingObject(GameObject target)
         {
+            return FindBlockingObject(target, false);
+        }
+
+        /// <summary>非レイキャスト対象の文字でも、祖先背景を除いた最前面 Graphic による遮蔽を返します。</summary>
+        internal static GameObject FindTextBlockingObject(GameObject target)
+        {
+            return FindBlockingObject(target, true);
+        }
+
+        private static GameObject FindBlockingObject(GameObject target, bool textElement)
+        {
             var eventSystem = EventSystem.current;
             if (eventSystem == null || target == null)
             {
@@ -156,6 +167,11 @@ namespace UniLab.AI
             if (raycastResults.Count == 0)
             {
                 return null;
+            }
+
+            if (textElement)
+            {
+                return FindTextBlocker(raycastResults, target);
             }
 
             var frontMostObject = raycastResults[0].gameObject;
@@ -257,6 +273,24 @@ namespace UniLab.AI
             }
 
             return selectable.IsInteractable();
+        }
+
+        private static GameObject FindTextBlocker(List<RaycastResult> results, GameObject target)
+        {
+            foreach (var result in results)
+            {
+                if (!(result.module is GraphicRaycaster) || result.gameObject == null
+                    || HasOverlayMarkerAncestor(result.gameObject.transform))
+                {
+                    continue;
+                }
+
+                var candidate = result.gameObject;
+                return IsSelfOrDescendant(candidate, target) || IsSelfOrDescendant(target, candidate)
+                    ? null : candidate;
+            }
+
+            return null;
         }
 
         private static bool IsSelfOrDescendant(GameObject candidate, GameObject target)

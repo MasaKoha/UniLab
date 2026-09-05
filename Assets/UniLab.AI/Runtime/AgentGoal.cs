@@ -14,6 +14,9 @@ namespace UniLab.AI
         /// </summary>
         public ScenarioExpectation[] goal;
 
+        /// <summary>目標を持たず、手数・時間の上限だけで終了する自由行動モード。プレイテスト用。</summary>
+        public bool freePlay;
+
         /// <summary>
         /// LLM が無限に手を選び続けることを防ぐための手数上限です。
         /// </summary>

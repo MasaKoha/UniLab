@@ -14,6 +14,10 @@ namespace UniLab.AI
 
         /// <summary>観測範囲です。visible は可視要素、all は全要素を返します。</summary>
         public string scope = "visible";
+        /// <summary>観測と同じフレームで撮影する任意の成果物名です。</summary>
+        public string capture;
+        /// <summary>ログの対象です。all または error を指定します。</summary>
+        public string level = "all";
         /// <summary>対象が操作可能になるまでの実時間の上限です。</summary>
         public float readyTimeoutSeconds = DefaultReadyTimeoutSeconds;
 

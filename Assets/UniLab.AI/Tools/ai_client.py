@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Unity 内蔵メールボックスを標準ライブラリだけで呼び出す。"""
+"""Unity 内蔵メールボックスを標準ライブラリだけで呼び出す。
+
+自由行動の開始例:
+    ai_client.py agent.begin '{"goal":{"freePlay":true,"maxSteps":5000,"maxSeconds":14400}}'
+同じフレームの観測と撮影:
+    ai_client.py agent.observe '{"capture":"turn_01"}'
+"""
 
 import argparse
 import json

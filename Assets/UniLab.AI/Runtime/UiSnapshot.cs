@@ -319,7 +319,7 @@ namespace UniLab.AI
                 offscreen = UiVisibilityUtility.ComputeVisibleRatio(rectValues, new[] { 0f, 0f, (float)Screen.width, Screen.height }) < MinimumScreenVisibleRatio,
                 clipped = IsClipped(rectTransform, rectValues),
                 interactable = false,
-                blockedBy = string.Empty,
+                blockedBy = GetTextBlockingObjectName(textObject.gameObject),
                 focused = selectedObject == textObject.gameObject,
                 value = string.Empty,
             };
@@ -482,6 +482,12 @@ namespace UniLab.AI
             }
 
             return UiVisibilityUtility.Truncate(textObject.text, SelectableLabelLength);
+        }
+
+        private static string GetTextBlockingObjectName(GameObject target)
+        {
+            var blockingObject = UiVisibilityUtility.FindTextBlockingObject(target);
+            return blockingObject == null ? string.Empty : blockingObject.name;
         }
 
         private static string GetBlockingObjectName(GameObject target)

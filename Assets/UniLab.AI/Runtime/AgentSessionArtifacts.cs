@@ -108,7 +108,7 @@ namespace UniLab.AI
                 stepCount = _scenarioSteps.Count,
                 maxSteps = _guards.ResolveMaxSteps(),
                 maxSeconds = _guards.ResolveMaxSeconds(),
-                goalReached = _evaluator.Evaluate(_goal.goal, lastSnapshot ?? UiSnapshot.Capture(), null),
+                goalReached = !_goal.freePlay && _evaluator.Evaluate(_goal.goal, lastSnapshot ?? UiSnapshot.Capture(), null),
                 message = message ?? string.Empty,
                 scenario = _scenarioFilePath ?? string.Empty,
             };
@@ -167,7 +167,7 @@ namespace UniLab.AI
         internal string ExportAsScenario(string name)
         {
             var steps = _scenarioSteps.ToArray();
-            if (steps.Length > 0)
+            if (!_goal.freePlay && steps.Length > 0)
             {
                 steps[steps.Length - 1].expect = _goal.goal ?? Array.Empty<ScenarioExpectation>();
                 // 目標がシーン到達なら、最終ステップの操作後にそのシーンを待ってから expect を評価させる。
