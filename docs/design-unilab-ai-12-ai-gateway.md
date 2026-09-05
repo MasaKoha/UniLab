@@ -303,3 +303,13 @@ Play 停止中は毎回収集する。内部の `Capture(int frameCount)` で共
 - `AiMailboxServerPollingTest`: 待機閾値、処理後の復帰、設定間隔の適用。
 - `UiSnapshotCacheTest`: 同一参照、フレーム更新、Play 停止中のキャッシュ無効。
 - `UiScrollToTest`: 最小移動とシナリオ語彙。`AgentActionExecutorTest` に scrollTo の種別・対象判定を追加。
+
+## PR6: ゲーム側の busy 判定（`IGameBusyProvider`）
+
+落ち着き待ち（`AiSettleWait`）はシーンロードと継続入力しか見ないため、フェード遷移や演出中の入力ブロック中でも `settled=true` を返すことがあった（Codex の所感「settled でもフェード中の応答があった」）。
+
+- `GameAdapterRegistry.BusyProvider` にゲーム側が `IGameBusyProvider`（`IsBusy` / `Reason`）を登録する。未登録なら従来どおり
+- `AiSettleWait` は busy の間を「静止していない」と扱い、静止時間の計測をやり直す（上限 `settleTimeoutSeconds` は従来どおり）
+- 観測テキストに `agent: busy=<reason>` を出す。AI はこの行があれば途中経過として扱い、再観測する
+- karakuri では `IInputBlockManager.BlockedInput`（ローディング・演出中の入力ブロック）を busy として登録する
+

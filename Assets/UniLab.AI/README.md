@@ -10,6 +10,7 @@ AI エージェントが**ゲームを実行し、自分で見て、何がおか
 |---|---|---|
 | 入口 | `AiCommandDispatcher` | CLI とメールボックスの操作を統一し、非同期経路では落ち着き待ちを行う |
 | 通信 | `AiMailboxServer` | Unity 内でファイル要求を一件ずつ処理する |
+| 接続 | `GameAdapterRegistry` | ゲーム側の状態提供（`IGameStateProvider`）・コマンド（`IGameCommandHandler`）・busy 判定（`IGameBusyProvider`）の登録先 |
 | 記録 | `FileLogSink` | Unity ログを全てファイルへ複写する |
 | 記録 | `VideoRecorder` | 画面を連番 JPG で実時間どおりに録画し、時刻とステップを対応付ける manifest を出す |
 | 記録 | `AudioRecorder` | ミックス後の音声を WAV へ書き出す。動画と同じ時間軸なのでそのまま多重化できる |
