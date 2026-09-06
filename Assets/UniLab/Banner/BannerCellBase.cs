@@ -10,7 +10,10 @@ namespace UniLab.Banner
     public abstract class BannerCellBase<T> : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDragHandler, IPointerClickHandler where T : class
     {
         [SerializeField] private Image _targetImage = null;
+        /// <summary>セル自身の領域として使う RectTransform を結線する。</summary>
+        [SerializeField] private RectTransform _rectTransform = null;
         protected Image TargetImage => _targetImage;
+        internal RectTransform RectTransform => _rectTransform;
         private readonly Subject<SwipeDirection> _onSwipe = new();
         public Observable<SwipeDirection> OnSwipe => _onSwipe;
         private readonly Subject<Unit> _onClick = new();
