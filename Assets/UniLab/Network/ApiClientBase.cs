@@ -66,7 +66,22 @@ namespace UniLab.Network
             var url = BuildUrl(path);
             using var request = UnityWebRequest.Get(url);
             SetCommonHeaders(request);
+            OnBeforeSend(request);
             return await SendWithRetryAsync<TResponse>(request, retryCount: 0, cancellationToken);
+        }
+
+        /// <summary>
+        /// バイナリレスポンスを返す GET リクエストを送信する。
+        /// </summary>
+        protected async UniTask<byte[]> GetBinaryAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            var url = BuildUrl(path);
+            using var request = UnityWebRequest.Get(url);
+            SetCommonHeaders(request);
+            OnBeforeSend(request);
+            return await SendBinaryWithRetryAsync(request, retryCount: 0, cancellationToken);
         }
 
         /// <summary>
@@ -90,6 +105,36 @@ namespace UniLab.Network
                 downloadHandler = new DownloadHandlerBuffer()
             };
             SetCommonHeaders(request);
+            OnBeforeSend(request);
+            return await SendWithRetryAsync<TResponse>(request, retryCount: 0, cancellationToken);
+        }
+
+        /// <summary>
+        /// バイナリボディを持つ POST リクエストを送信し、レスポンスを JSON 等で逆直列化する。
+        /// </summary>
+        protected async UniTask<TResponse> PostBinaryAsync<TResponse>(
+            string path,
+            byte[] body,
+            string contentType,
+            CancellationToken cancellationToken = default)
+        {
+            if (body == null || body.Length == 0)
+            {
+                throw new ArgumentException("バイナリ POST のボディは空にできません。", nameof(body));
+            }
+
+            var url = BuildUrl(path);
+            var uploadHandler = new UploadHandlerRaw(body)
+            {
+                contentType = contentType
+            };
+            using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST)
+            {
+                uploadHandler = uploadHandler,
+                downloadHandler = new DownloadHandlerBuffer()
+            };
+            SetCommonHeaders(request);
+            OnBeforeSend(request);
             return await SendWithRetryAsync<TResponse>(request, retryCount: 0, cancellationToken);
         }
 
@@ -99,6 +144,13 @@ namespace UniLab.Network
         /// Called when the server returns 401. Override to refresh the access token before the caller retries.
         /// </summary>
         protected virtual void OnUnauthorized()
+        {
+        }
+
+        /// <summary>
+        /// 送信直前に任意ヘッダを注入するためのフック。
+        /// </summary>
+        protected virtual void OnBeforeSend(UnityWebRequest request)
         {
         }
 
@@ -182,6 +234,58 @@ namespace UniLab.Network
             throw new ApiException(statusCode, responseBodyBytes, $"Request failed with status {statusCode}.");
         }
 
+        private async UniTask<byte[]> SendBinaryWithRetryAsync(
+            UnityWebRequest request,
+            int retryCount,
+            CancellationToken cancellationToken)
+        {
+            request.timeout = _timeoutSeconds;
+
+            await request.SendWebRequest().WithCancellation(cancellationToken);
+
+            var statusCode = (int)request.responseCode;
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                return request.downloadHandler?.data ?? Array.Empty<byte>();
+            }
+
+            var responseBodyBytes = request.downloadHandler?.data ?? Array.Empty<byte>();
+
+            if (statusCode == 401)
+            {
+                OnUnauthorized();
+                throw new UnauthorizedException(responseBodyBytes);
+            }
+
+            if (statusCode == 400 || statusCode == 404)
+            {
+                throw new ApiException(statusCode, responseBodyBytes, $"Request failed with status {statusCode}.");
+            }
+
+            var isRetryable = statusCode == 429 || statusCode >= 500;
+            if (isRetryable && retryCount < MaxRetryCount)
+            {
+                var delayMilliseconds = RetryBaseDelayMilliseconds * (int)Math.Pow(2, retryCount);
+                await UniTask.Delay(delayMilliseconds, cancellationToken: cancellationToken);
+
+                using var retryRequest = CloneRequest(request);
+                return await SendBinaryWithRetryAsync(retryRequest, retryCount + 1, cancellationToken);
+            }
+
+            if (statusCode == 429)
+            {
+                throw new TooManyRequestsException(responseBodyBytes);
+            }
+
+            if (statusCode == 503)
+            {
+                throw new ServiceUnavailableException(responseBodyBytes);
+            }
+
+            throw new ApiException(statusCode, responseBodyBytes, $"Request failed with status {statusCode}.");
+        }
+
         /// <summary>
         /// Clones a completed <see cref="UnityWebRequest"/> so it can be resent.
         /// UnityWebRequest is single-use; cloning is required for retry.
@@ -204,6 +308,7 @@ namespace UniLab.Network
             }
 
             SetCommonHeaders(clone);
+            OnBeforeSend(clone);
             return clone;
         }
     }

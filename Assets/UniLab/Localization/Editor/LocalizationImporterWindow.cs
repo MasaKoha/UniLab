@@ -12,9 +12,24 @@ namespace UniLab.Localization.Editor
     public class LocalizationImporterWindow : EditorWindow
     {
         private TextAsset _csvFile;
-        private const string AssetPath = "Assets/Resources/LocalizationData.asset";
+        private const string AssetPath = "Assets/UniLab/Resources/LocalizationData.asset";
         private const string KeyEnumPath = "Assets/Generated/UniLab/TextManager/LocalizationKeyEnum.cs";
         private const string LangEnumPath = "Assets/Generated/UniLab/TextManager/Language.cs";
+        private const string GeneratedNamespace = "UniLab.Localization.Generated";
+        private static readonly HashSet<string> CSharpKeywords = new()
+        {
+            "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char",
+            "checked", "class", "const", "continue", "decimal", "default", "delegate",
+            "do", "double", "else", "enum", "event", "explicit", "extern", "false",
+            "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit",
+            "in", "int", "interface", "internal", "is", "lock", "long", "namespace",
+            "new", "null", "object", "operator", "out", "override", "params",
+            "private", "protected", "public", "readonly", "ref", "return", "sbyte",
+            "sealed", "short", "sizeof", "stackalloc", "static", "string", "struct",
+            "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong",
+            "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile",
+            "while"
+        };
 
         [MenuItem("UniLab/TextManager/Import CSV")]
         public static void ShowWindow()
@@ -41,7 +56,17 @@ namespace UniLab.Localization.Editor
                 return;
             }
 
-            var headers = lines[0].ParseCsvLine().Skip(1).ToList(); // Skip key column
+            var headers = lines[0].ParseCsvLine()
+                .Skip(1) // Skip key column
+                .Select(header => header.Trim())
+                .Where(header => !string.IsNullOrEmpty(header))
+                .ToList();
+            if (headers.Count == 0)
+            {
+                Debug.LogError("Localization CSV must contain at least one language column.");
+                return;
+            }
+
             var entries = new List<LocalizationEntry>();
             var keySet = new SortedSet<string>();
 
@@ -59,10 +84,17 @@ namespace UniLab.Localization.Editor
                     continue;
                 }
 
+                var key = columns[0].Trim();
+                if (!keySet.Add(key))
+                {
+                    Debug.LogWarning($"Duplicate localization key skipped: {key}");
+                    continue;
+                }
+
                 var entry = new LocalizationEntry
                 {
-                    Key = columns[0].Trim(),
-                    Hash = KeyHash.Fnv1AHash(columns[0].Trim()),
+                    Key = key,
+                    Hash = KeyHash.Fnv1AHash(key),
                     Values = new List<string>()
                 };
 
@@ -72,7 +104,6 @@ namespace UniLab.Localization.Editor
                 }
 
                 entries.Add(entry);
-                keySet.Add(entry.Key);
             }
 
             var asset = CreateInstance<LocalizationData>();
@@ -85,6 +116,14 @@ namespace UniLab.Localization.Editor
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssets();
 
+            if (!asset.Validate(out var issues))
+            {
+                foreach (var issue in issues)
+                {
+                    Debug.LogWarning($"Localization import validation: {issue}");
+                }
+            }
+
             const string comment = "// Auto Generate\n// UniLab->TextManager->Import CSV";
             GenerateEnum("LocalizationKeyEnum", KeyEnumPath, comment, keySet);
             GenerateEnum("Language", LangEnumPath, comment, new SortedSet<string>(headers));
@@ -96,20 +135,58 @@ namespace UniLab.Localization.Editor
         {
             var sb = new StringBuilder();
             sb.AppendLine(comment);
-            sb.AppendLine("public enum " + enumName);
+            sb.AppendLine("namespace " + GeneratedNamespace);
             sb.AppendLine("{");
+            sb.AppendLine("    public enum " + enumName);
+            sb.AppendLine("    {");
 
+            var usedNames = new HashSet<string>();
             foreach (var item in items)
             {
-                var safe = item.Replace(" ", "_").Replace("-", "_");
-                if (char.IsDigit(safe[0])) safe = "_" + safe;
-                sb.AppendLine("    " + safe + ",");
+                var safe = CreateEnumMemberName(item, usedNames);
+                sb.AppendLine("        " + safe + ",");
             }
 
+            sb.AppendLine("    }");
             sb.AppendLine("}");
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? string.Empty);
             File.WriteAllText(outputPath, sb.ToString());
+        }
+
+        private static string CreateEnumMemberName(string item, HashSet<string> usedNames)
+        {
+            var sb = new StringBuilder();
+            foreach (var c in item)
+            {
+                sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+            }
+
+            var safe = sb.ToString().Trim('_');
+            if (string.IsNullOrEmpty(safe))
+            {
+                safe = "Value";
+            }
+
+            if (!(char.IsLetter(safe[0]) || safe[0] == '_'))
+            {
+                safe = "_" + safe;
+            }
+
+            if (CSharpKeywords.Contains(safe))
+            {
+                safe = "_" + safe;
+            }
+
+            var unique = safe;
+            var suffix = 2;
+            while (!usedNames.Add(unique))
+            {
+                unique = $"{safe}_{suffix}";
+                suffix++;
+            }
+
+            return unique;
         }
     }
 }

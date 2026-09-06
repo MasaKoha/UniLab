@@ -1,5 +1,4 @@
 using TMPro;
-using UniLab.Localization.Editor;
 using UnityEngine;
 
 namespace UniLab.Localization
