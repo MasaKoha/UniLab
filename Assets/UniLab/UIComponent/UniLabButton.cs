@@ -49,13 +49,30 @@ namespace UniLab.UI
             base.OnPointerUp(eventData);
             _stateSubject.OnNext(ButtonState.Up);
 
+            // ScrollRect 上のボタンで、指を載せたままスワイプ（スクロール）して離した場合はタップとみなさない。
+            // 押下と同じオブジェクト上で離しても、ドラッグが発生していれば _onDecide を発火させない。
             var pointerUpTarget = eventData.pointerCurrentRaycast.gameObject;
-            if (_pointerDownTarget != null && _pointerDownTarget == pointerUpTarget)
+            if (!IsDrag(eventData) && _pointerDownTarget != null && _pointerDownTarget == pointerUpTarget)
             {
                 _onDecide.OnNext(Unit.Default);
             }
 
             OnUp();
+        }
+
+        /// <summary>
+        /// 押下から離すまでにスクロール（ドラッグ）が発生したかを判定する。
+        /// EventSystem がドラッグ確定済み、または押下位置から pixelDragThreshold 以上動いていればドラッグとみなす。
+        /// </summary>
+        private static bool IsDrag(PointerEventData eventData)
+        {
+            if (eventData.dragging)
+            {
+                return true;
+            }
+
+            var threshold = EventSystem.current != null ? EventSystem.current.pixelDragThreshold : 10;
+            return (eventData.position - eventData.pressPosition).sqrMagnitude > (float)threshold * threshold;
         }
 
         /// <summary>

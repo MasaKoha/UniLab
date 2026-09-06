@@ -1,15 +1,12 @@
+using System.Collections.Generic;
+using System.Linq;
+using UniLab.Localization;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using System.Linq;
-using System.Collections.Generic;
 
 namespace UniLab.Localization.Editor
 {
-    public class LocalizationKeyDropdownAttribute : PropertyAttribute
-    {
-    }
-
 #if UNITY_EDITOR
     [CustomPropertyDrawer(typeof(LocalizationKeyDropdownAttribute))]
     public class LocalizationKeyDropdownDrawer : PropertyDrawer

@@ -1,22 +1,85 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace UniLab.Localization
 {
     public static class TextManager
     {
+        private const string DefaultLanguage = "ja";
+
+        private static ILocalizationDataSource _dataSource = new ResourcesLocalizationDataSource();
         private static LocalizationData _data;
-        private static uint _currentLangHash = KeyHash.Fnv1AHash("ja");
+        private static string _currentLanguage = DefaultLanguage;
+        private static uint _currentLangHash = KeyHash.Fnv1AHash(DefaultLanguage);
+        private static readonly uint FallbackLangHash = KeyHash.Fnv1AHash(DefaultLanguage);
+
         public static event Action OnLanguageChanged;
+
+        public static string CurrentLanguage => _currentLanguage;
+
+        public static IReadOnlyList<string> SupportedLanguages
+        {
+            get
+            {
+                LoadLocalizeAsset();
+                return _data?.SupportedLanguages ?? Array.Empty<string>();
+            }
+        }
 
         public static void SetLanguage(string lang)
         {
-            _currentLangHash = KeyHash.Fnv1AHash(lang);
+            var nextLanguage = NormalizeLanguage(lang);
+            LoadLocalizeAsset();
+
+            if (_data != null && !_data.HasLanguage(nextLanguage))
+            {
+                Debug.LogWarning($"Localization language not found: {nextLanguage}. Falling back to {DefaultLanguage}.");
+                nextLanguage = _data.HasLanguage(DefaultLanguage) ? DefaultLanguage : _currentLanguage;
+            }
+
+            if (_currentLanguage == nextLanguage)
+            {
+                return;
+            }
+
+            _currentLanguage = nextLanguage;
+            _currentLangHash = KeyHash.Fnv1AHash(nextLanguage);
             OnLanguageChanged?.Invoke();
+        }
+
+        public static bool HasLanguage(string lang)
+        {
+            LoadLocalizeAsset();
+            return _data != null && _data.HasLanguage(NormalizeLanguage(lang));
+        }
+
+        public static void SetData(LocalizationData data, bool notify = true)
+        {
+            SetDataSource(new StaticLocalizationDataSource(data), reloadImmediately: false);
+            ApplyLoadedData(data);
+            if (notify)
+            {
+                OnLanguageChanged?.Invoke();
+            }
+        }
+
+        public static void SetDataSource(ILocalizationDataSource dataSource, bool reloadImmediately = true)
+        {
+            _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _data = null;
+
+            if (reloadImmediately)
+            {
+                LoadLocalizeAsset();
+                OnLanguageChanged?.Invoke();
+            }
+        }
+
+        public static void UseResources(string resourcePath = ResourcesLocalizationDataSource.DefaultResourcePath, bool reloadImmediately = true)
+        {
+            SetDataSource(new ResourcesLocalizationDataSource(resourcePath), reloadImmediately);
         }
 
         public static void ResetLoadedAsset()
@@ -31,44 +94,117 @@ namespace UniLab.Localization
                 return;
             }
 
-            _data = Resources.Load<LocalizationData>("LocalizationData");
-#if UNITY_EDITOR
-            if (_data == null)
-            {
-                var guids = AssetDatabase.FindAssets("t:LocalizationData");
-                if (guids.Length > 0)
-                {
-                    var path = AssetDatabase.GUIDToAssetPath(guids[0]);
-                    _data = AssetDatabase.LoadAssetAtPath<LocalizationData>(path);
-                }
-            }
-#endif
+            ApplyLoadedData(_dataSource.Load());
 
             if (_data != null)
             {
-                _data.WarmupCache();
+                return;
             }
-            else
+
+            Debug.LogWarning("LocalizationData not found.");
+        }
+
+        private static void ApplyLoadedData(LocalizationData data)
+        {
+            _data = data;
+            if (_data == null)
             {
-                Debug.LogWarning("LocalizationData not found.");
+                return;
             }
+
+            _data.WarmupCache();
+            if (!_data.Validate(out var issues))
+            {
+                foreach (var issue in issues)
+                {
+                    Debug.LogWarning($"LocalizationData validation: {issue}");
+                }
+            }
+
+            EnsureCurrentLanguageExists();
+        }
+
+        private static void EnsureCurrentLanguageExists()
+        {
+            if (_data == null || _data.HasLanguage(_currentLanguage))
+            {
+                return;
+            }
+
+            var supportedLanguages = _data.SupportedLanguages;
+            var nextLanguage = _data.HasLanguage(DefaultLanguage)
+                ? DefaultLanguage
+                : supportedLanguages.Count > 0 ? supportedLanguages[0] : _currentLanguage;
+
+            if (_currentLanguage == nextLanguage)
+            {
+                return;
+            }
+
+            Debug.LogWarning($"Current localization language not found: {_currentLanguage}. Falling back to {nextLanguage}.");
+            _currentLanguage = nextLanguage;
+            _currentLangHash = KeyHash.Fnv1AHash(nextLanguage);
         }
 
         public static string GetByHash(uint keyHash)
         {
             LoadLocalizeAsset();
-            return _data?.Get(keyHash, _currentLangHash) ?? $"[Missing:{keyHash}]";
+            return _data?.Get(keyHash, _currentLangHash, FallbackLangHash) ?? $"[Missing:{keyHash}]";
         }
 
-        public static string GetText(string key)
+        public static string GetText(string key, params object[] args)
         {
+            if (string.IsNullOrEmpty(key))
+            {
+                return string.Empty;
+            }
+
             var hash = KeyHash.Fnv1AHash(key);
-            return GetByHash(hash);
+            return Format(GetByHash(hash), args);
         }
 
-        public static string GetText<T>(T key) where T : Enum
+        public static string GetTextOrDefault(string key, string defaultText, params object[] args)
         {
-            return GetText(key.ToString());
+            var text = GetText(key, args);
+            return IsMissingText(text) ? defaultText : text;
+        }
+
+        public static string GetText<T>(T key, params object[] args) where T : Enum
+        {
+            return GetText(key.ToString(), args);
+        }
+
+        public static string GetTextOrDefault<T>(T key, string defaultText, params object[] args) where T : Enum
+        {
+            return GetTextOrDefault(key.ToString(), defaultText, args);
+        }
+
+        private static string NormalizeLanguage(string lang)
+        {
+            return string.IsNullOrWhiteSpace(lang) ? DefaultLanguage : lang.Trim();
+        }
+
+        private static string Format(string text, object[] args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return text;
+            }
+
+            try
+            {
+                return string.Format(CultureInfo.InvariantCulture, text, args);
+            }
+            catch (FormatException exception)
+            {
+                Debug.LogWarning($"Localization format failed: {exception.Message}");
+                return text;
+            }
+        }
+
+        private static bool IsMissingText(string text)
+        {
+            return text.StartsWith("[Missing", StringComparison.Ordinal);
         }
     }
 }
