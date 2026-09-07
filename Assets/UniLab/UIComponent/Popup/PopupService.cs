@@ -231,8 +231,10 @@ namespace UniLab.UI.Popup
 
             _focusNavigator.PopGrid(grid);
 
-            // 元の要素が破棄されている（シーン遷移を挟んだ等）場合は復元しない
-            if (previousSelected != null)
+            // 元の要素が破棄・非表示・操作不可なら、無効な位置へフォーカスを戻さない。
+            if (previousSelected != null
+                && previousSelected.IsActive()
+                && previousSelected.IsInteractable())
             {
                 _focusNavigator.SetSelected(previousSelected);
             }
