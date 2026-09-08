@@ -1,4 +1,3 @@
-using UniLab.Common;
 using UniLab.Native.Share.Platform;
 using UniLab.Native.Share.Platform.Interface;
 using UnityEngine;
@@ -8,7 +7,7 @@ namespace UniLab.Native.Share
     /// <summary>
     /// OS ネイティブ共有シートのファサード。
     /// </summary>
-    public sealed class NativeShare : SingletonPureClass<NativeShare>, INativeShare
+    public sealed class NativeShare : INativeShare
     {
         private IPlatformShare _platformShare;
 
