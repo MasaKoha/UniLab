@@ -1,0 +1,13 @@
+{
+    "name": "UniLab.MasterData.Validation.Editor",
+    "rootNamespace": "UniLab.MasterData.Editor.Validation",
+    "references": [
+        "UniLab"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false,
+    "overrideReferences": false,
+    "noEngineReferences": true
+}
