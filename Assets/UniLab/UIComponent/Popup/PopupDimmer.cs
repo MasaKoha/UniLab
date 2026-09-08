@@ -13,12 +13,23 @@ namespace UniLab.UI.Popup
     {
         private readonly Subject<Unit> _onClick = new();
         private Button _button = null;
+        private bool _isInitialized;
 
         /// <summary>暗幕タップ通知。</summary>
         public Observable<Unit> OnClick => _onClick;
 
-        private void Awake()
+        /// <summary>
+        /// ボタン購読を開始し、初期状態を非表示にする。
+        /// シーン常駐時は所有者の初期化完了後に明示的に呼ぶ。
+        /// </summary>
+        public void Initialize()
         {
+            if (_isInitialized)
+            {
+                return;
+            }
+
+            _isInitialized = true;
             _button = GetComponent<Button>();
             // ボタンクリックを Subject へ中継する。AddTo(this) で破棄時に購読解除する
             _button.OnClickAsObservable()

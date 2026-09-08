@@ -37,6 +37,7 @@ namespace UniLab.UI.Popup.AssetVaultSample
                 await _assetVaultService.InitializeAsync(string.Empty, cancellationToken);
 
                 // ロード手段を AssetVault 版に差し替えるだけ。表示・スタック・暗幕の挙動はコアと共通
+                _dimmer.Initialize();
                 var viewProvider = new PopupViewProvider(
                     new AssetVaultPopupAssetLoader(_assetVaultService), _popupRoot);
                 _popupService = new PopupService(viewProvider, _dimmer);
