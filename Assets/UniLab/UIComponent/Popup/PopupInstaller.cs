@@ -11,7 +11,7 @@ namespace UniLab.UI.Popup
     /// </summary>
     public sealed class PopupInstaller : IInstaller
     {
-        /// <summary>IPopupService を Singleton 登録し、バックキー連携を EntryPoint として起動する。</summary>
+        /// <summary>IPopupService を Singleton 登録し、バックキー連携を EntryPoint として初期化する。</summary>
         public void Install(IContainerBuilder builder)
         {
             builder.Register<IPopupService, PopupService>(Lifetime.Singleton);
