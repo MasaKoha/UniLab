@@ -35,6 +35,13 @@ namespace UniLab.Localization
 
         private static void ScanLoadedSceneTexts()
         {
+            // 翻訳データが無い構成では走査しても置き換える先が無い。
+            // シーン内の TMP_Text を全件見に行くだけ無駄で、警告の発生源にもなる。
+            if (!TextManager.HasData)
+            {
+                return;
+            }
+
             var texts = Object.FindObjectsByType<TMP_Text>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (var text in texts)
             {

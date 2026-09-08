@@ -14,6 +14,7 @@ namespace UniLab.Localization
         // Resources へ置いたアセットはビルドから剥がせず、起動時のインデックスにも載る。
         private static ILocalizationDataSource _dataSource = new ResourcesLocalizationDataSource();
         private static LocalizationData _data;
+        private static bool _loadFailed;
         private static string _currentLanguage = DefaultLanguage;
         private static uint _currentLangHash = KeyHash.Fnv1AHash(DefaultLanguage);
         private static readonly uint FallbackLangHash = KeyHash.Fnv1AHash(DefaultLanguage);
@@ -72,6 +73,7 @@ namespace UniLab.Localization
         {
             _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
             _data = null;
+            _loadFailed = false;
 
             if (reloadImmediately)
             {
@@ -89,14 +91,33 @@ namespace UniLab.Localization
             SetDataSource(new ResourcesLocalizationDataSource(resourcePath), reloadImmediately);
         }
 
+        /// <summary>
+        /// 翻訳データを読み込めているか。読み込みを誘発するので、
+        /// 毎フレーム・全要素の走査を始める前の足切りに使う。
+        /// </summary>
+        public static bool HasData
+        {
+            get
+            {
+                LoadLocalizeAsset();
+                return _data != null;
+            }
+        }
+
         public static void ResetLoadedAsset()
         {
             _data = null;
+            _loadFailed = false;
         }
 
         private static void LoadLocalizeAsset()
         {
             if (_data != null)
+            {
+                return;
+            }
+
+            if (_loadFailed)
             {
                 return;
             }
@@ -108,7 +129,12 @@ namespace UniLab.Localization
                 return;
             }
 
-            Debug.LogWarning("LocalizationData not found.");
+            // 読み込みに失敗したら以後は試さない。_data が null のままだと呼ばれるたびに
+            // Load と警告を繰り返し、TMP_Text の数だけログが出てコンソールが埋まる。
+            _loadFailed = true;
+            Debug.LogWarning(
+                "LocalizationData を読み込めませんでした。以後この警告は出しません。"
+                + " SetDataSource で読み込み元を指定するか、翻訳を使わないなら TextManager を呼ばないこと。");
         }
 
         private static void ApplyLoadedData(LocalizationData data)
