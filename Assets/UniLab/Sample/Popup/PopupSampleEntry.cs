@@ -36,11 +36,12 @@ namespace UniLab.UI.Popup.Sample
             // ロード手段は IPopupAssetLoader で差し替え可能。サンプルは Resources 版を使う（本番は AssetVault 版に差し替え）。
             // 共通暗幕を注入し、各ポップアップは個別背景を持たず 1 枚を最前面ポップアップの背後に共有する
             var viewProvider = new PopupViewProvider(new ResourcesPopupAssetLoader(), _popupRoot);
+            _dimmer.Initialize();
             _popupService = new PopupService(viewProvider, _dimmer);
             // 非 DI 環境のため手動で生成・購読開始する。DI 環境では PopupInstaller が代行する
             _backKeyInput.Initialize();
             _backKeyHandler = new PopupBackKeyHandler(_popupService, new BackKeyInputPopupBackKeySource(_backKeyInput));
-            _backKeyHandler.Start();
+            _backKeyHandler.Initialize();
         }
 
         private void Start()

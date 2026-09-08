@@ -26,9 +26,20 @@ namespace UniLab.Animation
         public bool IsPlaying { get; private set; } = false;
 
         private CancellationTokenSource _tokenSource;
+        private bool _isInitialized;
 
-        private void Awake()
+        /// <summary>
+        /// Animator 参照を解決し、必要なら自動再生を開始する。
+        /// AddComponent/Instantiate 直後に所有者が明示的に呼ぶ。
+        /// </summary>
+        public void Initialize()
         {
+            if (_isInitialized)
+            {
+                return;
+            }
+
+            _isInitialized = true;
             _targetAnimator = GetComponent<Animator>();
             if (_playOnAwake)
             {

@@ -7,12 +7,13 @@ namespace UniLab.UI.Popup
 {
     /// <summary>
     /// 「閉じる」入力を購読し、最前面ポップアップの閉じ処理へ橋渡しする。
-    /// VContainer の EntryPoint（IStartable）として登録するか、非 DI 環境では Start/Dispose を手動で呼ぶ。
+    /// VContainer の EntryPoint（IInitializable）として登録するか、非 DI 環境では Initialize/Dispose を手動で呼ぶ。
     /// </summary>
-    public sealed class PopupBackKeyHandler : IStartable, IDisposable
+    public sealed class PopupBackKeyHandler : IInitializable, IDisposable
     {
         private readonly IPopupService _popupService;
         private readonly CompositeDisposable _disposables = new();
+        private bool _isInitialized;
 
         /// <summary>
         /// 閉じる操作の供給元。Android の戻るキー・パッドの Ⓑ・Esc のどれを割り当てるかは
@@ -31,8 +32,14 @@ namespace UniLab.UI.Popup
         /// バックキー Observable の購読を開始する。VContainer 起動時に自動で、非 DI では手動で呼ぶ。
         /// 実際に閉じるかは Parameter.EnableBackKey / CloseTopAsync 側で判定する。
         /// </summary>
-        public void Start()
+        public void Initialize()
         {
+            if (_isInitialized)
+            {
+                return;
+            }
+
+            _isInitialized = true;
             _backKeySource.OnBack
                 .Subscribe(_ => _popupService.CloseTopAsync().Forget())
                 .AddTo(_disposables);
