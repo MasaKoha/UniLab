@@ -1,5 +1,4 @@
 using System;
-using R3;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,44 +8,27 @@ namespace UniLab.UI
     /// N 軸の値を 1 枚のメッシュで描画する汎用レーダーチャート。
     /// 初期化時にだけバッファを確保し、描画ホットパスでは再確保しない。
     /// </summary>
-    // Graphic の RequireComponent は派生クラスに継承されないため、AddComponent 経路でも CanvasRenderer を保証する
     [RequireComponent(typeof(CanvasRenderer))]
     public sealed class RadarChartView : MaskableGraphic
     {
         private const int MinAxisCount = 3;
         private const int MaxAxisCount = 12;
         private const float FullCircleDegrees = 360f;
-        private const float MinimumAnimationDurationSeconds = 0.0001f;
-        private const float OutBackOvershoot = 1.70158f;
-        // 値多角形は外枠を越えて描いてよい。上限を 1 に切ると「上限を振り切った」表現ができず、
-        // OutBack の跳ね返りも頭打ちで潰れるため、既定で外枠の 1.5 倍まで許す（2026-09-03）
         private const float DefaultMaximumNormalizedValue = 1.5f;
-
-        // perf: 描画で使う配列は Initialize でだけ確保し、OnPopulateMesh 中の GC を防ぐ。
         private float[] _normalizedValues = Array.Empty<float>();
-        private float[] _animationStartValues = Array.Empty<float>();
-        private float[] _animationTargetValues = Array.Empty<float>();
         private Vector2[] _unitDirectionVectors = Array.Empty<Vector2>();
         private Vector2[] _outerVertices = Array.Empty<Vector2>();
         private Vector2[] _valueVertices = Array.Empty<Vector2>();
         private Color[] _axisColors = Array.Empty<Color>();
-
-        // perf: 線分四辺形の一時頂点を使い回し、AddUIVertexQuad ごとの配列確保を防ぐ。
         private readonly UIVertex[] _lineQuadVertices = new UIVertex[4];
-
         private int _axisCount;
         private bool _hasCustomAxisColors;
         private RadarChartStyle _style = RadarChartStyle.Default;
-        private IDisposable _animationSubscription;
-        private float _animationStartedAtRealtimeSeconds;
-        private float _animationDurationSeconds;
-        private RadarChartEasing _animationEasing;
-
+        private RadarChartAnimation _animation;
         /// <summary>
         /// 値アニメーションの再生中かを返す。
         /// </summary>
         public bool IsAnimating { get; private set; }
-
         /// <summary>
         /// 軸数を確定し、描画と値保持に必要な内部バッファを確保する。
         /// </summary>
@@ -56,18 +38,16 @@ namespace UniLab.UI
             {
                 throw new ArgumentOutOfRangeException(nameof(axisCount), axisCount, $"軸数は {MinAxisCount}〜{MaxAxisCount} の範囲で指定すべき。");
             }
-
-            StopAnimation();
+            EnsureAnimation();
+            _animation.Dispose();
             _axisCount = axisCount;
             _normalizedValues = new float[axisCount];
-            _animationStartValues = new float[axisCount];
-            _animationTargetValues = new float[axisCount];
             _unitDirectionVectors = new Vector2[axisCount];
             _outerVertices = new Vector2[axisCount];
             _valueVertices = new Vector2[axisCount];
             _axisColors = new Color[axisCount];
             _hasCustomAxisColors = false;
-
+            _animation.Initialize(axisCount);
             UpdateUnitDirectionVectors();
             SetVerticesDirty();
         }
@@ -76,50 +56,41 @@ namespace UniLab.UI
         /// 値多角形が外枠を越えて描かれる上限。1 を超える値を渡すと外枠の外側へはみ出す。
         /// </summary>
         public float MaximumNormalizedValue { get; set; } = DefaultMaximumNormalizedValue;
-
         /// <summary>
         /// 各軸の正規化済み値を更新する。入力値は 0〜<see cref="MaximumNormalizedValue"/> に Clamp して保持する。
         /// </summary>
         public void SetValues(ReadOnlySpan<float> normalizedValues)
         {
             EnsureInitialized();
-            StopAnimation();
+            EnsureAnimation();
+            _animation.Dispose();
             CopyClampedValues(normalizedValues, _normalizedValues);
             SetVerticesDirty();
         }
-
         /// <summary>
         /// 現在値から指定値まで補間し、毎フレーム再描画する。
         /// </summary>
         public void AnimateTo(ReadOnlySpan<float> targetValues, float durationSeconds, RadarChartEasing easing = RadarChartEasing.OutBack)
         {
             EnsureInitialized();
-            CopyClampedValues(targetValues, _animationTargetValues);
-            StartAnimation(durationSeconds, easing, zeroStart: false);
+            EnsureAnimation();
+            _animation.AnimateTo(targetValues, durationSeconds, easing);
         }
-
         /// <summary>
         /// 全軸を中心から現在値まで伸ばす演出を再生する。
         /// </summary>
         public void PlayGrowFromCenter(float durationSeconds)
         {
             EnsureInitialized();
-
-            for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
-            {
-                _animationTargetValues[axisIndex] = _normalizedValues[axisIndex];
-            }
-
-            StartAnimation(durationSeconds, RadarChartEasing.OutBack, zeroStart: true);
+            EnsureAnimation();
+            _animation.PlayGrowFromCenter(durationSeconds);
         }
-
         /// <summary>
         /// 描画スタイルを差し替え、必要な頂点方向キャッシュを更新する。
         /// </summary>
         public void SetStyle(RadarChartStyle style)
         {
             _style = style;
-
             if (_axisCount > 0)
             {
                 UpdateUnitDirectionVectors();
@@ -127,19 +98,16 @@ namespace UniLab.UI
 
             SetVerticesDirty();
         }
-
         /// <summary>
         /// 各軸の描画色を設定する。
         /// </summary>
         public void SetAxisColors(ReadOnlySpan<Color> axisColors)
         {
             EnsureInitialized();
-
             if (axisColors.Length != _axisCount)
             {
                 throw new ArgumentException($"軸色の数は軸数 {_axisCount} と一致すべき。", nameof(axisColors));
             }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 _axisColors[axisIndex] = axisColors[axisIndex];
@@ -148,60 +116,50 @@ namespace UniLab.UI
             _hasCustomAxisColors = true;
             SetVerticesDirty();
         }
-
         /// <summary>
         /// 指定軸の外周方向にある局所座標を返す。ラベル配置に使う。
         /// </summary>
         public Vector2 GetVertexLocalPosition(int axisIndex, float radiusScale)
         {
             EnsureInitialized();
-
             if (axisIndex < 0 || axisIndex >= _axisCount)
             {
                 throw new ArgumentOutOfRangeException(nameof(axisIndex), axisIndex, "軸インデックスが範囲外。");
             }
-
             var rect = rectTransform.rect;
-            var center = rect.center;
             var radius = Mathf.Min(rect.width, rect.height) * 0.5f;
-            return center + (_unitDirectionVectors[axisIndex] * radius * radiusScale);
+            return rect.center + (_unitDirectionVectors[axisIndex] * radius * radiusScale);
         }
-
         /// <summary>
         /// 内部バッファに保持した値から UI メッシュを再構築する。
         /// </summary>
         protected override void OnPopulateMesh(VertexHelper vertexHelper)
         {
             vertexHelper.Clear();
-
             if (_axisCount < MinAxisCount)
             {
                 return;
             }
-
             var rect = rectTransform.rect;
             var radius = Mathf.Min(rect.width, rect.height) * 0.5f;
             if (radius <= 0f)
             {
                 return;
             }
-
             var center = rect.center;
             UpdatePolygonVertices(center, radius);
-
             AddPolygonFill(vertexHelper, center, _outerVertices, _style.BackgroundColor);
             AddAxisLines(vertexHelper, center);
             AddValuePolygonFill(vertexHelper, center);
             AddValuePolygonOutline(vertexHelper);
             AddPolygonOutline(vertexHelper, _outerVertices, _style.OutlineColor, _style.OutlineThickness);
         }
-
         protected override void OnDestroy()
         {
-            StopAnimation();
+            _animation?.Dispose();
+            _animation = null;
             base.OnDestroy();
         }
-
         private void EnsureInitialized()
         {
             if (_axisCount < MinAxisCount)
@@ -209,115 +167,24 @@ namespace UniLab.UI
                 throw new InvalidOperationException("Initialize を先に呼ぶべき。");
             }
         }
-
-        private void CopyClampedValues(ReadOnlySpan<float> sourceValues, float[] destinationValues)
+        private void EnsureAnimation()
+        {
+            if (_animation == null)
+            {
+                _animation = new RadarChartAnimation(this);
+            }
+        }
+        internal void CopyClampedValues(ReadOnlySpan<float> sourceValues, float[] destinationValues)
         {
             if (sourceValues.Length != _axisCount)
             {
                 throw new ArgumentException($"値の数は軸数 {_axisCount} と一致すべき。", nameof(sourceValues));
             }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 destinationValues[axisIndex] = Mathf.Clamp(sourceValues[axisIndex], 0f, MaximumNormalizedValue);
             }
         }
-
-        private void StartAnimation(float durationSeconds, RadarChartEasing easing, bool zeroStart)
-        {
-            StopAnimation();
-
-            if (durationSeconds <= 0f || easing == RadarChartEasing.None)
-            {
-                ApplyAnimationValues(1f, zeroStart);
-                return;
-            }
-
-            for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
-            {
-                _animationStartValues[axisIndex] = zeroStart ? 0f : _normalizedValues[axisIndex];
-            }
-
-            if (zeroStart)
-            {
-                for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
-                {
-                    _normalizedValues[axisIndex] = 0f;
-                }
-
-                SetVerticesDirty();
-            }
-
-            _animationStartedAtRealtimeSeconds = Time.realtimeSinceStartup;
-            _animationDurationSeconds = Mathf.Max(MinimumAnimationDurationSeconds, durationSeconds);
-            _animationEasing = easing;
-            IsAnimating = true;
-            _animationSubscription = Observable.EveryUpdate(destroyCancellationToken)
-                .Subscribe(_ => AdvanceAnimation());
-        }
-
-        private void AdvanceAnimation()
-        {
-            if (!IsAnimating)
-            {
-                return;
-            }
-
-            var elapsedSeconds = Time.realtimeSinceStartup - _animationStartedAtRealtimeSeconds;
-            var normalizedTime = Mathf.Clamp01(elapsedSeconds / _animationDurationSeconds);
-            ApplyAnimationValues(EvaluateEasing(normalizedTime, _animationEasing), zeroStart: false);
-
-            if (normalizedTime < 1f)
-            {
-                return;
-            }
-
-            for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
-            {
-                _normalizedValues[axisIndex] = _animationTargetValues[axisIndex];
-            }
-
-            StopAnimation();
-            SetVerticesDirty();
-        }
-
-        private void ApplyAnimationValues(float easedProgress, bool zeroStart)
-        {
-            for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
-            {
-                var startValue = zeroStart ? 0f : _animationStartValues[axisIndex];
-                _normalizedValues[axisIndex] = Mathf.Clamp(Mathf.LerpUnclamped(startValue, _animationTargetValues[axisIndex], easedProgress), 0f, MaximumNormalizedValue);
-            }
-
-            SetVerticesDirty();
-        }
-
-        private void StopAnimation()
-        {
-            _animationSubscription?.Dispose();
-            _animationSubscription = null;
-            IsAnimating = false;
-        }
-
-        private static float EvaluateEasing(float normalizedTime, RadarChartEasing easing)
-        {
-            switch (easing)
-            {
-                case RadarChartEasing.None:
-                case RadarChartEasing.Linear:
-                    return normalizedTime;
-                case RadarChartEasing.OutCubic:
-                    return 1f - Mathf.Pow(1f - normalizedTime, 3f);
-                case RadarChartEasing.OutBack:
-                    {
-                        var inverse = normalizedTime - 1f;
-                        return 1f + ((OutBackOvershoot + 1f) * inverse * inverse * inverse) + (OutBackOvershoot * inverse * inverse);
-                    }
-                default:
-                    return normalizedTime;
-            }
-        }
-
         private void UpdateUnitDirectionVectors()
         {
             var signedStepDegrees = FullCircleDegrees / _axisCount;
@@ -325,15 +192,12 @@ namespace UniLab.UI
             {
                 signedStepDegrees *= -1f;
             }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
-                var angleDegrees = _style.StartAngleDegrees + (signedStepDegrees * axisIndex);
-                var angleRadians = angleDegrees * Mathf.Deg2Rad;
+                var angleRadians = (_style.StartAngleDegrees + (signedStepDegrees * axisIndex)) * Mathf.Deg2Rad;
                 _unitDirectionVectors[axisIndex] = new Vector2(Mathf.Cos(angleRadians), Mathf.Sin(angleRadians));
             }
         }
-
         private void UpdatePolygonVertices(Vector2 center, float radius)
         {
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
@@ -343,36 +207,30 @@ namespace UniLab.UI
                 _valueVertices[axisIndex] = center + (direction * radius * _normalizedValues[axisIndex]);
             }
         }
-
         private void AddAxisLines(VertexHelper vertexHelper, Vector2 center)
         {
             if (_style.AxisLineThickness <= 0f || _style.AxisLineColor.a <= 0f)
             {
                 return;
             }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 var axisColor = _hasCustomAxisColors ? GetAxisLineColor(axisIndex) : _style.AxisLineColor;
                 AddLineQuad(vertexHelper, center, _outerVertices[axisIndex], axisColor, axisColor, _style.AxisLineThickness);
             }
         }
-
         private void AddPolygonFill(VertexHelper vertexHelper, Vector2 center, Vector2[] polygonVertices, Color color)
         {
             if (color.a <= 0f)
             {
                 return;
             }
-
             var centerVertexIndex = vertexHelper.currentVertCount;
             vertexHelper.AddVert(CreateVertex(center, color));
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 vertexHelper.AddVert(CreateVertex(polygonVertices[axisIndex], color));
             }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 var currentVertexIndex = centerVertexIndex + 1 + axisIndex;
@@ -380,7 +238,6 @@ namespace UniLab.UI
                 vertexHelper.AddTriangle(centerVertexIndex, currentVertexIndex, nextVertexIndex);
             }
         }
-
         private void AddValuePolygonFill(VertexHelper vertexHelper, Vector2 center)
         {
             if (ShouldUseRadialFillGradient())
@@ -406,27 +263,16 @@ namespace UniLab.UI
                 return;
             }
 
-            if (_style.ValueOutlineThickness <= 0f)
+            if (_style.ValueOutlineThickness <= 0f || _style.ValueOutlineColor.a <= 0f)
             {
                 return;
             }
 
             var outlineAlpha = _style.ValueOutlineColor.a;
-            if (outlineAlpha <= 0f)
-            {
-                return;
-            }
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
                 var nextAxisIndex = (axisIndex + 1) % _axisCount;
-                AddLineQuad(
-                    vertexHelper,
-                    _valueVertices[axisIndex],
-                    _valueVertices[nextAxisIndex],
-                    GetColorWithAlpha(_axisColors[axisIndex], outlineAlpha),
-                    GetColorWithAlpha(_axisColors[nextAxisIndex], outlineAlpha),
-                    _style.ValueOutlineThickness);
+                AddLineQuad(vertexHelper, _valueVertices[axisIndex], _valueVertices[nextAxisIndex], GetColorWithAlpha(_axisColors[axisIndex], outlineAlpha), GetColorWithAlpha(_axisColors[nextAxisIndex], outlineAlpha), _style.ValueOutlineThickness);
             }
         }
 
@@ -440,11 +286,9 @@ namespace UniLab.UI
             }
 
             vertexHelper.AddVert(CreateVertex(center, fillCenterColor));
-
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
             {
-                var outerColor = ResolveFillOuterColor(axisIndex, edgeColor);
-                vertexHelper.AddVert(CreateVertex(polygonVertices[axisIndex], outerColor));
+                vertexHelper.AddVert(CreateVertex(polygonVertices[axisIndex], ResolveFillOuterColor(axisIndex, edgeColor)));
             }
 
             for (var axisIndex = 0; axisIndex < _axisCount; axisIndex++)
@@ -462,12 +306,7 @@ namespace UniLab.UI
                 return edgeColor;
             }
 
-            if (ShouldUseRadialFillGradient())
-            {
-                return MultiplyColors(edgeColor, _axisColors[axisIndex]);
-            }
-
-            return _axisColors[axisIndex];
+            return ShouldUseRadialFillGradient() ? MultiplyColors(edgeColor, _axisColors[axisIndex]) : _axisColors[axisIndex];
         }
 
         private bool ShouldUseRadialFillGradient()
@@ -489,11 +328,7 @@ namespace UniLab.UI
 
         private static Color MultiplyColors(Color left, Color right)
         {
-            return new Color(
-                left.r * right.r,
-                left.g * right.g,
-                left.b * right.b,
-                left.a * right.a);
+            return new Color(left.r * right.r, left.g * right.g, left.b * right.b, left.a * right.a);
         }
 
         private static Color GetColorWithAlpha(Color color, float alpha)
@@ -526,7 +361,6 @@ namespace UniLab.UI
             }
 
             var normal = new Vector2(-segment.y / magnitude, segment.x / magnitude) * (thickness * 0.5f);
-
             _lineQuadVertices[0] = CreateVertex(start - normal, startColor);
             _lineQuadVertices[1] = CreateVertex(start + normal, startColor);
             _lineQuadVertices[2] = CreateVertex(end + normal, endColor);
@@ -541,5 +375,10 @@ namespace UniLab.UI
             vertex.color = color;
             return vertex;
         }
+
+        internal int AxisCount => _axisCount;
+        internal float[] NormalizedValues => _normalizedValues;
+        internal void RequestRedraw() { SetVerticesDirty(); }
+        internal void SetAnimating(bool isAnimating) { IsAnimating = isAnimating; }
     }
 }
