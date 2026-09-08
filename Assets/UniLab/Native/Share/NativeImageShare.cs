@@ -98,7 +98,7 @@ namespace UniLab.Native.Share
         }
 
         // 保存要求があればギャラリー保存し、その後にネイティブ共有を開く共通処理。
-        private static async UniTask<GallerySaveResult> SaveIfRequestedAndShareAsync(
+        private async UniTask<GallerySaveResult> SaveIfRequestedAndShareAsync(
             string imagePath,
             string fileName,
             ShareContent content,
