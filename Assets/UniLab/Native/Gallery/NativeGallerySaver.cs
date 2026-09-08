@@ -1,6 +1,5 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UniLab.Common;
 using UniLab.Native.Gallery.Platform;
 using UniLab.Native.Gallery.Platform.Interface;
 using UnityEngine;
@@ -10,7 +9,7 @@ namespace UniLab.Native.Gallery
     /// <summary>
     /// 端末の写真アプリまたはギャラリー保存のファサード。
     /// </summary>
-    public sealed class NativeGallerySaver : SingletonPureClass<NativeGallerySaver>, INativeGallerySaver
+    public sealed class NativeGallerySaver : INativeGallerySaver
     {
         private IPlatformGallerySaver _platformGallerySaver;
 

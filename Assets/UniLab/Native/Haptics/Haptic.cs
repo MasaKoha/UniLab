@@ -1,4 +1,3 @@
-using UniLab.Common;
 using UniLab.Native.Haptics.Platform;
 using UniLab.Native.Haptics.Platform.Interface;
 using UnityEngine;
@@ -8,7 +7,7 @@ namespace UniLab.Native.Haptics
     /// <summary>
     /// 触覚フィードバックのファサード。
     /// </summary>
-    public sealed class Haptic : SingletonPureClass<Haptic>, IHaptic
+    public sealed class Haptic : IHaptic
     {
         private IPlatformHaptic _platformHaptic;
 

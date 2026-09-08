@@ -18,7 +18,7 @@ namespace UniLab.AssetVault
         /// </summary>
         public static UniTask<T> LoadAssetAsync<T>(this IAssetVaultService service, GameObject owner, string key, CancellationToken cancellationToken = default)
         {
-            var holder = AssetScopeHolder.GetOrAttach(owner, service);
+            var holder = CreateHolder(service, owner.GetCancellationTokenOnDestroy());
             return holder.Scope.LoadAssetAsync<T>(key, ResolveToken(holder, cancellationToken));
         }
 
@@ -37,7 +37,7 @@ namespace UniLab.AssetVault
         /// </summary>
         public static UniTask<IReadOnlyList<T>> LoadAssetsAsync<T>(this IAssetVaultService service, GameObject owner, string label, CancellationToken cancellationToken = default)
         {
-            var holder = AssetScopeHolder.GetOrAttach(owner, service);
+            var holder = CreateHolder(service, owner.GetCancellationTokenOnDestroy());
             return holder.Scope.LoadAssetsAsync<T>(label, ResolveToken(holder, cancellationToken));
         }
 
@@ -54,7 +54,7 @@ namespace UniLab.AssetVault
         /// </summary>
         public static UniTask<GameObject> InstantiateAsync(this IAssetVaultService service, GameObject owner, string key, Transform parent, CancellationToken cancellationToken = default)
         {
-            var holder = AssetScopeHolder.GetOrAttach(owner, service);
+            var holder = CreateHolder(service, owner.GetCancellationTokenOnDestroy());
             return holder.Scope.InstantiateAsync(key, parent, ResolveToken(holder, cancellationToken));
         }
 
@@ -69,7 +69,12 @@ namespace UniLab.AssetVault
         // 未指定なら GameObject 破棄トークン（ホルダーも同じ GameObject の MonoBehaviour）を既定にする。
         private static CancellationToken ResolveToken(AssetScopeHolder holder, CancellationToken cancellationToken)
         {
-            return cancellationToken == default ? holder.destroyCancellationToken : cancellationToken;
+            return cancellationToken == default ? holder.OwnerDestroyToken : cancellationToken;
+        }
+
+        private static AssetScopeHolder CreateHolder(IAssetVaultService service, CancellationToken ownerDestroyToken)
+        {
+            return new AssetScopeHolder(service.CreateScope(), ownerDestroyToken);
         }
     }
 }

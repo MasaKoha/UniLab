@@ -1,6 +1,5 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using UniLab.Common;
 using UniLab.Native.Gallery;
 using UnityEngine;
 
@@ -10,8 +9,18 @@ namespace UniLab.Native.Share
     /// 撮影・ギャラリー保存・ネイティブ共有を用途別に組み合わせるファサード。
     /// 各操作（撮影＝ScreenshotCapture / 保存＝NativeGallerySaver / 共有＝NativeShare）を単一責務のまま合成する。
     /// </summary>
-    public sealed class NativeImageShare : SingletonPureClass<NativeImageShare>, INativeImageShare
+    public sealed class NativeImageShare : INativeImageShare
     {
+        private readonly INativeGallerySaver _gallerySaver;
+        private readonly INativeShare _share;
+
+        /// <summary>保存と共有の実装を受け取る。差し替えのため具象へ直接依存しない。</summary>
+        public NativeImageShare(INativeGallerySaver gallerySaver, INativeShare share)
+        {
+            _gallerySaver = gallerySaver;
+            _share = share;
+        }
+
         /// <summary>
         /// 全画面スクリーンショットを撮影し、端末のギャラリーへ保存する（共有はしない）。
         /// </summary>
@@ -25,7 +34,7 @@ namespace UniLab.Native.Share
             CancellationToken cancellationToken = default)
         {
             var imagePath = await ScreenshotCapture.CaptureToTempFileAsync(fileName, cancellationToken);
-            return await NativeGallerySaver.Instance.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
+            return await _gallerySaver.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
         }
 
         /// <summary>
@@ -63,7 +72,7 @@ namespace UniLab.Native.Share
             CancellationToken cancellationToken = default)
         {
             var imagePath = await ScreenshotCapture.SaveTextureToTempFileAsync(texture, fileName, cancellationToken);
-            return await NativeGallerySaver.Instance.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
+            return await _gallerySaver.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
         }
 
         /// <summary>
@@ -89,7 +98,7 @@ namespace UniLab.Native.Share
         }
 
         // 保存要求があればギャラリー保存し、その後にネイティブ共有を開く共通処理。
-        private static async UniTask<GallerySaveResult> SaveIfRequestedAndShareAsync(
+        private async UniTask<GallerySaveResult> SaveIfRequestedAndShareAsync(
             string imagePath,
             string fileName,
             ShareContent content,
@@ -100,12 +109,12 @@ namespace UniLab.Native.Share
             var saveResult = GallerySaveResult.Failed(imagePath);
             if (alsoSaveToGallery)
             {
-                saveResult = await NativeGallerySaver.Instance.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
+                saveResult = await _gallerySaver.SaveImageAsync(imagePath, fileName, albumRoot, cancellationToken);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             var shareContent = new ShareContent(content.Text, content.Url, imagePath, content.Subject);
-            NativeShare.Instance.Share(shareContent);
+            _share.Share(shareContent);
             return saveResult;
         }
     }

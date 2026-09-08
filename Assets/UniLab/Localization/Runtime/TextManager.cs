@@ -9,6 +9,9 @@ namespace UniLab.Localization
     {
         private const string DefaultLanguage = "ja";
 
+        // 既定は Resources 版のまま置く。SetDataSource を呼ばない既存の利用者を壊さないため。
+        // 新しく組む側は AssetVaultLocalizationDataSource（Addressables）を SetDataSource で渡す。
+        // Resources へ置いたアセットはビルドから剥がせず、起動時のインデックスにも載る。
         private static ILocalizationDataSource _dataSource = new ResourcesLocalizationDataSource();
         private static LocalizationData _data;
         private static string _currentLanguage = DefaultLanguage;
@@ -77,6 +80,10 @@ namespace UniLab.Localization
             }
         }
 
+        /// <summary>
+        /// Resources から読む構成に切り替える。互換のために残している。
+        /// 新規の実装では AssetVaultLocalizationDataSource を SetDataSource へ渡すこと。
+        /// </summary>
         public static void UseResources(string resourcePath = ResourcesLocalizationDataSource.DefaultResourcePath, bool reloadImmediately = true)
         {
             SetDataSource(new ResourcesLocalizationDataSource(resourcePath), reloadImmediately);
