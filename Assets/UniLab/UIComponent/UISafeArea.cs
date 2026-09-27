@@ -11,6 +11,13 @@ namespace UniLab.UI
     [RequireComponent(typeof(RectTransform)), ExecuteAlways]
     public class UISafeArea : MonoBehaviour
     {
+        /// <summary>
+        /// 表示領域の縦横比（幅 / 高さ）。0 以下なら固定せず、セーフエリアいっぱいを使う。
+        /// 正の値なら、セーフエリアに収まる最大のこの比率の矩形を中央に取る（21:9 の画面や折りたたみ端末でも
+        /// レイアウトを一つの比率で作れるようにするため）。外側の帯はカメラのクリア色で埋まる。
+        /// </summary>
+        [SerializeField, Min(0f)] private float _fixedAspectRatio = 0f;
+
         private RectTransform _rectTransform;
         private DrivenRectTransformTracker _tracker;
         private Rect _lastSafeArea;
@@ -38,6 +45,38 @@ namespace UniLab.UI
             }
         }
 
+        /// <summary>
+        /// area に収まる最大の aspectRatio（幅 / 高さ）の矩形を、中央に揃えて返す。
+        /// 横に広すぎれば左右を、縦に長すぎれば上下を削る。
+        /// </summary>
+        public static Rect FitAspectRatio(Rect area, float aspectRatio)
+        {
+            if (area.width <= 0f || area.height <= 0f || aspectRatio <= 0f)
+            {
+                return area;
+            }
+
+            if (area.width / area.height > aspectRatio)
+            {
+                var fittedWidth = area.height * aspectRatio;
+                return new Rect(area.x + (area.width - fittedWidth) * 0.5f, area.y, fittedWidth, area.height);
+            }
+
+            var fittedHeight = area.width / aspectRatio;
+            return new Rect(area.x, area.y + (area.height - fittedHeight) * 0.5f, area.width, fittedHeight);
+        }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            // Inspector で比率を変えたとき、画面の変化を待たずに反映する
+            if (isActiveAndEnabled)
+            {
+                ApplySafeArea();
+            }
+        }
+#endif
+
         private bool HasScreenChanged()
         {
             return _lastSafeArea != Screen.safeArea ||
@@ -61,6 +100,10 @@ namespace UniLab.UI
             var safeArea = Screen.safeArea;
             _lastSafeArea = safeArea;
             _lastResolution = new Vector2Int(Screen.width, Screen.height);
+            if (_fixedAspectRatio > 0f)
+            {
+                safeArea = FitAspectRatio(safeArea, _fixedAspectRatio);
+            }
 
             var anchorMin = safeArea.position;
             var anchorMax = safeArea.position + safeArea.size;
